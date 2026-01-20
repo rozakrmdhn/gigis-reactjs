@@ -18,7 +18,7 @@ export interface RekapDibangunResponse {
 export const laporanService = {
     getRekapJalanByDibangun: async (params?: { kecamatan?: string; desa?: string }): Promise<RekapDibangun[]> => {
         try {
-            const url = new URL("https://api-melarosa.saggaserv.my.id/rekap/dibangun");
+            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/rekap/dibangun`);
             if (params?.kecamatan) url.searchParams.append("kecamatan", params.kecamatan);
             if (params?.desa) url.searchParams.append("desa", params.desa);
 

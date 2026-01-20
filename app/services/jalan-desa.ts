@@ -43,8 +43,8 @@ export const jalanDesaService = {
     getJalan: async (searchQuery?: string): Promise<Jalan[]> => {
         try {
             const url = searchQuery
-                ? `https://api-melarosa.saggaserv.my.id/jalan?nama_ruas=${encodeURIComponent(searchQuery)}`
-                : "https://api-melarosa.saggaserv.my.id/jalan";
+                ? `${import.meta.env.VITE_API_BASE_URL}/jalan?nama_ruas=${encodeURIComponent(searchQuery)}`
+                : `${import.meta.env.VITE_API_BASE_URL}/jalan`;
 
             const response = await fetch(url);
             if (!response.ok) {
@@ -59,7 +59,7 @@ export const jalanDesaService = {
     },
     getJalanById: async (id: string): Promise<GeoJSONFeature | null> => {
         try {
-            const response = await fetch(`https://api-melarosa.saggaserv.my.id/jalan/${id}/geojson`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/${id}/geojson`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch geojson: ${response.statusText}`);
             }
@@ -73,8 +73,8 @@ export const jalanDesaService = {
     getGeojsonJalan: async (idKecamatan?: string): Promise<GeoJSONFeatureCollection | null> => {
         try {
             const url = idKecamatan
-                ? `https://api-melarosa.saggaserv.my.id/jalan/geojson?id_kecamatan=${encodeURIComponent(idKecamatan)}`
-                : "https://api-melarosa.saggaserv.my.id/jalan/geojson";
+                ? `${import.meta.env.VITE_API_BASE_URL}/jalan/geojson?id_kecamatan=${encodeURIComponent(idKecamatan)}`
+                : `${import.meta.env.VITE_API_BASE_URL}/jalan/geojson`;
 
             const response = await fetch(url);
             if (!response.ok) {

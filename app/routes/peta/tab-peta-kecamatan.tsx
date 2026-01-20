@@ -17,6 +17,7 @@ import { MapPin, Search, Loader2, Info, X } from 'lucide-react';
 import { Input } from '~/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Separator as UISeparator } from '~/components/ui/separator';
+import { is } from 'date-fns/locale';
 
 export function TabPetaKecamatan() {
     const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
@@ -98,7 +99,7 @@ export function TabPetaKecamatan() {
                 type: 'line',
                 source: 'kecamatan-jalan',
                 paint: {
-                    'line-color': '#3b82f6',
+                    'line-color': '#000000',
                     'line-width': 3,
                 }
             });
@@ -193,6 +194,8 @@ export function TabPetaKecamatan() {
     useEffect(() => {
         if (!selectedKecamatan || !mapRef.current) return;
 
+        setSelectedJalan(null);
+
         const handleKecamatanChange = async () => {
             setFetchingGeojson(true);
             const [geojsonJalan, geojsonDesa] = await Promise.all([
@@ -284,7 +287,8 @@ export function TabPetaKecamatan() {
         }
 
         source.setData(selectedJalan as any);
-        setIsPanelVisible(true);
+        // Panel stays hidden by default on selection as per user request
+        setIsPanelVisible(false);
 
         // Extract coordinates for markers
         let coords: any[] = [];
@@ -304,26 +308,96 @@ export function TabPetaKecamatan() {
             const startPoint = points[0];
             const endPoint = points[points.length - 1];
 
-            // Helper to create modern popup content (simplified for brevity, matching TabPeta)
+            // Helper to create modern popup content
             const createPopupContent = (title: string, lng: number, lat: number) => {
                 const container = document.createElement('div');
                 container.className = 'p-1 min-w-[150px]';
+
                 const titleEl = document.createElement('p');
-                titleEl.className = 'font-bold text-sm mb-1';
+                titleEl.className = 'font-bold text-sm mb-1 line-clamp-1';
                 titleEl.innerText = title;
                 container.appendChild(titleEl);
-                const coordsEl = document.createElement('p');
-                coordsEl.className = 'text-[10px] text-muted-foreground font-mono';
-                coordsEl.innerText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-                container.appendChild(coordsEl);
+
+                const coordsContainer = document.createElement('div');
+                coordsContainer.className = 'bg-muted/50 p-2 rounded-md mb-2 text-[10px] space-y-0.5 font-mono relative group';
+
+                const lngEl = document.createElement('p');
+                lngEl.innerHTML = `<span class="text-muted-foreground">Lng:</span> ${lng.toFixed(7)}`;
+                coordsContainer.appendChild(lngEl);
+
+                const latEl = document.createElement('p');
+                latEl.innerHTML = `<span class="text-muted-foreground">Lat:</span> ${lat.toFixed(7)}`;
+                coordsContainer.appendChild(latEl);
+
+                container.appendChild(coordsContainer);
+
+                const copyBtn = document.createElement('button');
+                copyBtn.className = 'w-full py-1.5 px-2 bg-primary text-primary-foreground rounded-md text-[10px] font-medium transition-all hover:bg-primary/90 flex items-center justify-center gap-1.5 active:scale-95';
+                const defaultContent = `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                    <span>Salin Koordinat</span>
+                `;
+                copyBtn.innerHTML = defaultContent;
+
+                copyBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const textToCopy = `${lat}, ${lng}`;
+
+                    const performCopy = async () => {
+                        try {
+                            let success = false;
+                            if (navigator.clipboard && window.isSecureContext) {
+                                await navigator.clipboard.writeText(textToCopy);
+                                success = true;
+                            } else {
+                                // Fallback
+                                const textArea = document.createElement("textarea");
+                                textArea.value = textToCopy;
+                                textArea.style.position = "fixed";
+                                textArea.style.left = "-9999px";
+                                textArea.style.top = "0";
+                                document.body.appendChild(textArea);
+                                textArea.focus();
+                                textArea.select();
+                                success = document.execCommand('copy');
+                                document.body.removeChild(textArea);
+                            }
+
+                            if (success) {
+                                // Success UI
+                                copyBtn.innerHTML = `
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                                    <span>Tersalin!</span>
+                                `;
+                                copyBtn.className = 'w-full py-1.5 px-2 bg-green-600 text-white rounded-md text-[10px] font-medium flex items-center justify-center gap-1.5';
+
+                                setTimeout(() => {
+                                    copyBtn.innerHTML = defaultContent;
+                                    copyBtn.className = 'w-full py-1.5 px-2 bg-primary text-primary-foreground rounded-md text-[10px] font-medium transition-all hover:bg-primary/90 flex items-center justify-center gap-1.5 active:scale-95';
+                                }, 2000);
+                            }
+                        } catch (err) {
+                            console.error('Gagal menyalin:', err);
+                        }
+                    };
+
+                    performCopy();
+                });
+
+                container.appendChild(copyBtn);
                 return container;
             };
 
+            // Create Popups
             const startPopup = new mapboxgl.Popup({ offset: 10, closeButton: false })
                 .setDOMContent(createPopupContent('Titik Awal', startPoint[0], startPoint[1]));
+
             const endPopup = new mapboxgl.Popup({ offset: 10, closeButton: false })
                 .setDOMContent(createPopupContent('Titik Akhir', endPoint[0], endPoint[1]));
 
+            // Create Markers with pulse effect
             const elStart = document.createElement('div');
             elStart.className = 'marker-pulse marker-pulse-start';
             const startMarker = new mapboxgl.Marker(elStart).setLngLat(startPoint).setPopup(startPopup).addTo(mapRef.current);
@@ -341,21 +415,27 @@ export function TabPetaKecamatan() {
             points.forEach(p => bounds.extend(p));
             mapRef.current.fitBounds(bounds, { padding: 100, duration: 1000 });
 
-            // Animate flow
+            // Animate flow smoothly
             const animate = (time: number) => {
                 if (!mapRef.current || !mapRef.current.getLayer('jalan-flow')) return;
-                const speed = 0.004;
-                const totalLength = 4;
+
+                const speed = 0.004; // units per ms
+                const dashLength = 2;
+                const totalLength = dashLength * 2;
                 const step = (time * speed) % totalLength;
-                if (step < 2) {
-                    mapRef.current.setPaintProperty('jalan-flow', 'line-dasharray', [0, step, 2, 2 - step]);
+
+                if (step < dashLength) {
+                    mapRef.current.setPaintProperty('jalan-flow', 'line-dasharray', [0, step, dashLength, dashLength - step]);
                 } else {
-                    mapRef.current.setPaintProperty('jalan-flow', 'line-dasharray', [step - 2, 2, totalLength - step, 0]);
+                    mapRef.current.setPaintProperty('jalan-flow', 'line-dasharray', [step - dashLength, dashLength, totalLength - step, 0]);
                 }
+
                 animationFrameRef.current = requestAnimationFrame(animate);
             };
 
-            if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
             animationFrameRef.current = requestAnimationFrame(animate);
         }
     }, [selectedJalan]);
@@ -435,7 +515,7 @@ export function TabPetaKecamatan() {
 
             {/* Info Panel & Toggle Button */}
             {selectedJalan && (
-                <div className="absolute top-26 right-3 z-10 flex flex-col items-end gap-2 text-primary">
+                <div className="absolute top-14 left-3 z-10 flex flex-col items-start gap-2">
                     <Button
                         variant="secondary"
                         size="icon"
@@ -447,19 +527,11 @@ export function TabPetaKecamatan() {
                     </Button>
 
                     {isPanelVisible && (
-                        <Card className="py-1 w-80 shadow-lg max-h-[85vh] overflow-auto">
+                        <Card className="py-1 w-80 shadow-lg gap-2 max-h-[85vh] overflow-auto">
                             <CardHeader className="flex flex-row items-center justify-between space-y-0 px-3 pt-2">
                                 <CardTitle className="text-sm font-bold">
                                     {selectedJalan.properties.nama_ruas}
                                 </CardTitle>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6"
-                                    onClick={() => setSelectedJalan(null)}
-                                >
-                                    <X className="h-4 w-4" />
-                                </Button>
                             </CardHeader>
                             <CardContent className="p-3 pt-0 space-y-3">
                                 <UISeparator />
@@ -470,7 +542,7 @@ export function TabPetaKecamatan() {
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground font-semibold">Lokasi</p>
-                                        <p>{selectedJalan.properties.desa}</p>
+                                        <p>{selectedJalan.properties.desa}, {selectedJalan.properties.kecamatan}</p>
                                     </div>
                                     <div>
                                         <p className="text-muted-foreground font-semibold">Panjang</p>
@@ -488,10 +560,19 @@ export function TabPetaKecamatan() {
                                         <p className="text-muted-foreground font-semibold">Kondisi</p>
                                         <p>{selectedJalan.properties.kondisi}</p>
                                     </div>
+                                    <div>
+                                        <p className="text-muted-foreground font-semibold">Status Awal</p>
+                                        <p>{selectedJalan.properties.status_awal}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground font-semibold">Status Eksisting</p>
+                                        <p>{selectedJalan.properties.status_eksisting}</p>
+                                    </div>
                                 </div>
                                 <UISeparator />
                                 <div className="text-[10px] text-muted-foreground pt-1">
                                     <p>Sumber Data: {selectedJalan.properties.sumber_data}</p>
+                                    <p>Terakhir Update: {selectedJalan.properties.updated_at ? new Date(selectedJalan.properties.updated_at).toLocaleDateString() : '-'}</p>
                                 </div>
                             </CardContent>
                         </Card>

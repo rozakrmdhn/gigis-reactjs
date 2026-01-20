@@ -14,7 +14,7 @@ export interface KecamatanResponse {
 export const kecamatanService = {
     getKecamatan: async (): Promise<Kecamatan[]> => {
         try {
-            const response = await fetch("https://api-melarosa.saggaserv.my.id/kecamatan");
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
             if (!response.ok) {
                 throw new Error(`Failed to fetch kecamatan data: ${response.statusText}`);
             }

@@ -15,8 +15,8 @@ export const desaService = {
     getGeojsonDesa: async (idKecamatan?: string): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         try {
             const url = idKecamatan
-                ? `https://api-melarosa.saggaserv.my.id/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan)}`
-                : "https://api-melarosa.saggaserv.my.id/desa/geojson";
+                ? `${import.meta.env.VITE_API_BASE_URL}/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan)}`
+                : `${import.meta.env.VITE_API_BASE_URL}/desa/geojson`;
 
             const response = await fetch(url);
             if (!response.ok) {
