@@ -1,12 +1,12 @@
-import { TabTabel } from "../peta/tab-tabel";
-import { jalanDesaService } from "~/services/jalan-desa";
+import { TabTabel } from "~/features/peta/components/TabTabel";
+import { jalanDropdownService } from "~/features/peta/services/jalan-dropdown.service";
 import type { Route } from "./+types/jalan";
 
 import { useLoaderData } from "react-router";
 
 export async function loader({ }: Route.LoaderArgs) {
     try {
-        const jalanData = await jalanDesaService.getJalan();
+        const jalanData = await jalanDropdownService.getJalan();
         return { jalanData: jalanData || [] };
     } catch (error) {
         console.error("Loader error in master/jalan:", error);
@@ -24,7 +24,7 @@ export default function MasterJalanPage() {
                 <h1 className="text-2xl font-bold">Data Jalan</h1>
                 <p className="text-muted-foreground text-sm">Halaman manajemen data jalan (Master Data).</p>
             </div>
-            <TabTabel data={jalanData} />
+            <TabTabel initialData={jalanData} />
         </div>
     );
 }

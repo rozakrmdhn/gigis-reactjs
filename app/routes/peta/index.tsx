@@ -1,6 +1,6 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
-import { TabPeta } from "./tab-peta";
-import { TabPetaKecamatan } from "./tab-peta-kecamatan";
+import { TabPeta } from "~/features/peta/components/TabPeta";
+import { TabPetaKecamatan } from "~/features/peta/components/TabPetaKecamatan";
 import type { Route } from "./+types/index";
 
 export function meta({ }: Route.MetaArgs) {
