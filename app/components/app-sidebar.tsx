@@ -38,6 +38,11 @@ const data = {
       icon: IconMap,
     },
     {
+      title: "Monitoring",
+      url: "/monitoring",
+      icon: IconMap,
+    },
+    {
       title: "Laporan",
       url: "/laporan",
       icon: IconFileText,

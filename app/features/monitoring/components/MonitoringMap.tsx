@@ -1,0 +1,49 @@
+import { useRef, useEffect } from "react";
+import { type GeoJSONFeatureCollection } from "~/features/peta/types";
+import { useMonitoringMap } from "~/features/monitoring/hooks/useMonitoringMap";
+
+interface MonitoringMapProps {
+    jalanFeatures?: GeoJSONFeatureCollection | null;
+    segmenFeatures?: GeoJSONFeatureCollection | null;
+}
+
+export function MonitoringMap({ jalanFeatures, segmenFeatures }: MonitoringMapProps) {
+    const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
+    const mapContainerRef = useRef<HTMLDivElement>(null);
+
+    const { mapRef, updateData } = useMonitoringMap({
+        mapboxToken,
+        containerRef: mapContainerRef
+    });
+
+    useEffect(() => {
+        const resizeObserver = new ResizeObserver(() => {
+            if (mapRef.current) {
+                mapRef.current.resize();
+            }
+        });
+
+        if (mapContainerRef.current) {
+            resizeObserver.observe(mapContainerRef.current);
+        }
+
+        return () => {
+            resizeObserver.disconnect();
+        };
+    }, [mapRef]);
+
+    useEffect(() => {
+        updateData(jalanFeatures || null, segmenFeatures || null);
+    }, [jalanFeatures, segmenFeatures, updateData]);
+
+    return (
+        <div className="flex-1 relative h-full w-full bg-slate-100">
+            {!mapboxToken && (
+                <div className="absolute top-0 left-0 z-50 p-4 bg-yellow-100 text-yellow-800 w-full text-center">
+                    Warning: VITE_MAPBOX_TOKEN is missing in .env
+                </div>
+            )}
+            <div ref={mapContainerRef} className="w-full h-full" />
+        </div>
+    );
+}

@@ -1,6 +1,6 @@
 import { TabTabel } from "~/features/peta/components/TabTabel";
 import { jalanDropdownService } from "~/features/peta/services/jalan-dropdown.service";
-import type { Route } from "./+types/jalan";
+import type { Route } from "./+types/index";
 
 import { useLoaderData } from "react-router";
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { type GeoJSONFeature } from '../types';
+import { type GeoJSONFeature, type GeoJSONFeatureCollection } from '../types';
 
 interface UsePetaMapProps {
     mapboxToken: string;
@@ -104,7 +104,7 @@ export function usePetaMap({ mapboxToken, containerRef }: UsePetaMapProps) {
         };
     }, [mapboxToken]);
 
-    const updateSelectedJalan = (selectedJalan: GeoJSONFeature | null, onPanelShow?: () => void) => {
+    const updateSelectedJalan = (selectedJalan: GeoJSONFeature | GeoJSONFeatureCollection | null, onPanelShow?: () => void) => {
         if (!mapRef.current) return;
 
         const source = mapRef.current.getSource('selected-jalan') as mapboxgl.GeoJSONSource;
@@ -124,20 +124,31 @@ export function usePetaMap({ mapboxToken, containerRef }: UsePetaMapProps) {
 
         // Extract coordinates for markers robustly
         let points: [number, number][] = [];
-        const geometry = selectedJalan.geometry;
 
-        if (geometry.type === 'LineString') {
-            points = geometry.coordinates as [number, number][];
-        } else if (geometry.type === 'MultiLineString') {
-            points = geometry.coordinates.flat() as [number, number][];
-        } else if (geometry.type === 'GeometryCollection') {
-            geometry.geometries.forEach(g => {
-                if (g.type === 'LineString') {
-                    points.push(...(g.coordinates as [number, number][]));
-                } else if (g.type === 'MultiLineString') {
-                    points.push(...(g.coordinates.flat() as [number, number][]));
+        if (selectedJalan.type === 'FeatureCollection') {
+            selectedJalan.features.forEach(feature => {
+                const geometry = feature.geometry;
+                if (geometry.type === 'LineString') {
+                    points.push(...(geometry.coordinates as [number, number][]));
+                } else if (geometry.type === 'MultiLineString') {
+                    points.push(...(geometry.coordinates.flat() as [number, number][]));
                 }
             });
+        } else {
+            const geometry = selectedJalan.geometry;
+            if (geometry.type === 'LineString') {
+                points = geometry.coordinates as [number, number][];
+            } else if (geometry.type === 'MultiLineString') {
+                points = geometry.coordinates.flat() as [number, number][];
+            } else if (geometry.type === 'GeometryCollection') {
+                geometry.geometries.forEach(g => {
+                    if (g.type === 'LineString') {
+                        points.push(...(g.coordinates as [number, number][]));
+                    } else if (g.type === 'MultiLineString') {
+                        points.push(...(g.coordinates.flat() as [number, number][]));
+                    }
+                });
+            }
         }
 
         // Remove existing markers
@@ -148,84 +159,93 @@ export function usePetaMap({ mapboxToken, containerRef }: UsePetaMapProps) {
             const startPoint = points[0];
             const endPoint = points[points.length - 1];
 
-            // Helper to create modern popup content
+            // Helper to create ultra-mini modern popup content
             const createPopupContent = (title: string, lng: number, lat: number) => {
                 const container = document.createElement('div');
-                container.className = 'p-1 min-w-[150px]';
+                container.className = 'px-1.5 py-1 flex items-center gap-2 min-w-fit max-w-[200px] overflow-hidden';
 
-                const titleEl = document.createElement('p');
-                titleEl.className = 'font-bold text-sm mb-1 line-clamp-1';
+                const textContent = document.createElement('div');
+                textContent.className = 'flex flex-col leading-none';
+
+                const titleEl = document.createElement('span');
+                titleEl.className = 'font-bold text-[9px] text-slate-400 uppercase tracking-tighter mb-0.5';
                 titleEl.innerText = title;
-                container.appendChild(titleEl);
+                textContent.appendChild(titleEl);
 
-                const coordsContainer = document.createElement('div');
-                coordsContainer.className = 'bg-muted/50 p-2 rounded-md mb-2 text-[10px] space-y-0.5 font-mono relative group';
+                const coordsEl = document.createElement('div');
+                coordsEl.className = 'font-mono text-[10px] text-slate-700 whitespace-nowrap';
+                coordsEl.innerText = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+                textContent.appendChild(coordsEl);
 
-                const lngEl = document.createElement('p');
-                lngEl.innerHTML = `<span class="text-muted-foreground">Lng:</span> ${lng.toFixed(7)}`;
-                coordsContainer.appendChild(lngEl);
+                container.appendChild(textContent);
 
-                const latEl = document.createElement('p');
-                latEl.innerHTML = `<span class="text-muted-foreground">Lat:</span> ${lat.toFixed(7)}`;
-                coordsContainer.appendChild(latEl);
-
-                container.appendChild(coordsContainer);
-
+                // Subtle copy icon
                 const copyBtn = document.createElement('button');
-                copyBtn.className = 'w-full py-1.5 px-2 bg-primary text-primary-foreground rounded-md text-[10px] font-medium transition-all hover:bg-primary/90 flex items-center justify-center gap-1.5 active:scale-95';
-                const defaultContent = `
-                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
-                    <span>Salin Koordinat</span>
-                `;
-                copyBtn.innerHTML = defaultContent;
+                copyBtn.className = 'text-primary hover:text-primary/80 transition-colors p-1 rounded hover:bg-slate-100 flex-shrink-0 ml-1 border border-slate-100 shadow-sm bg-white';
+                copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>';
 
-                copyBtn.addEventListener('click', (e) => {
+                container.appendChild(copyBtn);
+
+                // Copy logic
+                copyBtn.onclick = (e) => {
                     e.preventDefault();
                     e.stopPropagation();
 
                     const textToCopy = `${lat}, ${lng}`;
 
                     const performCopy = async () => {
+                        let success = false;
                         try {
-                            let success = false;
-                            if (navigator.clipboard && window.isSecureContext) {
+                            if (navigator.clipboard) {
                                 await navigator.clipboard.writeText(textToCopy);
                                 success = true;
                             } else {
-                                // Fallback
-                                const textArea = document.createElement("textarea");
-                                textArea.value = textToCopy;
-                                textArea.style.position = "fixed";
-                                textArea.style.left = "-9999px";
-                                textArea.style.top = "0";
-                                document.body.appendChild(textArea);
-                                textArea.focus();
-                                textArea.select();
-                                success = document.execCommand('copy');
-                                document.body.removeChild(textArea);
-                            }
-
-                            if (success) {
-                                copyBtn.innerHTML = `
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                                    <span>Tersalin!</span>
-                                `;
-                                copyBtn.className = 'w-full py-1.5 px-2 bg-green-600 text-white rounded-md text-[10px] font-medium flex items-center justify-center gap-1.5';
-
-                                setTimeout(() => {
-                                    copyBtn.innerHTML = defaultContent;
-                                    copyBtn.className = 'w-full py-1.5 px-2 bg-primary text-primary-foreground rounded-md text-[10px] font-medium transition-all hover:bg-primary/90 flex items-center justify-center gap-1.5 active:scale-95';
-                                }, 2000);
+                                throw new Error('Clipboard API unavailable');
                             }
                         } catch (err) {
-                            console.error('Gagal menyalin:', err);
+                            // Fallback for mobile/non-HTTPS
+                            const textArea = document.createElement("textarea");
+                            textArea.value = textToCopy;
+
+                            // Ensure it's not visible and doesn't affect layout/scrolling
+                            textArea.style.position = "fixed";
+                            textArea.style.left = "0";
+                            textArea.style.top = "0";
+                            textArea.style.opacity = "0";
+                            textArea.style.width = "1px";
+                            textArea.style.height = "1px";
+                            textArea.style.padding = "0";
+                            textArea.style.border = "none";
+                            textArea.style.outline = "none";
+                            textArea.style.boxShadow = "none";
+                            textArea.style.background = "transparent";
+
+                            document.body.appendChild(textArea);
+
+                            // Focus without scrolling
+                            textArea.focus({ preventScroll: true });
+                            textArea.select();
+
+                            try {
+                                success = document.execCommand('copy');
+                            } catch (copyErr) {
+                                console.error('Fallback copy failed:', copyErr);
+                            }
+                            document.body.removeChild(textArea);
+                        }
+
+                        if (success) {
+                            const originalHTML = copyBtn.innerHTML;
+                            copyBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="text-emerald-500"><polyline points="20 6 9 17 4 12"/></svg>';
+                            setTimeout(() => {
+                                copyBtn.innerHTML = originalHTML;
+                            }, 2000);
                         }
                     };
 
                     performCopy();
-                });
+                };
 
-                container.appendChild(copyBtn);
                 return container;
             };
 
@@ -241,11 +261,13 @@ export function usePetaMap({ mapboxToken, containerRef }: UsePetaMapProps) {
             elStart.className = 'marker-pulse marker-pulse-start';
             const startMarker = new mapboxgl.Marker(elStart).setLngLat(startPoint).setPopup(startPopup).addTo(mapRef.current);
             elStart.addEventListener('mouseenter', () => startPopup.addTo(mapRef.current!));
+            elStart.addEventListener('click', () => startPopup.addTo(mapRef.current!));
 
             const elEnd = document.createElement('div');
             elEnd.className = 'marker-pulse marker-pulse-end';
             const endMarker = new mapboxgl.Marker(elEnd).setLngLat(endPoint).setPopup(endPopup).addTo(mapRef.current);
             elEnd.addEventListener('mouseenter', () => endPopup.addTo(mapRef.current!));
+            elEnd.addEventListener('click', () => endPopup.addTo(mapRef.current!));
 
             markersRef.current = [startMarker, endMarker];
 

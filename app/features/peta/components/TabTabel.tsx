@@ -90,7 +90,7 @@ export function TabTabel({ initialData }: TabTabelProps) {
     }, [initialData]);
 
     return (
-        <div className="mt-2 border rounded-md p-4 bg-card">
+        <div className="mt-2 border rounded-md bg-card">
             <DataTable columns={columns} data={data} />
         </div>
     );

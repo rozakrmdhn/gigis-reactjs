@@ -16,13 +16,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const kecamatan = url.searchParams.get("kecamatan") || undefined;
     const desa = url.searchParams.get("desa") || undefined;
+    const tahun_pembangunan = url.searchParams.get("tahun_pembangunan") || undefined;
+    const check_melarosa = url.searchParams.get("check_melarosa") || "ya";
 
     const [rekapData, kecamatanList] = await Promise.all([
-        laporanService.getRekapJalanByDibangun({ kecamatan, desa }),
+        laporanService.getRekapJalanByDibangun({ kecamatan, desa, tahun_pembangunan, check_melarosa }),
         kecamatanService.getKecamatan()
     ]);
 
-    return { rekapData, kecamatanList, filters: { kecamatan, desa } };
+    return { rekapData, kecamatanList, filters: { kecamatan, desa, tahun_pembangunan, check_melarosa } };
 }
 
 
@@ -73,6 +75,46 @@ export default function LaporanPage() {
                 </div>
                 <div className="flex items-center gap-2">
                     <Select
+                        value={filters.tahun_pembangunan || "all"}
+                        onValueChange={(value) => {
+                            const newParams = new URLSearchParams(searchParams);
+                            if (value === "all") {
+                                newParams.delete("tahun_pembangunan");
+                            } else {
+                                newParams.set("tahun_pembangunan", value);
+                            }
+                            setSearchParams(newParams);
+                        }}
+                    >
+                        <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Pilih Tahun" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">Semua Tahun</SelectItem>
+                            {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i - 1).map((year) => (
+                                <SelectItem key={year} value={year.toString()}>
+                                    {year}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <Select
+                        value={filters.check_melarosa || "ya"}
+                        onValueChange={(value) => {
+                            const newParams = new URLSearchParams(searchParams);
+                            newParams.set("check_melarosa", value);
+                            setSearchParams(newParams);
+                        }}
+                    >
+                        <SelectTrigger className="w-[120px]">
+                            <SelectValue placeholder="Melarosa" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="ya">Ya</SelectItem>
+                            <SelectItem value="tidak">Tidak</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select
                         value={filters.kecamatan || "all"}
                         onValueChange={(value) => {
                             const newParams = new URLSearchParams(searchParams);
@@ -88,7 +130,7 @@ export default function LaporanPage() {
                             <SelectValue placeholder="Pilih Kecamatan" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all">Semua Kecamatan</SelectItem>
+                            <SelectItem value="all">All Kecamatan</SelectItem>
                             {kecamatanList.map((k: Kecamatan) => (
                                 <SelectItem key={k.id} value={k.nama_kecamatan}>
                                     {k.nama_kecamatan}
@@ -153,54 +195,84 @@ function ReportContent({ rekapData, search, setSearch }: { rekapData: RekapDiban
 
     return (
         <>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                <Card className="gap-1">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
+            <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-5">
+                <Card className="
+                    gap-1 relative overflow-hidden
+                    bg-gradient-to-br from-slate-50 via-white to-slate-100/60
+                    transition-all hover:-translate-y-0.5 hover:shadow-md
+                    ">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-slate-400/60 to-transparent" />
+
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4">
                         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Desa</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{rekapData.length}</div>
+                    <CardContent className="px-4">
+                        <div className="text-1xl font-bold">{rekapData.length}</div>
                         <p className="text-xs text-muted-foreground">Jumlah desa yang terdata</p>
                     </CardContent>
                 </Card>
-                <Card className="gap-1">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
+                <Card className="
+                    gap-1 relative overflow-hidden
+                    bg-gradient-to-br from-sky-50 via-white to-blue-100/40
+                    transition-all hover:-translate-y-0.5 hover:shadow-md
+                    ">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-blue-400/60 to-transparent" />
+
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4">
                         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Panjang Jalan Desa</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold">{formatNumber(totalAset)} m</div>
+                    <CardContent className="px-4">
+                        <div className="text-1xl font-bold">{formatNumber(totalAset)} m</div>
                         <p className="text-xs text-muted-foreground">Total panjang Jalan Desa</p>
                     </CardContent>
                 </Card>
-                <Card className="gap-1">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
+                <Card className="
+                    gap-1 relative overflow-hidden
+                    bg-gradient-to-br from-emerald-50 via-white to-green-100/50
+                    transition-all hover:-translate-y-0.5 hover:shadow-md
+                    ">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-green-400/60 to-transparent" />
+
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4">
                         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Jalan Desa Dibangun</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{formatNumber(totalDibangun)} m</div>
+                    <CardContent className="px-4">
+                        <div className="text-1xl font-bold text-green-600">{formatNumber(totalDibangun)} m</div>
                         <p className="text-xs text-muted-foreground">Panjang Jalan Desa dibangun</p>
                     </CardContent>
                 </Card>
-                <Card className="gap-1">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
+                <Card className="
+                    gap-1 relative overflow-hidden
+                    bg-gradient-to-br from-teal-50 via-white to-emerald-100/40
+                    transition-all hover:-translate-y-0.5 hover:shadow-md
+                    ">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-emerald-400/60 to-transparent" />
+
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4">
                         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Peningkatan Status</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-green-600">{formatNumber(totalPuk)} m</div>
+                    <CardContent className="px-4">
+                        <div className="text-1xl font-bold text-green-600">{formatNumber(totalPuk)} m</div>
                         <p className="text-xs text-muted-foreground">Total peningkatan status</p>
                     </CardContent>
                 </Card>
-                <Card className="gap-1">
-                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0">
+                <Card className="
+                    gap-1 relative overflow-hidden
+                    bg-gradient-to-br from-orange-50 via-white to-amber-100/50
+                    transition-all hover:-translate-y-0.5 hover:shadow-md
+                    ">
+                    <span className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent via-amber-400/60 to-transparent" />
+
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4">
                         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Total Selisih</CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="text-2xl font-bold text-orange-600">{formatNumber(totalSelisih)} m</div>
+                    <CardContent className="px-4">
+                        <div className="text-1xl font-bold text-orange-600">{formatNumber(totalSelisih)} m</div>
                         <p className="text-xs text-muted-foreground">Sisa yang belum dibangun</p>
                     </CardContent>
                 </Card>
             </div>
-            <div className="grid gap-4">
+            <div className="grid lg:grid-cols-1 gap-4">
                 <Card className="gap-0">
                     <CardHeader>
                         <CardTitle>Data Rekap Jalan Per Desa</CardTitle>
