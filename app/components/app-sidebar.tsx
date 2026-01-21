@@ -87,7 +87,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               className="data-[slot=sidebar-menu-button]:p-1.5!"
             >
               <a href="#">
-                <span className="text-base font-semibold">GIGIS App</span>
+                <span className="text-base font-bold tracking-widest text-emerald-600">GIGIS Monitoring</span>
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

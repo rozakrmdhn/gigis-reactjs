@@ -72,7 +72,7 @@ export interface MonitoringJalanResponse {
 }
 
 export const monitoringService = {
-    getMonitoringJalan: async (params?: { id_kecamatan?: string; page?: number; limit?: number }): Promise<MonitoringJalanResponse> => {
+    getMonitoringJalan: async (params?: { id_kecamatan?: string; page?: number; limit?: number; search?: string }): Promise<MonitoringJalanResponse> => {
         try {
             const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan`);
             if (params?.id_kecamatan) {
@@ -83,6 +83,9 @@ export const monitoringService = {
             }
             if (params?.limit) {
                 url.searchParams.append("limit", params.limit.toString());
+            }
+            if (params?.search) {
+                url.searchParams.append("search", params.search);
             }
 
             const response = await fetch(url.toString());

@@ -12,11 +12,7 @@ import "./app.css";
 import { Spinner } from "./components/ui/spinner";
 
 export function HydrateFallback() {
-  return (
-    <div className="flex h-screen w-full items-center justify-center">
-      <Spinner className="size-12 text-primary" />
-    </div>
-  );
+  return null;
 }
 
 export const links: Route.LinksFunction = () => [

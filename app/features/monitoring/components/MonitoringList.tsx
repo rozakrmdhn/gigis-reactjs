@@ -1,14 +1,39 @@
 import { type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
 import { Badge } from "~/components/ui/badge";
+import { Skeleton } from "~/components/ui/skeleton";
 import { cn } from "~/lib/utils";
 
 interface MonitoringListProps {
     data: MonitoringJalanResult[];
     onSelectJalan: (id: string) => void;
     selectedId?: string | null;
+    isLoading?: boolean;
 }
 
-export function MonitoringList({ data, onSelectJalan, selectedId }: MonitoringListProps) {
+export function MonitoringList({ data, onSelectJalan, selectedId, isLoading }: MonitoringListProps) {
+    if (isLoading) {
+        return (
+            <div className="space-y-3">
+                {[...Array(5)].map((_, i) => (
+                    <div key={i} className="flex flex-col gap-3 p-4 rounded-xl border border-slate-100 bg-white/50 animate-pulse">
+                        <div className="flex justify-between items-start">
+                            <Skeleton className="h-5 w-2/3 rounded-lg" />
+                            <Skeleton className="h-5 w-16 rounded-full" />
+                        </div>
+                        <div className="flex gap-2">
+                            <Skeleton className="h-4 w-20 rounded-md" />
+                            <Skeleton className="h-4 w-24 rounded-md" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-1">
+                            <Skeleton className="h-10 rounded-xl" />
+                            <Skeleton className="h-10 rounded-xl" />
+                        </div>
+                    </div>
+                ))}
+            </div>
+        );
+    }
+
     if (!data || data.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-8 text-center border rounded-lg border-dashed bg-slate-50/50">

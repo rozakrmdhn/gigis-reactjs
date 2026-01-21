@@ -24,7 +24,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
             zoom: 9.5
         });
 
-        map.addControl(new mapboxgl.NavigationControl(), 'top-right');
+        // Removed default NavigationControl
 
         map.on('load', () => {
             mapRef.current = map;
@@ -86,7 +86,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
         };
     }, [mapboxToken]);
 
-    const updateData = (jalanData: GeoJSONFeatureCollection | null, segmenData: GeoJSONFeatureCollection | null) => {
+    const updateData = (jalanData: GeoJSONFeatureCollection | null, segmenData: GeoJSONFeatureCollection | null, isMobile?: boolean) => {
         if (!mapRef.current) return;
 
         const jalanSource = mapRef.current.getSource('jalan-source') as mapboxgl.GeoJSONSource;
@@ -277,12 +277,33 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
         if (points.length > 0) {
             const bounds = new mapboxgl.LngLatBounds();
             points.forEach(p => bounds.extend(p));
-            mapRef.current.fitBounds(bounds, { padding: 100, duration: 1000 });
+
+            // Adjust padding based on device. 
+            // On desktop (with panels) we want more padding.
+            // On mobile we want to maximize the view.
+            const padding = isMobile ? 50 : 250;
+
+            mapRef.current.fitBounds(bounds, { padding: padding, duration: 1000 });
         }
+    };
+
+    const zoomIn = () => {
+        if (mapRef.current) mapRef.current.zoomIn();
+    };
+
+    const zoomOut = () => {
+        if (mapRef.current) mapRef.current.zoomOut();
+    };
+
+    const resetBearing = () => {
+        if (mapRef.current) mapRef.current.resetNorthPitch();
     };
 
     return {
         mapRef,
-        updateData
+        updateData,
+        zoomIn,
+        zoomOut,
+        resetBearing
     };
 }

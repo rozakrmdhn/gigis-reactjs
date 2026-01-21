@@ -1,6 +1,8 @@
 import { useRef, useEffect } from "react";
 import { type GeoJSONFeatureCollection } from "~/features/peta/types";
 import { useMonitoringMap } from "~/features/monitoring/hooks/useMonitoringMap";
+import { useIsMobile } from "~/hooks/use-mobile";
+import { MapControls } from "./MapControls";
 
 interface MonitoringMapProps {
     jalanFeatures?: GeoJSONFeatureCollection | null;
@@ -8,10 +10,11 @@ interface MonitoringMapProps {
 }
 
 export function MonitoringMap({ jalanFeatures, segmenFeatures }: MonitoringMapProps) {
+    const isMobile = useIsMobile();
     const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
     const mapContainerRef = useRef<HTMLDivElement>(null);
 
-    const { mapRef, updateData } = useMonitoringMap({
+    const { mapRef, updateData, zoomIn, zoomOut, resetBearing } = useMonitoringMap({
         mapboxToken,
         containerRef: mapContainerRef
     });
@@ -33,8 +36,8 @@ export function MonitoringMap({ jalanFeatures, segmenFeatures }: MonitoringMapPr
     }, [mapRef]);
 
     useEffect(() => {
-        updateData(jalanFeatures || null, segmenFeatures || null);
-    }, [jalanFeatures, segmenFeatures, updateData]);
+        updateData(jalanFeatures || null, segmenFeatures || null, isMobile);
+    }, [jalanFeatures, segmenFeatures, updateData, isMobile]);
 
     return (
         <div className="flex-1 relative h-full w-full bg-slate-100">
@@ -44,6 +47,13 @@ export function MonitoringMap({ jalanFeatures, segmenFeatures }: MonitoringMapPr
                 </div>
             )}
             <div ref={mapContainerRef} className="w-full h-full" />
+
+            <MapControls
+                onZoomIn={zoomIn}
+                onZoomOut={zoomOut}
+                onResetBearing={resetBearing}
+                className="absolute top-2 right-2 z-40"
+            />
         </div>
     );
 }

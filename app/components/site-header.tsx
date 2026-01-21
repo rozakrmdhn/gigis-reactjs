@@ -19,9 +19,9 @@ export function SiteHeader() {
               href="https://github.com/shadcn-ui/ui/tree/main/apps/v4/app/(examples)/dashboard"
               rel="noopener noreferrer"
               target="_blank"
-              className="dark:text-foreground text-mono"
+              className="dark:text-foreground font-bold text-emerald-600"
             >
-              GiGIS App
+              GIGIS
             </a>
           </Button>
         </div>

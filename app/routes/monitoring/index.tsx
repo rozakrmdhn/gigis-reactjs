@@ -1,8 +1,15 @@
-import { useState } from 'react';
-import { useLoaderData, useSearchParams, type LoaderFunctionArgs } from "react-router";
+import { useState, useEffect } from 'react';
+import { useLoaderData, useSearchParams, useNavigation, type LoaderFunctionArgs } from "react-router";
+import { History, Search, X } from 'lucide-react';
+import { Button } from '~/components/ui/button';
+import { Input } from '~/components/ui/input';
+import { cn } from '~/lib/utils';
+import { Spinner } from '~/components/ui/spinner';
 import { MonitoringSidebar } from '~/features/monitoring/components/MonitoringSidebar';
 import { MonitoringMap } from '~/features/monitoring/components/MonitoringMap';
+import { useIsMobile } from '~/hooks/use-mobile';
 import { MonitoringList } from '~/features/monitoring/components/MonitoringList';
+import { ConstructionHistoryPanel } from '~/features/monitoring/components/ConstructionHistoryPanel';
 import { type GeoJSONFeatureCollection } from '~/features/peta/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import {
@@ -15,25 +22,26 @@ import {
     PaginationPrevious,
 } from "~/components/ui/pagination";
 
-import { monitoringService } from "~/features/monitoring/services/monitoring.service";
+import { monitoringService, type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
 import { kecamatanService, type Kecamatan } from "~/services/kecamatan";
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
     const id_kecamatan = url.searchParams.get("id_kecamatan") || undefined;
+    const search = url.searchParams.get("search") || undefined;
     const page = parseInt(url.searchParams.get("page") || "1");
     const limit = parseInt(url.searchParams.get("limit") || "50");
 
     try {
         const [monitoringResponse, kecamatanList] = await Promise.all([
-            monitoringService.getMonitoringJalan({ id_kecamatan, page, limit }),
+            monitoringService.getMonitoringJalan({ id_kecamatan, page, limit, search }),
             kecamatanService.getKecamatan()
         ]);
         return {
             monitoringData: monitoringResponse.result,
             pagination: monitoringResponse.pagination,
             kecamatanList,
-            filters: { id_kecamatan, page, limit }
+            filters: { id_kecamatan, page, limit, search }
         };
     } catch (error) {
         console.error("Loader error in monitoring page:", error);
@@ -42,17 +50,33 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function MonitoringPage() {
+    const isMobile = useIsMobile();
+    const navigation = useNavigation();
+    const isLoadingData = navigation.state === "loading" && navigation.location.pathname === "/monitoring";
     const { monitoringData, pagination, kecamatanList, filters } = useLoaderData<typeof loader>();
     const [searchParams, setSearchParams] = useSearchParams();
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [selectedMonitoringData, setSelectedMonitoringData] = useState<MonitoringJalanResult | null>(null);
+    const [searchQuery, setSearchQuery] = useState(filters.search || "");
     const [jalanFeatures, setJalanFeatures] = useState<GeoJSONFeatureCollection | null>(null);
     const [segmenFeatures, setSegmenFeatures] = useState<GeoJSONFeatureCollection | null>(null);
     const [isPanelVisible, setIsPanelVisible] = useState(false);
+    const [isHistoryPanelVisible, setIsHistoryPanelVisible] = useState(false);
     const [fetchingGeojson, setFetchingGeojson] = useState(false);
+    const [isDebouncing, setIsDebouncing] = useState(false);
 
     const handleSelectJalan = async (id: string) => {
         setFetchingGeojson(true);
         setSelectedId(id);
+
+        const found = monitoringData.find((item: MonitoringJalanResult) => item.jalan.id === id);
+        if (found) {
+            setSelectedMonitoringData(found);
+            if (!isMobile) {
+                setIsHistoryPanelVisible(true);
+            }
+        }
+
         const result = await monitoringService.getMonitoringJalanById(id);
 
         if (result) {
@@ -62,6 +86,28 @@ export default function MonitoringPage() {
         }
         setFetchingGeojson(false);
     };
+
+    // Debounce search update
+    useEffect(() => {
+        if (searchQuery !== (filters.search || "")) {
+            setIsDebouncing(true);
+        }
+        const timer = setTimeout(() => {
+            if (searchQuery !== (filters.search || "")) {
+                const newParams = new URLSearchParams(searchParams);
+                if (searchQuery) {
+                    newParams.set("search", searchQuery);
+                } else {
+                    newParams.delete("search");
+                }
+                newParams.set("page", "1");
+                setSearchParams(newParams);
+            }
+            setIsDebouncing(false);
+        }, 300);
+
+        return () => clearTimeout(timer);
+    }, [searchQuery, filters.search, searchParams, setSearchParams]);
 
     return (
         <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden relative">
@@ -123,11 +169,12 @@ export default function MonitoringPage() {
                         </div>
                     </div>
 
-                    <div className="flex-1 p-2 pb-20">
+                    <div className="flex-1 p-2 pb-10">
                         <MonitoringList
                             data={monitoringData}
                             onSelectJalan={handleSelectJalan}
                             selectedId={selectedId}
+                            isLoading={isLoadingData}
                         />
                     </div>
 
@@ -179,6 +226,55 @@ export default function MonitoringPage() {
                 <MonitoringMap
                     jalanFeatures={jalanFeatures}
                     segmenFeatures={segmenFeatures}
+                />
+
+                {/* Search Overlay */}
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 w-full max-w-md px-16">
+                    <div className="relative group">
+                        <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none">
+                            <Search className="h-4 w-4 text-muted-foreground group-focus-within:text-emerald-500 transition-colors" />
+                        </div>
+                        <Input
+                            type="text"
+                            placeholder="Cari Nama Ruas / Desa ..."
+                            className="w-full pl-10 pr-10 bg-white/90 backdrop-blur-md border-emerald-500/20 shadow-xl focus-visible:ring-emerald-500/50 h-11 rounded-2xl"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                        />
+                        {(isLoadingData || isDebouncing) && (
+                            <div className="absolute inset-y-0 right-10 flex items-center">
+                                <Spinner className="h-4 w-4 text-emerald-500 animate-spin" />
+                            </div>
+                        )}
+                        {searchQuery && (
+                            <button
+                                onClick={() => setSearchQuery("")}
+                                className="absolute inset-y-0 right-3 flex items-center text-muted-foreground hover:text-slate-900 transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {selectedId && (
+                    <Button
+                        variant="secondary"
+                        size="sm"
+                        className={cn(
+                            "absolute top-2 right-14 z-40 shadow-lg border-emerald-500/20 bg-white/90 backdrop-blur-sm hover:bg-emerald-50 transition-all duration-300",
+                            isHistoryPanelVisible && "opacity-0 pointer-events-none translate-x-10"
+                        )}
+                        onClick={() => setIsHistoryPanelVisible(true)}
+                    >
+                        <History className="w-4 h-4 mr-2 text-emerald-600" />
+                        <span className="font-bold text-slate-700">Riwayat</span>
+                    </Button>
+                )}
+                <ConstructionHistoryPanel
+                    data={selectedMonitoringData}
+                    isVisible={isHistoryPanelVisible}
+                    onClose={() => setIsHistoryPanelVisible(false)}
                 />
             </div>
         </div>
