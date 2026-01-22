@@ -60,7 +60,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                         </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left">
-                        <p className="text-xs font-semibold">Reset Compass</p>
+                        <p className="text-xs font-semibold">Reset View</p>
                     </TooltipContent>
                 </Tooltip>
             </div>

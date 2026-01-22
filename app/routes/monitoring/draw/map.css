@@ -1,0 +1,70 @@
+.map-container {
+    width: 100%;
+    height: calc(100vh - 64px);
+    /* Adjust based on header height if any */
+    position: relative;
+}
+
+.ol-viewport {
+    border-radius: 8px;
+}
+
+.map-controls {
+    position: absolute;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.9);
+    padding: 8px;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    gap: 8px;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.map-control-btn {
+    padding: 6px 12px;
+    border-radius: 4px;
+    border: 1px solid #ddd;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s;
+}
+
+.map-control-btn:hover {
+    background: #f0f0f0;
+}
+
+.map-control-btn.active {
+    background: #2563eb;
+    color: white;
+    border-color: #2563eb;
+}
+
+.map-control-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.geojson-output {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    max-width: 300px;
+    max-height: 200px;
+    overflow: auto;
+    background: white;
+    padding: 10px;
+    border-radius: 4px;
+    font-size: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    display: none;
+}

@@ -1,6 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
+.custom-draw-marker {
+  background: transparent;
+  border: none;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme {

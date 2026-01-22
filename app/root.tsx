@@ -9,6 +9,7 @@ import {
 
 import type { Route } from "./+types/root";
 import "./app.css";
+import "leaflet/dist/leaflet.css";
 import { Spinner } from "./components/ui/spinner";
 
 export function HydrateFallback() {

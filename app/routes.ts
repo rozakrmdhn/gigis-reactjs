@@ -9,8 +9,8 @@ export default [
         route("master/desa", "routes/master/desa/index.tsx"),
         route("master/kecamatan", "routes/master/kecamatan/index.tsx"),
         route("master/jalan", "routes/master/jalan/index.tsx"),
-        route("peta-monitoring", "routes/peta-monitoring/index.tsx"),
+        route("monitoring/maps", "routes/monitoring/maps/index.tsx"),
+        route("monitoring/draw", "routes/monitoring/draw/index.tsx"),
         route("data-monitoring", "routes/data-monitoring/index.tsx"),
     ]),
 ] satisfies RouteConfig;
-
