@@ -31,21 +31,46 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const limit = Number(url.searchParams.get("limit")) || 50;
     const search = url.searchParams.get("search") || undefined;
 
-    const [monitoringData, kecamatanList] = await Promise.all([
-        monitoringService.getMonitoringJalan({ id_kecamatan, page, limit, search }),
-        kecamatanService.getKecamatan()
-    ]);
-
-    return { monitoringData, kecamatanList, filters: { id_kecamatan, page, limit, search } };
+    // Return only filters for instant navigation
+    // Data will be fetched client-side
+    return { filters: { id_kecamatan, page, limit, search } };
 }
 
 export default function DataMonitoringPage() {
-    const { monitoringData, kecamatanList, filters } = useLoaderData<typeof loader>();
+    const { filters } = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
     const [searchParams, setSearchParams] = useSearchParams();
+
+    // Client-side data state
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [monitoringData, setMonitoringData] = useState<any>(null);
+    const [kecamatanList, setKecamatanList] = useState<any[]>([]);
+
     const [searchTerm, setSearchTerm] = useState(filters.search || "");
-    const isLoading = revalidator.state === "loading";
-    const pagination = monitoringData.pagination;
+    const isLoading = isInitialLoading || revalidator.state === "loading";
+    const pagination = monitoringData?.pagination;
+
+    // Fetch data on mount and when filters change
+    useEffect(() => {
+        async function fetchData() {
+            setIsInitialLoading(true);
+            try {
+                const [monitoringResponse, kecamatanData] = await Promise.all([
+                    monitoringService.getMonitoringJalan(filters),
+                    kecamatanService.getKecamatan()
+                ]);
+                setMonitoringData(monitoringResponse);
+                setKecamatanList(kecamatanData);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                setMonitoringData(null);
+                setKecamatanList([]);
+            } finally {
+                setIsInitialLoading(false);
+            }
+        }
+        fetchData();
+    }, [filters.id_kecamatan, filters.page, filters.limit, filters.search]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -139,8 +164,8 @@ export default function DataMonitoringPage() {
                     </div>
                 ) : (
                     <div className="grid gap-3">
-                        {monitoringData.result.length > 0 ? (
-                            monitoringData.result.map((item, index) => (
+                        {monitoringData?.result?.length > 0 ? (
+                            monitoringData.result.map((item: any, index: number) => (
                                 <DataMonitoringItem
                                     key={item.jalan.id}
                                     data={item}

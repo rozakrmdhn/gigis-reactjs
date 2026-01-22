@@ -14,21 +14,45 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const tahun_pembangunan = url.searchParams.get("tahun_pembangunan") || undefined;
     const check_melarosa = url.searchParams.get("check_melarosa") || "ya";
 
-    const [rekapData, kecamatanList] = await Promise.all([
-        laporanService.getRekapJalanByDibangun({ kecamatan, desa, tahun_pembangunan, check_melarosa }),
-        kecamatanService.getKecamatan()
-    ]);
-
-    return { rekapData, kecamatanList, filters: { kecamatan, desa, tahun_pembangunan, check_melarosa } };
+    // Return only filters for instant navigation
+    // Data will be fetched client-side
+    return { filters: { kecamatan, desa, tahun_pembangunan, check_melarosa } };
 }
 
 export default function LaporanPage() {
-    const { rekapData, kecamatanList, filters } = useLoaderData<typeof loader>();
+    const { filters } = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
     const [searchParams, setSearchParams] = useSearchParams();
 
+    // Client-side data state
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [rekapData, setRekapData] = useState<any[]>([]);
+    const [kecamatanList, setKecamatanList] = useState<any[]>([]);
+
     const [search, setSearch] = useState(filters.desa || "");
-    const isLoading = revalidator.state === "loading";
+    const isLoading = isInitialLoading || revalidator.state === "loading";
+
+    // Fetch data on mount and when filters change
+    useEffect(() => {
+        async function fetchData() {
+            setIsInitialLoading(true);
+            try {
+                const [rekapResponse, kecamatanData] = await Promise.all([
+                    laporanService.getRekapJalanByDibangun(filters),
+                    kecamatanService.getKecamatan()
+                ]);
+                setRekapData(rekapResponse);
+                setKecamatanList(kecamatanData);
+            } catch (error) {
+                console.error("Error fetching data:", error);
+                setRekapData([]);
+                setKecamatanList([]);
+            } finally {
+                setIsInitialLoading(false);
+            }
+        }
+        fetchData();
+    }, [filters.kecamatan, filters.tahun_pembangunan, filters.check_melarosa]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

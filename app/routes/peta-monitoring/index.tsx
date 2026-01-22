@@ -10,6 +10,8 @@ import { MonitoringMap } from '~/features/monitoring/components/MonitoringMap';
 import { useIsMobile } from '~/hooks/use-mobile';
 import { MonitoringList } from '~/features/monitoring/components/MonitoringList';
 import { ConstructionHistoryPanel } from '~/features/monitoring/components/ConstructionHistoryPanel';
+import { MonitoringSidebarSkeleton } from '~/features/monitoring/components/MonitoringSidebarSkeleton';
+import { MonitoringMapSkeleton } from '~/features/monitoring/components/MonitoringMapSkeleton';
 import { type GeoJSONFeatureCollection } from '~/features/peta/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import {
@@ -32,21 +34,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const page = parseInt(url.searchParams.get("page") || "1");
     const limit = parseInt(url.searchParams.get("limit") || "50");
 
-    try {
-        const [monitoringResponse, kecamatanList] = await Promise.all([
-            monitoringService.getMonitoringJalan({ id_kecamatan, page, limit, search }),
-            kecamatanService.getKecamatan()
-        ]);
-        return {
-            monitoringData: monitoringResponse.result,
-            pagination: monitoringResponse.pagination,
-            kecamatanList,
-            filters: { id_kecamatan, page, limit, search }
-        };
-    } catch (error) {
-        console.error("Loader error in monitoring page:", error);
-        return { monitoringData: [], pagination: undefined, kecamatanList: [], filters: {} };
-    }
+    // Return only filters for instant navigation
+    // Data will be fetched client-side
+    return {
+        filters: { id_kecamatan, page, limit, search }
+    };
 }
 
 interface SearchInputProps {
@@ -86,9 +78,14 @@ export default function MonitoringPage() {
     const isMobile = useIsMobile();
     const navigation = useNavigation();
     const revalidator = useRevalidator();
-    const isLoadingData = (navigation.state === "loading" && navigation.location.pathname === "/monitoring") || revalidator.state === "loading";
-    const { monitoringData, pagination, kecamatanList, filters } = useLoaderData<typeof loader>();
+    const { filters } = useLoaderData<typeof loader>();
     const [searchParams, setSearchParams] = useSearchParams();
+
+    // Client-side data state
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [monitoringData, setMonitoringData] = useState<MonitoringJalanResult[]>([]);
+    const [pagination, setPagination] = useState<any>(null);
+    const [kecamatanList, setKecamatanList] = useState<Kecamatan[]>([]);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [selectedMonitoringData, setSelectedMonitoringData] = useState<MonitoringJalanResult | null>(null);
     const [searchQuery, setSearchQuery] = useState(filters.search || "");
@@ -99,6 +96,41 @@ export default function MonitoringPage() {
     const [isHistoryPanelVisible, setIsHistoryPanelVisible] = useState(false);
     const [fetchingGeojson, setFetchingGeojson] = useState(false);
     const [isDebouncing, setIsDebouncing] = useState(false);
+
+    const isLoadingData = isInitialLoading || revalidator.state === "loading";
+
+    // Fetch kecamatan list once on mount (doesn't change)
+    useEffect(() => {
+        async function fetchKecamatanList() {
+            try {
+                const kecamatanData = await kecamatanService.getKecamatan();
+                setKecamatanList(kecamatanData);
+            } catch (error) {
+                console.error("Error fetching kecamatan list:", error);
+                setKecamatanList([]);
+            }
+        }
+        fetchKecamatanList();
+    }, []);
+
+    // Fetch monitoring data when filters change
+    useEffect(() => {
+        async function fetchData() {
+            setIsInitialLoading(true);
+            try {
+                const monitoringResponse = await monitoringService.getMonitoringJalan(filters);
+                setMonitoringData(monitoringResponse.result);
+                setPagination(monitoringResponse.pagination);
+            } catch (error) {
+                console.error("Error fetching monitoring data:", error);
+                setMonitoringData([]);
+                setPagination(null);
+            } finally {
+                setIsInitialLoading(false);
+            }
+        }
+        fetchData();
+    }, [filters.id_kecamatan, filters.page, filters.limit, filters.search]);
 
     const handleSelectJalan = useCallback(async (id: string) => {
         setFetchingGeojson(true);
@@ -231,7 +263,11 @@ export default function MonitoringPage() {
                     </div>
 
                     <div className="flex-1 overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
-                        {memoizedMonitoringList}
+                        {isInitialLoading ? (
+                            <MonitoringSidebarSkeleton />
+                        ) : (
+                            memoizedMonitoringList
+                        )}
                     </div>
 
                     <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1">
@@ -245,7 +281,7 @@ export default function MonitoringPage() {
                             <RotateCw className={cn("h-4 w-4", revalidator.state === "loading" && "animate-spin")} />
                         </Button>
                         <div className="flex-1">
-                            {pagination && pagination.totalPages > 1 && (
+                            {!isInitialLoading && pagination && pagination.totalPages > 1 && (
                                 <Pagination>
                                     <PaginationContent>
                                         <PaginationItem>
@@ -290,6 +326,7 @@ export default function MonitoringPage() {
             </MonitoringSidebar>
 
             <div className="flex-1 relative">
+                {/* Map is always rendered and visible - no loading overlay */}
                 <MonitoringMap
                     jalanFeatures={jalanFeatures}
                     segmenFeatures={segmenFeatures}

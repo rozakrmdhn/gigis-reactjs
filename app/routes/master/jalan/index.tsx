@@ -1,22 +1,26 @@
+import { useState, useEffect } from "react";
 import { TabTabel } from "~/features/peta/components/TabTabel";
 import { jalanDropdownService } from "~/features/peta/services/jalan-dropdown.service";
-import type { Route } from "./+types/index";
-
-import { useLoaderData } from "react-router";
-
-export async function loader({ }: Route.LoaderArgs) {
-    try {
-        const jalanData = await jalanDropdownService.getJalan();
-        return { jalanData: jalanData || [] };
-    } catch (error) {
-        console.error("Loader error in master/jalan:", error);
-        return { jalanData: [] };
-    }
-}
 
 export default function MasterJalanPage() {
-    const data = useLoaderData<typeof loader>();
-    const jalanData = data?.jalanData || [];
+    const [jalanData, setJalanData] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchData() {
+            setIsLoading(true);
+            try {
+                const data = await jalanDropdownService.getJalan();
+                setJalanData(data || []);
+            } catch (error) {
+                console.error("Error fetching jalan data:", error);
+                setJalanData([]);
+            } finally {
+                setIsLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4">
@@ -24,7 +28,15 @@ export default function MasterJalanPage() {
                 <h1 className="text-2xl font-bold">Data Jalan</h1>
                 <p className="text-muted-foreground text-sm">Halaman manajemen data jalan (Master Data).</p>
             </div>
-            <TabTabel initialData={jalanData} />
+            {isLoading ? (
+                <div className="space-y-4">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                        <div key={i} className="h-16 bg-slate-100 rounded-lg animate-pulse" />
+                    ))}
+                </div>
+            ) : (
+                <TabTabel initialData={jalanData} />
+            )}
         </div>
     );
 }

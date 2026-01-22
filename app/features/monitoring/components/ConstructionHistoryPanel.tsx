@@ -47,8 +47,8 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                 {/* Header */}
                 <div className="p-4 border-b bg-linear-to-br from-emerald-500/10 to-transparent">
                     <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-1">
-                            <span className="text-sm font-bold text-monospace text-muted-foreground">No. {jalan.kode_ruas}</span>
+                        <div className="flex items-start gap-1">
+                            <span className="text-sm w-12 font-bold text-monospace text-muted-foreground">No. {jalan.kode_ruas}</span>
                             <h2 className="text-md font-bold text-slate-900 tracking-tight">
                                 {jalan.nama_ruas}</h2>
                         </div>
