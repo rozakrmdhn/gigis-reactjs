@@ -1,3 +1,4 @@
+import React from 'react';
 import { type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
 import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -10,7 +11,7 @@ interface MonitoringListProps {
     isLoading?: boolean;
 }
 
-export function MonitoringList({ data, onSelectJalan, selectedId, isLoading }: MonitoringListProps) {
+export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isLoading }: MonitoringListProps) => {
     if (isLoading) {
         return (
             <div className="space-y-3">
@@ -113,11 +114,11 @@ export function MonitoringList({ data, onSelectJalan, selectedId, isLoading }: M
                                 <div className="flex items-center justify-between text-[11px]">
                                     <span className="text-muted-foreground font-medium flex items-center gap-1.5">
                                         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                        Terbangun: {formatNumber(item.summary.total_panjang_segmen)} m
+                                        Terbangun: {formatNumber(item.summary.fisik.total)} m
                                     </span>
                                     <span className="text-muted-foreground font-medium flex items-center gap-1.5">
                                         <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                                        Sisa: {formatNumber(item.summary.total_selisih_panjang)} m
+                                        Sisa: {formatNumber(item.summary.panjang_belum_tertangani)} m
                                     </span>
                                 </div>
 
@@ -125,14 +126,14 @@ export function MonitoringList({ data, onSelectJalan, selectedId, isLoading }: M
                                     <div
                                         className="h-full bg-emerald-500 transition-all duration-500 ease-out"
                                         style={{
-                                            width: `${Math.min(100, (item.summary.total_panjang_segmen / item.summary.total_panjang_jalan) * 100)}%`
+                                            width: `${Math.min(100, (item.summary.fisik.total / item.summary.total_panjang_jalan) * 100)}%`
                                         }}
                                     />
                                 </div>
 
                                 <div className="flex justify-between text-[10px] text-muted-foreground/80 italic">
-                                    <span>{item.summary.total_segmens} Segmen</span>
-                                    <span>{Math.round((item.summary.total_panjang_segmen / item.summary.total_panjang_jalan) * 100)}% Selesai</span>
+                                    <span>{(item.segmen.desa?.length || 0) + (item.segmen.kabupaten?.length || 0)} Segmen</span>
+                                    <span>{Math.round((item.summary.fisik.total / item.summary.total_panjang_jalan) * 100)}% Selesai</span>
                                 </div>
 
                                 {item.summary.kondisi_jalan && (
@@ -185,4 +186,6 @@ export function MonitoringList({ data, onSelectJalan, selectedId, isLoading }: M
             })}
         </div>
     );
-}
+});
+
+MonitoringList.displayName = "MonitoringList";

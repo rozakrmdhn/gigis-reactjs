@@ -38,9 +38,14 @@ const data = {
       icon: IconMap,
     },
     {
-      title: "Monitoring",
-      url: "/monitoring",
+      title: "Peta Monitoring",
+      url: "/peta-monitoring",
       icon: IconMap,
+    },
+    {
+      title: "Data Monitoring",
+      url: "/data-monitoring",
+      icon: IconDatabase,
     },
     {
       title: "Laporan",

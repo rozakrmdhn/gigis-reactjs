@@ -80,6 +80,7 @@ interface DataTableProps<TData, TValue> {
     getRowId?: (row: TData) => string
     searchValue?: string
     onSearchChange?: (value: string) => void
+    defaultPageSize?: number
 }
 
 function DraggableRow<TData>({ row }: { row: Row<TData> }) {
@@ -116,6 +117,7 @@ export function DataTable<TData, TValue>({
     getRowId,
     searchValue,
     onSearchChange,
+    defaultPageSize = 10,
 }: DataTableProps<TData, TValue>) {
     const [data, setData] = React.useState(() => initialData)
 
@@ -133,7 +135,7 @@ export function DataTable<TData, TValue>({
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
-        pageSize: 10,
+        pageSize: defaultPageSize,
     })
 
     const sortableId = React.useId()

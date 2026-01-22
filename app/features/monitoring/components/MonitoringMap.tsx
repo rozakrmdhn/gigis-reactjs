@@ -7,9 +7,10 @@ import { MapControls } from "./MapControls";
 interface MonitoringMapProps {
     jalanFeatures?: GeoJSONFeatureCollection | null;
     segmenFeatures?: GeoJSONFeatureCollection | null;
+    segmenKabFeatures?: GeoJSONFeatureCollection | null;
 }
 
-export function MonitoringMap({ jalanFeatures, segmenFeatures }: MonitoringMapProps) {
+export function MonitoringMap({ jalanFeatures, segmenFeatures, segmenKabFeatures }: MonitoringMapProps) {
     const isMobile = useIsMobile();
     const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
     const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -36,8 +37,8 @@ export function MonitoringMap({ jalanFeatures, segmenFeatures }: MonitoringMapPr
     }, [mapRef]);
 
     useEffect(() => {
-        updateData(jalanFeatures || null, segmenFeatures || null, isMobile);
-    }, [jalanFeatures, segmenFeatures, updateData, isMobile]);
+        updateData(jalanFeatures || null, segmenFeatures || null, segmenKabFeatures || null, isMobile);
+    }, [jalanFeatures, segmenFeatures, segmenKabFeatures, updateData, isMobile]);
 
     return (
         <div className="flex-1 relative h-full w-full bg-slate-100">

@@ -16,8 +16,11 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
 
     const { jalan, segmen, summary } = data;
 
+    // Combine desa and kabupaten segments
+    const allSegments = [...(segmen.desa || []), ...(segmen.kabupaten || [])];
+
     // Group segments by year
-    const groupedSegments = segmen.reduce((acc, curr) => {
+    const groupedSegments = allSegments.reduce((acc, curr) => {
         const year = curr.tahun_pembangunan || "Tidak Diketahui";
         if (!acc[year]) acc[year] = [];
         acc[year].push(curr);
@@ -80,18 +83,18 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                             <div className="flex justify-between items-center mb-2">
                                 <span className="text-xs font-semibold text-emerald-700">Progres Pembangunan</span>
                                 <span className="text-xs font-bold text-emerald-700">
-                                    {Math.round((summary.total_panjang_segmen / summary.total_panjang_jalan) * 100)}%
+                                    {Math.round((summary.fisik.total / summary.total_panjang_jalan) * 100)}%
                                 </span>
                             </div>
                             <div className="h-2 w-full bg-slate-200/50 rounded-full overflow-hidden flex">
                                 <div
                                     className="h-full bg-emerald-500 transition-all duration-700 ease-out"
-                                    style={{ width: `${Math.min(100, (summary.total_panjang_segmen / summary.total_panjang_jalan) * 100)}%` }}
+                                    style={{ width: `${Math.min(100, (summary.fisik.total / summary.total_panjang_jalan) * 100)}%` }}
                                 />
                             </div>
                             <div className="flex justify-between mt-2 text-[10px] text-emerald-600/80 font-medium">
-                                <span>{formatNumber(summary.total_panjang_segmen)}m Terbangun</span>
-                                <span>{summary.total_segmens} Segmen</span>
+                                <span>{formatNumber(summary.fisik.total)}m Terbangun</span>
+                                <span>{allSegments.length} Segmen</span>
                             </div>
                         </div>
                     )}
@@ -124,9 +127,14 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                                                     className="group bg-slate-50 border border-slate-200/60 p-3 rounded-2xl hover:bg-white hover:border-emerald-500/30 hover:shadow-xl transition-all duration-300"
                                                 >
                                                     <div className="flex justify-between items-start mb-3">
-                                                        <Badge variant="outline" className="bg-white border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-tight">
-                                                            {seg.jenis_perkerasan}
-                                                        </Badge>
+                                                        <div className="flex flex-wrap gap-1">
+                                                            <Badge variant="outline" className="bg-white border-emerald-100 text-emerald-700 px-2.5 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-tight">
+                                                                {seg.jenis_perkerasan || seg.perkerasan}
+                                                            </Badge>
+                                                            <Badge variant="secondary" className="bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase border-slate-200">
+                                                                {seg.status_eksisting || 'Desa'}
+                                                            </Badge>
+                                                        </div>
                                                         <Badge
                                                             className={cn(
                                                                 "text-[10px] px-2 h-5 font-bold uppercase rounded-md",
@@ -149,6 +157,7 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                                                             <span className="font-bold text-slate-700">{seg.lebar} m</span>
                                                         </div>
                                                     </div>
+                                                    <span className="block text-[10px] pt-1 text-slate-400">{seg.id}</span>
 
                                                     {seg.verifikator && (
                                                         <div className="mt-3 pt-3 border-t border-slate-200/50 flex items-center gap-2 text-[10px]">

@@ -14,7 +14,7 @@ export function MonitoringSidebar({ children, className }: MonitoringSidebarProp
     return (
         <div
             className={cn(
-                "absolute top-0 left-0 bottom-0 bg-background/95 backdrop-blur-sm border-r transition-all duration-300 ease-in-out flex flex-col z-30 shadow-xl",
+                "absolute top-0 left-0 bottom-0 bg-background/95 backdrop-blur-sm border-r transition-all duration-500 ease-in-out flex flex-col z-30 shadow-xl",
                 isOpen ? "w-80" : "w-0",
                 className
             )}

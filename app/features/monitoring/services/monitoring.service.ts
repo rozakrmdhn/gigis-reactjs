@@ -11,46 +11,57 @@ export interface Jalan {
     status_awal: string;
     status_eksisting: string;
     sumber_data: string;
-    id_desa: string;
-    id_kecamatan: number;
+    id_desa?: string;
+    id_kecamatan?: number;
     created_at: string | null;
     updated_at: string | null;
-    JalanSegmens: any[];
+    JalanSegmens?: any[];
 }
 
 export interface Segmen {
     id: string;
-    check_melarosa: string;
-    status_jalan: string;
-    sumber_data: string;
-    tahun_pembangunan: number;
-    verifikator: string;
+    check_melarosa?: string;
+    status_jalan?: string;
+    sumber_data?: string;
+    tahun_pembangunan?: number;
+    verifikator?: string;
     desa: string;
     kecamatan: string;
     panjang: number;
-    lebar: string;
-    jenis_perkerasan: string;
-    tahun_renovasi_terakhir: number | null;
+    lebar: string | number;
+    jenis_perkerasan?: string;
+    perkerasan?: string;
+    tahun_renovasi_terakhir?: number | null;
     kondisi: string;
-    nama_jalan: string;
+    nama_jalan?: string | null;
+    nama_ruas?: string;
     kode_ruas: number;
-    kecamatan_id: number;
-    desa_id: number;
-    keterangan: string;
-    foto_url: string | null;
-    created_at: string | null;
-    updated_at: string | null;
+    kecamatan_id?: number | string;
+    id_kecamatan?: number | string;
+    desa_id?: number | string;
+    id_desa?: string;
+    keterangan?: string;
+    foto_url?: string | null;
+    status_eksisting?: string;
+    created_at?: string | null;
+    updated_at?: string | null;
 }
 
 export interface MonitoringJalanResult {
     jalan: Jalan;
-    segmen: Segmen[];
+    segmen: {
+        desa: Segmen[];
+        kabupaten: Segmen[];
+    };
     summary: {
-        total_segmens: number;
-        total_panjang_segmen: number;
         total_panjang_jalan: number;
-        total_selisih_panjang: number;
-        kondisi_jalan?: {
+        fisik: {
+            desa: number;
+            kabupaten: number;
+            total: number;
+        };
+        panjang_belum_tertangani: number;
+        kondisi_jalan: {
             kode: number;
             nama: string;
             mantap: string;
@@ -100,7 +111,7 @@ export const monitoringService = {
         }
     },
 
-    getMonitoringJalanById: async (id: string): Promise<{ jalan: any; segmen: any } | null> => {
+    getMonitoringJalanById: async (id: string): Promise<{ jalan: any; segmen: any; segmenkab: any } | null> => {
         try {
             const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}/geojson`);
             if (!response.ok) {

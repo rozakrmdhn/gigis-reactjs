@@ -21,7 +21,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
             container: containerRef.current,
             style: 'mapbox://styles/mapbox/streets-v11',
             center: [111.8328268, -7.2288555], // Bojonegoro
-            zoom: 9.5
+            zoom: 10
         });
 
         // Removed default NavigationControl
@@ -56,7 +56,16 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                 }
             });
 
-            // Layer for Jalan (Gray)
+            // Source for segments Kabupaten (Segmen Kab)
+            map.addSource('segmenkab-source', {
+                type: 'geojson',
+                data: {
+                    type: 'FeatureCollection',
+                    features: []
+                }
+            });
+
+            // Layer for Jalan (Orange)
             map.addLayer({
                 id: 'jalan-layer',
                 type: 'line',
@@ -99,6 +108,21 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                     'line-width': 7
                 }
             });
+
+            // Layer for Segmen Kabupaten (Blue)
+            map.addLayer({
+                id: 'segmenkab-layer',
+                type: 'line',
+                source: 'segmenkab-source',
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': '#3b82f6', // Blue
+                    'line-width': 7
+                }
+            });
         });
 
         return () => {
@@ -108,11 +132,17 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
         };
     }, [mapboxToken]);
 
-    const updateData = (jalanData: GeoJSONFeatureCollection | null, segmenData: GeoJSONFeatureCollection | null, isMobile?: boolean) => {
+    const updateData = (
+        jalanData: GeoJSONFeatureCollection | null,
+        segmenData: GeoJSONFeatureCollection | null,
+        segmenKabData: GeoJSONFeatureCollection | null,
+        isMobile?: boolean
+    ) => {
         if (!mapRef.current) return;
 
         const jalanSource = mapRef.current.getSource('jalan-source') as mapboxgl.GeoJSONSource;
         const segmenSource = mapRef.current.getSource('segmen-source') as mapboxgl.GeoJSONSource;
+        const segmenKabSource = mapRef.current.getSource('segmenkab-source') as mapboxgl.GeoJSONSource;
 
         if (jalanSource) {
             jalanSource.setData(jalanData || { type: 'FeatureCollection', features: [] });
@@ -122,10 +152,15 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
             segmenSource.setData(segmenData || { type: 'FeatureCollection', features: [] });
         }
 
+        if (segmenKabSource) {
+            segmenKabSource.setData(segmenKabData || { type: 'FeatureCollection', features: [] });
+        }
+
         // Fit bounds logic from combined data
         const allFeatures = [
             ...(jalanData?.features || []),
-            ...(segmenData?.features || [])
+            ...(segmenData?.features || []),
+            ...(segmenKabData?.features || [])
         ];
 
         let points: [number, number][] = [];
@@ -142,8 +177,14 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
         markersRef.current.forEach(marker => marker.remove());
         markersRef.current = [];
 
-        const featuresForMarkers = (segmenData?.features && segmenData.features.length > 0)
-            ? segmenData.features
+        // Combine all segments for markers
+        const combinedSegments = [
+            ...(segmenData?.features || []).map(f => ({ ...f, _source: 'Desa' })),
+            ...(segmenKabData?.features || []).map(f => ({ ...f, _source: 'Kabupaten' }))
+        ];
+
+        const featuresForMarkers = combinedSegments.length > 0
+            ? combinedSegments
             : (jalanData?.features || []);
 
         if (featuresForMarkers.length > 0) {
@@ -252,9 +293,9 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                     };
 
                     // Mark Titik Awal/Akhir based on context
-                    const isRoad = !segmenData?.features || segmenData.features.length === 0;
-                    const startTitle = isRoad ? 'Awal Ruas' : 'Awal Segmen';
-                    const endTitle = isRoad ? 'Akhir Ruas' : 'Akhir Segmen';
+                    const source = (feature as any)._source;
+                    const startTitle = source ? `Awal Segmen ${source}` : 'Awal Ruas';
+                    const endTitle = source ? `Akhir Segmen ${source}` : 'Akhir Ruas';
 
                     // Create Popups
                     const startPopup = new mapboxgl.Popup({
@@ -295,6 +336,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                 }
             });
         }
+
 
         if (points.length > 0) {
             const bounds = new mapboxgl.LngLatBounds();

@@ -1,19 +1,4 @@
-export interface RekapDibangun {
-    id_kecamatan: number;
-    id_desa: number;
-    nama_desa: string;
-    nama_kecamatan: string;
-    total_panjang_aset: number;
-    total_panjang_puk: number;
-    total_panjang_dibangun: number;
-    selisih: number;
-}
-
-export interface RekapDibangunResponse {
-    status: string;
-    message: string;
-    result: RekapDibangun[];
-}
+import { type RekapDibangun, type RekapDibangunResponse } from "../types/laporan.types";
 
 export const laporanService = {
     getRekapJalanByDibangun: async (params?: { kecamatan?: string; desa?: string; tahun_pembangunan?: string; check_melarosa?: string }): Promise<RekapDibangun[]> => {

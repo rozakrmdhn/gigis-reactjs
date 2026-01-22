@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
-import { useLoaderData, useSearchParams, useNavigation, type LoaderFunctionArgs } from "react-router";
-import { History, Search, X } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useLoaderData, useSearchParams, useNavigation, useRevalidator, type LoaderFunctionArgs } from "react-router";
+import { History, Search, X, RotateCw } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { cn } from '~/lib/utils';
@@ -49,10 +49,44 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 }
 
+interface SearchInputProps {
+    value: string;
+    onChange: (val: string) => void;
+    isLoading?: boolean;
+}
+
+const SearchInput = React.memo(({ value, onChange, isLoading }: SearchInputProps) => {
+    return (
+        <div className="relative">
+            <Search className={cn(
+                "absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 transition-colors",
+                isLoading ? "text-emerald-500 animate-pulse" : "text-muted-foreground"
+            )} />
+            <Input
+                placeholder="Cari nama ruas..."
+                className="pl-9 h-9 bg-white/50 border-slate-200 focus-visible:ring-emerald-500/20"
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+            />
+            {value && (
+                <button
+                    onClick={() => onChange("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-slate-100 transition-colors"
+                >
+                    <X className="h-3 w-3" />
+                </button>
+            )}
+        </div>
+    );
+});
+
+SearchInput.displayName = "SearchInput";
+
 export default function MonitoringPage() {
     const isMobile = useIsMobile();
     const navigation = useNavigation();
-    const isLoadingData = navigation.state === "loading" && navigation.location.pathname === "/monitoring";
+    const revalidator = useRevalidator();
+    const isLoadingData = (navigation.state === "loading" && navigation.location.pathname === "/monitoring") || revalidator.state === "loading";
     const { monitoringData, pagination, kecamatanList, filters } = useLoaderData<typeof loader>();
     const [searchParams, setSearchParams] = useSearchParams();
     const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -60,12 +94,13 @@ export default function MonitoringPage() {
     const [searchQuery, setSearchQuery] = useState(filters.search || "");
     const [jalanFeatures, setJalanFeatures] = useState<GeoJSONFeatureCollection | null>(null);
     const [segmenFeatures, setSegmenFeatures] = useState<GeoJSONFeatureCollection | null>(null);
+    const [segmenKabFeatures, setSegmenKabFeatures] = useState<GeoJSONFeatureCollection | null>(null);
     const [isPanelVisible, setIsPanelVisible] = useState(false);
     const [isHistoryPanelVisible, setIsHistoryPanelVisible] = useState(false);
     const [fetchingGeojson, setFetchingGeojson] = useState(false);
     const [isDebouncing, setIsDebouncing] = useState(false);
 
-    const handleSelectJalan = async (id: string) => {
+    const handleSelectJalan = useCallback(async (id: string) => {
         setFetchingGeojson(true);
         setSelectedId(id);
 
@@ -82,10 +117,11 @@ export default function MonitoringPage() {
         if (result) {
             setJalanFeatures(result.jalan);
             setSegmenFeatures(result.segmen);
+            setSegmenKabFeatures(result.segmenkab);
             setIsPanelVisible(true);
         }
         setFetchingGeojson(false);
-    };
+    }, [monitoringData, isMobile]);
 
     // Debounce search update
     useEffect(() => {
@@ -109,6 +145,25 @@ export default function MonitoringPage() {
         return () => clearTimeout(timer);
     }, [searchQuery, filters.search, searchParams, setSearchParams]);
 
+    // Memoize kecamatan options
+    const kecamatanOptions = useMemo(() => (
+        kecamatanList.map((k: Kecamatan) => (
+            <SelectItem key={k.id} value={k.id.toString()}>
+                {k.nama_kecamatan}
+            </SelectItem>
+        ))
+    ), [kecamatanList]);
+
+    // Memoize the monitoring list component
+    const memoizedMonitoringList = useMemo(() => (
+        <MonitoringList
+            data={monitoringData}
+            onSelectJalan={handleSelectJalan}
+            selectedId={selectedId}
+            isLoading={isLoadingData}
+        />
+    ), [monitoringData, handleSelectJalan, selectedId, isLoadingData]);
+
     return (
         <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden relative">
             <MonitoringSidebar className="z-30">
@@ -123,6 +178,7 @@ export default function MonitoringPage() {
                                 <Select
                                     value={filters.id_kecamatan || "all"}
                                     onValueChange={(value) => {
+                                        if (value === (filters.id_kecamatan || "all")) return;
                                         const newParams = new URLSearchParams(searchParams);
                                         if (value === "all") {
                                             newParams.delete("id_kecamatan");
@@ -138,17 +194,14 @@ export default function MonitoringPage() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All</SelectItem>
-                                        {kecamatanList.map((k: Kecamatan) => (
-                                            <SelectItem key={k.id} value={k.id.toString()}>
-                                                {k.nama_kecamatan}
-                                            </SelectItem>
-                                        ))}
+                                        {kecamatanOptions}
                                     </SelectContent>
                                 </Select>
 
                                 <Select
                                     value={filters.limit?.toString() || "50"}
                                     onValueChange={(value) => {
+                                        if (value === (filters.limit?.toString() || "50")) return;
                                         const newParams = new URLSearchParams(searchParams);
                                         newParams.set("limit", value);
                                         newParams.set("page", "1");
@@ -169,56 +222,70 @@ export default function MonitoringPage() {
                         </div>
                     </div>
 
-                    <div className="flex-1 p-2 pb-10">
-                        <MonitoringList
-                            data={monitoringData}
-                            onSelectJalan={handleSelectJalan}
-                            selectedId={selectedId}
-                            isLoading={isLoadingData}
+                    <div className="p-2">
+                        <SearchInput
+                            value={searchQuery}
+                            onChange={setSearchQuery}
+                            isLoading={isDebouncing || isLoadingData}
                         />
                     </div>
 
-                    {pagination && pagination.totalPages > 1 && (
-                        <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-0 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20">
-                            <Pagination>
-                                <PaginationContent>
-                                    <PaginationItem>
-                                        <PaginationPrevious
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (pagination.page > 1) {
-                                                    const newParams = new URLSearchParams(searchParams);
-                                                    newParams.set("page", (pagination.page - 1).toString());
-                                                    setSearchParams(newParams);
-                                                }
-                                            }}
-                                            className={pagination.page <= 1 ? "pointer-events-none opacity-50" : ""}
-                                        />
-                                    </PaginationItem>
+                    <div className="flex-1 overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
+                        {memoizedMonitoringList}
+                    </div>
 
-                                    <div className="flex items-center text-xs font-small px-4">
-                                        Page {pagination.page} of {pagination.totalPages}
-                                    </div>
+                    <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-emerald-600 shrink-0"
+                            onClick={() => revalidator.revalidate()}
+                            disabled={isLoadingData}
+                        >
+                            <RotateCw className={cn("h-4 w-4", revalidator.state === "loading" && "animate-spin")} />
+                        </Button>
+                        <div className="flex-1">
+                            {pagination && pagination.totalPages > 1 && (
+                                <Pagination>
+                                    <PaginationContent>
+                                        <PaginationItem>
+                                            <PaginationPrevious
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (pagination.page > 1) {
+                                                        const newParams = new URLSearchParams(searchParams);
+                                                        newParams.set("page", (pagination.page - 1).toString());
+                                                        setSearchParams(newParams);
+                                                    }
+                                                }}
+                                                className={pagination.page <= 1 ? "pointer-events-none opacity-50" : ""}
+                                            />
+                                        </PaginationItem>
 
-                                    <PaginationItem>
-                                        <PaginationNext
-                                            href="#"
-                                            onClick={(e) => {
-                                                e.preventDefault();
-                                                if (pagination.page < pagination.totalPages) {
-                                                    const newParams = new URLSearchParams(searchParams);
-                                                    newParams.set("page", (pagination.page + 1).toString());
-                                                    setSearchParams(newParams);
-                                                }
-                                            }}
-                                            className={pagination.page >= pagination.totalPages ? "pointer-events-none opacity-50" : ""}
-                                        />
-                                    </PaginationItem>
-                                </PaginationContent>
-                            </Pagination>
+                                        <div className="flex items-center text-[10px] font-medium px-2 whitespace-nowrap">
+                                            {pagination.page} / {pagination.totalPages}
+                                        </div>
+
+                                        <PaginationItem>
+                                            <PaginationNext
+                                                href="#"
+                                                onClick={(e) => {
+                                                    e.preventDefault();
+                                                    if (pagination.page < pagination.totalPages) {
+                                                        const newParams = new URLSearchParams(searchParams);
+                                                        newParams.set("page", (pagination.page + 1).toString());
+                                                        setSearchParams(newParams);
+                                                    }
+                                                }}
+                                                className={pagination.page >= pagination.totalPages ? "pointer-events-none opacity-50" : ""}
+                                            />
+                                        </PaginationItem>
+                                    </PaginationContent>
+                                </Pagination>
+                            )}
                         </div>
-                    )}
+                    </div>
                 </div>
             </MonitoringSidebar>
 
@@ -226,6 +293,7 @@ export default function MonitoringPage() {
                 <MonitoringMap
                     jalanFeatures={jalanFeatures}
                     segmenFeatures={segmenFeatures}
+                    segmenKabFeatures={segmenKabFeatures}
                 />
 
                 {/* Search Overlay */}
