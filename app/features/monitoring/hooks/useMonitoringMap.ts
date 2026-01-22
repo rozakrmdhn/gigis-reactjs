@@ -38,6 +38,15 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                 }
             });
 
+            // Source for WMS Bojonegoro (Jalan Desa)
+            map.addSource('wms-bojonegoro-source', {
+                type: 'raster',
+                tiles: [
+                    'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=palapa:jalan_ln_2021_ruasporosdesa&SRS=EPSG:3857&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}'
+                ],
+                tileSize: 256
+            });
+
             // Source for segments (Segmen)
             map.addSource('segmen-source', {
                 type: 'geojson',
@@ -57,11 +66,24 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                     'line-cap': 'round'
                 },
                 paint: {
-                    'line-color': '#808080', // Gray
-                    'line-width': 6,
+                    'line-color': '#F97316', // Orange
+                    'line-width': 3,
                     'line-opacity': 0.8
                 }
             });
+
+            // Layer for WMS Bojonegoro (Desa) - Add before others to keep it under
+            map.addLayer(
+                {
+                    id: 'wms-bojonegoro-layer',
+                    type: 'raster',
+                    source: 'wms-bojonegoro-source',
+                    paint: {
+                        'raster-opacity': 0.5
+                    }
+                },
+                'jalan-layer' // Place it before/below the gray road layer
+            );
 
             // Layer for Segmen (Green)
             map.addLayer({
@@ -74,7 +96,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
                 },
                 paint: {
                     'line-color': '#22c55e', // Green
-                    'line-width': 4
+                    'line-width': 7
                 }
             });
         });
@@ -249,7 +271,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
 
                     // Start marker
                     const elStart = document.createElement('div');
-                    elStart.className = 'w-3 h-3 bg-white rounded-full border-2 border-slate-600 shadow-sm transition-transform hover:scale-125 cursor-pointer';
+                    elStart.className = 'w-3.5 h-3.5 bg-white rounded-full border-2 border-slate-600 shadow-sm transition-transform hover:scale-125 cursor-pointer';
                     const startMarker = new mapboxgl.Marker(elStart)
                         .setLngLat(startPoint)
                         .setPopup(startPopup)
@@ -261,7 +283,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
 
                     // End marker
                     const elEnd = document.createElement('div');
-                    elEnd.className = 'w-3 h-3 bg-white rounded-full border-2 border-slate-600 shadow-sm transition-transform hover:scale-125 cursor-pointer';
+                    elEnd.className = 'w-3.5 h-3.5 bg-white rounded-full border-2 border-slate-600 shadow-sm transition-transform hover:scale-125 cursor-pointer';
                     const endMarker = new mapboxgl.Marker(elEnd)
                         .setLngLat(endPoint)
                         .setPopup(endPopup)
