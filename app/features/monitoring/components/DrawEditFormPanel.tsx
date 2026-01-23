@@ -111,7 +111,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 isVisible ? "translate-x-0" : "translate-x-full"
             )}
         >
-            <div className="p-4 border-b bg-slate-50 flex items-center justify-between">
+            <div className="p-3 border-b bg-slate-50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-amber-600 rounded-lg text-white">
                         <PencilIcon className="w-5 h-5" />
@@ -126,7 +126,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3 space-y-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
                 <div className="space-y-4">
 
                     {/* Basic Info Readonly/Disabled */}
@@ -274,8 +274,8 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 </div>
             </form>
 
-            <div className="p-4 border-t bg-slate-50">
-                <Button className="w-full bg-amber-600 hover:bg-amber-700 h-11 text-sm font-bold shadow-lg shadow-amber-200" onClick={handleSubmit}>
+            <div className="p-3 border-t bg-slate-50">
+                <Button className="w-full bg-amber-600 hover:bg-amber-700 h-10 text-sm font-bold cursor-pointer shadow-lg shadow-amber-200" onClick={handleSubmit}>
                     <PencilIcon className="w-4 h-4 mr-2" />
                     UPDATE DATA SEGMEN
                 </Button>

@@ -187,5 +187,43 @@ export const monitoringService = {
                 }
             };
         }
+    },
+    getAllSegmentsGeoJSON: async (): Promise<any> => {
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch all segments: ${response.statusText}`);
+            }
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching all segments geojson:", error);
+            return {
+                status: "error",
+                message: "Failed to fetch data",
+                result: {
+                    type: "FeatureCollection",
+                    features: []
+                }
+            };
+        }
+    },
+    getKabupatenSegmentsGeoJSON: async (): Promise<any> => {
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch kabupaten segments: ${response.statusText}`);
+            }
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching kabupaten segments geojson:", error);
+            return {
+                status: "success",
+                message: "Fallback empty collection",
+                result: {
+                    type: "FeatureCollection",
+                    features: []
+                }
+            };
+        }
     }
 };

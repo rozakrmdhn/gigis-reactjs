@@ -1,8 +1,9 @@
-import { MapPin, Pencil, Search, X } from "lucide-react";
+import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
+import { useState } from "react";
 
 interface RoadSegmentsPanelProps {
     isVisible: boolean;
@@ -21,7 +22,11 @@ export function RoadSegmentsPanel({
     onEdit,
     className
 }: RoadSegmentsPanelProps) {
+    const [isOpen, setIsOpen] = useState(true);
+
     if (!isVisible) return null;
+
+    const handleToggle = () => setIsOpen(!isOpen);
 
     // Group segments by type/source if possible, or just list them.
     // Assuming segments are OL features or objects with properties.
@@ -82,17 +87,33 @@ export function RoadSegmentsPanel({
 
     return (
         <div className={cn(
-            "absolute top-4 bottom-4 right-4 w-80 bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 z-30 flex flex-col animate-in slide-in-from-right-4 duration-500",
+            "absolute inset-y-0 right-0 z-30 w-full sm:w-80 bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
+            isOpen ? "translate-x-0" : "translate-x-full",
             className
         )}>
-            <div className="flex items-center justify-between p-4 border-b border-slate-100">
-                <div>
-                    <h3 className="font-bold text-slate-800 text-sm">Daftar Segmen</h3>
-                    <p className="text-[10px] text-slate-500 font-medium">
-                        {segments.length} segment ditemukan
-                    </p>
+            {/* Toggle Button */}
+            <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-1/2 -translate-y-1/2 -left-8 h-10 w-8 rounded-r-none shadow-md z-50 bg-white border border-l-0 cursor-pointer"
+                onClick={handleToggle}
+            >
+                {isOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
+
+            <div className="p-4 border-b bg-slate-50 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                    <div className="p-2 bg-blue-600 rounded-lg text-white">
+                        <List className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">DAFTAR SEGMEN</h2>
+                        <p className="text-[10px] text-slate-500 uppercase font-semibold">
+                            {segments.length} segment ditemukan
+                        </p>
+                    </div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100" onClick={onClose}>
+                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200" onClick={handleToggle}>
                     <X className="w-4 h-4 text-slate-500" />
                 </Button>
             </div>

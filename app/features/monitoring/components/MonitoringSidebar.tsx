@@ -44,7 +44,7 @@ export function MonitoringSidebar({
             <Button
                 variant="secondary"
                 size="icon"
-                className="absolute top-1/2 -translate-y-1/2 -right-8 h-8 w-8 rounded-l-none shadow-md z-50"
+                className="absolute top-1/2 -translate-y-1/2 -right-8 h-10 w-8 rounded-l-none cursor-pointer shadow-md z-50"
                 onClick={handleToggle}
             >
                 {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}

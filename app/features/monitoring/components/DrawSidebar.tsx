@@ -45,12 +45,12 @@ export function DrawSidebar({
     return (
         <MonitoringSidebar widthClass="w-80" isOpen={isOpen} onToggle={onToggle}>
             <div className="flex flex-col h-full bg-slate-50/50">
-                <div className="p-4 bg-white border-b sticky top-0 z-10 space-y-3">
+                <div className="p-3 bg-white border-b sticky top-0 z-10 space-y-3">
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
                             <MapPin className="w-4 h-4" />
                         </div>
-                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">Ruas Jalan Poros</h2>
+                        <h2 className="text-sm font-bold text-slate-800 uppercase tracking-tight">DAFTAR JALAN</h2>
                     </div>
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />

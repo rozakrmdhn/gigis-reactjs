@@ -25,7 +25,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                             <Plus className="h-4 w-4" />
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left">
+                    <TooltipContent side="right">
                         <p className="text-xs font-semibold">Zoom In</p>
                     </TooltipContent>
                 </Tooltip>
@@ -41,7 +41,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                             <Minus className="h-4 w-4" />
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left">
+                    <TooltipContent side="right">
                         <p className="text-xs font-semibold">Zoom Out</p>
                     </TooltipContent>
                 </Tooltip>
@@ -59,7 +59,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                             <Compass className="h-4 w-4" />
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left">
+                    <TooltipContent side="right">
                         <p className="text-xs font-semibold">Reset View</p>
                     </TooltipContent>
                 </Tooltip>

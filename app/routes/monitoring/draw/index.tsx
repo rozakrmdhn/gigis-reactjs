@@ -11,6 +11,7 @@ import { defaults as defaultControls } from "ol/control";
 import GeoJSON from "ol/format/GeoJSON";
 import { fromLonLat } from "ol/proj";
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
+import { altKeyOnly } from "ol/events/condition";
 import "ol/ol.css";
 import "./map.css";
 import {
@@ -169,7 +170,10 @@ export default function DrawPage() {
         });
 
         if (mode === "edit") {
-            const modify = new Modify({ source: sourceRef.current });
+            const modify = new Modify({
+                source: sourceRef.current,
+                deleteCondition: altKeyOnly
+            });
             const snap = new Snap({ source: sourceRef.current });
             const snapExisting = new Snap({ source: existingSourceRef.current });
             mapRef.current.addInteraction(modify);
@@ -476,7 +480,10 @@ export default function DrawPage() {
                         onZoomIn={handleZoomIn}
                         onZoomOut={handleZoomOut}
                         onResetBearing={handleResetView}
-                        className="absolute top-4 right-4 z-40"
+                        className={cn(
+                            "absolute bottom-4 transition-all duration-500 z-40",
+                            isSidebarOpen ? "left-[336px]" : "left-4"
+                        )}
                     />
 
                     <DrawControls
