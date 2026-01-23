@@ -123,5 +123,69 @@ export const monitoringService = {
             console.error("Error fetching monitoring detail data:", error);
             return null;
         }
+    },
+
+    createSegment: async (data: any): Promise<any> => {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to create segment: ${response.statusText}`);
+        }
+        return response.json();
+    },
+
+    updateSegment: async (id: string, data: any): Promise<any> => {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(data),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to update segment: ${response.statusText}`);
+        }
+        return response.json();
+    },
+
+    getSegmentDetail: async (id: string): Promise<any> => {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`);
+        if (!response.ok) {
+            throw new Error(`Failed to fetch segment detail: ${response.statusText}`);
+        }
+        return response.json();
+    },
+
+    getSegmenByKodeRuas: async (kode_ruas: string | number): Promise<any> => {
+        try {
+            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`);
+            if (kode_ruas) {
+                url.searchParams.append("kode_ruas", kode_ruas.toString());
+            }
+
+            const response = await fetch(url.toString());
+            if (!response.ok) {
+                throw new Error(`Failed to fetch segment geojson: ${response.statusText}`);
+            }
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching segment geojson:", error);
+            // Return empty feature collection on error to prevent UI crashes
+            return {
+                status: "error",
+                message: "Failed to fetch data",
+                result: {
+                    type: "FeatureCollection",
+                    features: []
+                }
+            };
+        }
     }
 };

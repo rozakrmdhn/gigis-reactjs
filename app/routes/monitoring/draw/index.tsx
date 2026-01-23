@@ -34,9 +34,11 @@ import { DrawSidebar } from "~/features/monitoring/components/DrawSidebar";
 import { DrawFormPanel } from "~/features/monitoring/components/DrawFormPanel";
 import { MapControls } from "~/features/monitoring/components/MapControls";
 import { DrawControls, type DrawMode } from "~/features/monitoring/components/DrawControls";
+import { RoadSegmentsPanel } from "~/features/monitoring/components/RoadSegmentsPanel";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { monitoringService, type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
+import { DrawEditFormPanel } from "~/features/monitoring/components/DrawEditFormPanel";
 
 export default function DrawPage() {
     const mapElement = useRef<HTMLDivElement>(null);
@@ -46,10 +48,15 @@ export default function DrawPage() {
     const [mode, setMode] = useState<DrawMode>("view");
     const [selectedRoad, setSelectedRoad] = useState<MonitoringJalanResult | null>(null);
     const [isPanelVisible, setIsPanelVisible] = useState(false);
+    const [segmentPanelVisible, setSegmentPanelVisible] = useState(false);
+    const [featuresList, setFeaturesList] = useState<any[]>([]);
     const [drawnGeoJSON, setDrawnGeoJSON] = useState<string | null>(null);
     const [isFetchingDetail, setIsFetchingDetail] = useState(false);
     const [hasTemporaryFeature, setHasTemporaryFeature] = useState(false);
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
+    const [editingFeatureData, setEditingFeatureData] = useState<any>(null);
+    const originalEditFeatureRef = useRef<any>(null);
     const isMobile = useIsMobile();
 
     // Auto-collapse sidebar on mobile
@@ -61,6 +68,7 @@ export default function DrawPage() {
 
     useEffect(() => {
         if (!mapElement.current) return;
+
 
         const vectorLayer = new VectorLayer({
             source: sourceRef.current,
@@ -209,6 +217,51 @@ export default function DrawPage() {
 
     }, [mode]);
 
+    const refreshSegmentData = async (roadId: string) => {
+        setIsFetchingDetail(true);
+        try {
+            // Use new endpoint with kode_ruas via jalan.id
+            const response = await monitoringService.getSegmenByKodeRuas(roadId);
+
+            if (response.status === "success" && response.result) {
+                existingSourceRef.current.clear();
+                const format = new GeoJSON();
+                const features: any[] = [];
+
+                if (response.result.features) {
+                    const parsed = format.readFeatures(response.result, {
+                        dataProjection: "EPSG:4326",
+                        featureProjection: "EPSG:3857",
+                    });
+
+                    parsed.forEach(f => {
+                        // Ensure ID is set on the feature object itself for OpenLayers interactions
+                        const id = f.get("id");
+                        if (id) f.setId(id);
+                    });
+                    features.push(...parsed);
+                }
+
+                if (features.length > 0) {
+                    existingSourceRef.current.addFeatures(features);
+                    setFeaturesList(features);
+                    setSegmentPanelVisible(true);
+                } else {
+                    // toast.info("Belum ada data GeoJSON untuk jalan ini");
+                    setFeaturesList([]);
+                }
+            } else {
+                setFeaturesList([]);
+                existingSourceRef.current.clear();
+            }
+        } catch (error) {
+            console.error("Error fetching detail:", error);
+            toast.error("Gagal mengambil data segmen jalan");
+        } finally {
+            setIsFetchingDetail(false);
+        }
+    };
+
     // Fetch existing road segments when selectedRoad changes
     useEffect(() => {
         if (!selectedRoad) {
@@ -216,63 +269,18 @@ export default function DrawPage() {
             return;
         }
 
-        const fetchDetails = async () => {
-            setIsFetchingDetail(true);
-            try {
-                const data = await monitoringService.getMonitoringJalanById(selectedRoad.jalan.id);
-                if (data) {
-                    existingSourceRef.current.clear();
-                    const format = new GeoJSON();
-
-                    const features: any[] = [];
-
-                    if (data.jalan) {
-                        const parsed = format.readFeatures(data.jalan, {
-                            dataProjection: "EPSG:4326",
-                            featureProjection: "EPSG:3857",
-                        });
-                        parsed.forEach(f => f.set("is_base_jalan", true));
-                        features.push(...parsed);
-                    }
-
-                    if (data.segmen) {
-                        const parsed = format.readFeatures(data.segmen, {
-                            dataProjection: "EPSG:4326",
-                            featureProjection: "EPSG:3857",
-                        });
-                        features.push(...parsed);
-                    }
-
-                    if (data.segmenkab) {
-                        const parsed = format.readFeatures(data.segmenkab, {
-                            dataProjection: "EPSG:4326",
-                            featureProjection: "EPSG:3857",
-                        });
-                        features.push(...parsed);
-                    }
-
-                    if (features.length > 0) {
-                        existingSourceRef.current.addFeatures(features);
-
-                        // Zoom to extent
-                        const extent = existingSourceRef.current.getExtent();
-                        mapRef.current?.getView().fit(extent, {
-                            padding: [150, 150, 150, 150],
-                            duration: 1000
-                        });
-                    } else {
-                        toast.info("Belum ada data GeoJSON untuk jalan ini");
-                    }
-                }
-            } catch (error) {
-                console.error("Error fetching detail:", error);
-                toast.error("Gagal mengambil data segmen jalan");
-            } finally {
-                setIsFetchingDetail(false);
+        refreshSegmentData(selectedRoad.jalan.id).then(() => {
+            // Zoom to extent on initial load
+            if (existingSourceRef.current.getFeatures().length > 0) {
+                const extent = existingSourceRef.current.getExtent();
+                mapRef.current?.getView().fit(extent, {
+                    padding: [150, 150, 150, 150],
+                    duration: 1000
+                });
+            } else {
+                toast.info("Belum ada data GeoJSON untuk jalan ini");
             }
-        };
-
-        fetchDetails();
+        });
     }, [selectedRoad]);
 
     const handleZoomIn = () => {
@@ -320,14 +328,112 @@ export default function DrawPage() {
         URL.revokeObjectURL(url);
     };
 
-    const handleSaveSegment = (data: any) => {
-        console.log("Saving segment data:", data);
-        // Here you would typically call an API to save the segment
-        // After success:
+    const handleSaveSegment = async (data: any) => {
+        try {
+            console.log("Saving segment data:", data);
+
+            if (editingFeatureId) {
+                await monitoringService.updateSegment(editingFeatureId, data);
+                toast.success("Berhasil memperbarui segmen jalan!");
+            } else {
+                await monitoringService.createSegment(data);
+                toast.success("Berhasil menambahkan segmen jalan baru!");
+            }
+
+            // Refresh data using the centralized function
+            if (selectedRoad) {
+                await refreshSegmentData(selectedRoad.jalan.id);
+            }
+
+            sourceRef.current.clear();
+            setDrawnGeoJSON(null);
+            setHasTemporaryFeature(false);
+            setIsPanelVisible(false);
+            setEditingFeatureId(null);
+
+            // Show segments panel again
+            setSegmentPanelVisible(true);
+
+        } catch (error) {
+            console.error("Error saving segment:", error);
+            toast.error("Gagal menyimpan data segmen");
+        }
+    };
+
+    const handleCancelReshape = () => {
+        if (editingFeatureId && originalEditFeatureRef.current) {
+            // Restore original feature to existing layer
+            existingSourceRef.current.addFeature(originalEditFeatureRef.current);
+            originalEditFeatureRef.current = null;
+            toast.info("Edit dibatalkan, segmen dikembalikan.");
+        }
+
+        // Clear draw layer
         sourceRef.current.clear();
         setDrawnGeoJSON(null);
         setHasTemporaryFeature(false);
         setIsPanelVisible(false);
+        setEditingFeatureId(null);
+        setEditingFeatureData(null);
+        setMode("view");
+
+        // Show panel again if road selected
+        if (selectedRoad) {
+            setSegmentPanelVisible(true);
+        }
+    };
+
+    const handleZoomToSegment = (feature: any) => {
+        const extent = feature.getGeometry().getExtent();
+        mapRef.current?.getView().fit(extent, {
+            padding: [100, 100, 100, 100],
+            duration: 1000
+        });
+    };
+
+    const handleEditSegment = (feature: any) => {
+        // Remove from existing layer
+        existingSourceRef.current.removeFeature(feature);
+
+        // Add to draw layer (sourceRef)
+        // Ensure styles are stripped so it picks up the draw layer style?
+        // Or we might want to keep properties.
+        const clone = feature.clone();
+        clone.setId(feature.getId()); // Keep ID if needed
+        // Style will be managed by the layer, so we can strip custom styles if any attached to feature
+        clone.setStyle(null);
+
+        sourceRef.current.clear(); // Ensure only one feature being edited at a time? or support multiple?
+        // Let's clear for now to avoid confusion with "Save" button saving multiple features as one geometry?
+        // But user might want to reshape based on other features... 
+        // For now, let's assume one edit at a time.
+        sourceRef.current.addFeature(clone);
+
+        // Store original for cancel
+        originalEditFeatureRef.current = feature.clone(); // Keep original geometry hiding style if needed but cloning feature
+
+        // Extract properties for form
+        const props = feature.getProperties();
+        console.log("Editing feature properties:", props);
+
+        setMode("edit");
+        setHasTemporaryFeature(true);
+        const fId = feature.getId() || feature.get("id");
+        if (!fId) console.warn("Feature has no ID!");
+        setEditingFeatureId(fId);
+
+        // Set form data immediately from feature properties
+        setEditingFeatureData(props);
+
+        // Keep list visible so context is NOT lost
+        setSegmentPanelVisible(true);
+
+        // Zoom to it quickly
+        const extent = clone.getGeometry().getExtent();
+        mapRef.current?.getView().fit(extent, {
+            padding: [150, 150, 150, 150],
+            duration: 500 // Faster zoom
+        });
     };
 
     const handleFinishReshape = () => {
@@ -378,6 +484,9 @@ export default function DrawPage() {
                         onSetMode={setMode}
                         onClear={handleClear}
                         onExport={handleExport}
+                        onFinishReshape={handleFinishReshape}
+                        canFinishReshape={mode === "edit" && hasTemporaryFeature && !isPanelVisible}
+                        onCancelReshape={handleCancelReshape}
                         className={cn(
                             "absolute top-4 transition-all duration-500 z-40",
                             isSidebarOpen ? "left-[336px]" : "left-4"
@@ -409,17 +518,6 @@ export default function DrawPage() {
                         </div>
                     )}
 
-                    {mode === "edit" && hasTemporaryFeature && !isPanelVisible && (
-                        <div className="absolute bottom-34 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-top-4">
-                            <Button
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-2xl rounded-full px-6 border-2 border-white"
-                                onClick={handleFinishReshape}
-                            >
-                                <Check className="w-3 h-3 mr-2" />
-                                SELESAI RESHAPE & SIMPAN
-                            </Button>
-                        </div>
-                    )}
 
                     {isFetchingDetail && (
                         <div className="absolute inset-0 bg-white/20 backdrop-blur-[1px] z-30 flex items-center justify-center">
@@ -455,18 +553,42 @@ export default function DrawPage() {
                 </div>
             </div>
 
-            <DrawFormPanel
-                isVisible={isPanelVisible}
-                onClose={() => {
-                    setIsPanelVisible(false);
-                    if (hasTemporaryFeature) {
-                        setMode("edit");
-                        toast.info("Mode Reshape Aktif: Silahkan sesuaikan titik garis.");
-                    }
-                }}
-                selectedRoad={selectedRoad}
-                drawnGeoJSON={drawnGeoJSON}
-                onSave={handleSaveSegment}
+            {editingFeatureId ? (
+                <DrawEditFormPanel
+                    isVisible={isPanelVisible}
+                    onClose={() => {
+                        setIsPanelVisible(false);
+                        // on edit cancel/close, maybe reset mode?
+                        // If we are editing, closing panel might mean we are done or cancelling -> handled by Close button in panel
+                    }}
+                    selectedRoad={selectedRoad}
+                    drawnGeoJSON={drawnGeoJSON}
+                    onSave={handleSaveSegment}
+                    initialData={editingFeatureData}
+                />
+            ) : (
+                <DrawFormPanel
+                    isVisible={isPanelVisible}
+                    onClose={() => {
+                        setIsPanelVisible(false);
+                        if (hasTemporaryFeature) {
+                            setMode("edit");
+                            toast.info("Mode Reshape Aktif: Silahkan sesuaikan titik garis.");
+                        }
+                    }}
+                    selectedRoad={selectedRoad}
+                    drawnGeoJSON={drawnGeoJSON}
+                    onSave={handleSaveSegment}
+                />
+            )}
+
+            <RoadSegmentsPanel
+                isVisible={segmentPanelVisible && !!selectedRoad}
+                onClose={() => setSegmentPanelVisible(false)}
+                segments={featuresList}
+                onZoom={handleZoomToSegment}
+                onEdit={handleEditSegment}
+                className="z-30"
             />
         </div>
     );

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { MonitoringSidebar } from "./MonitoringSidebar";
+import { MonitoringList } from "./MonitoringList";
 import { monitoringService, type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -69,75 +70,15 @@ export function DrawSidebar({
                                 <div key={i} className="h-20 bg-white border border-slate-100 rounded-xl animate-pulse" />
                             ))}
                         </div>
-                    ) : roads.length > 0 ? (
-                        roads.map((item) => {
-                            const isSelected = selectedRoad?.jalan.kode_ruas === item.jalan.kode_ruas;
-                            const progress = Math.round((item.summary.fisik.total / item.summary.total_panjang_jalan) * 100);
-
-                            return (
-                                <div
-                                    key={item.jalan.id}
-                                    className={cn(
-                                        "px-4 py-3 border-b border-slate-100 transition-all cursor-pointer group relative",
-                                        isSelected
-                                            ? "bg-blue-50/50"
-                                            : "bg-white hover:bg-slate-50"
-                                    )}
-                                    onClick={() => onSelectRoad(item)}
-                                >
-                                    <div className="flex justify-between items-center mb-1">
-                                        <div className="flex flex-col gap-0.5 min-w-0">
-                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight">#{item.jalan.kode_ruas}</span>
-                                            <h3 className={cn(
-                                                "text-xs font-bold truncate transition-colors",
-                                                isSelected ? "text-blue-600" : "text-slate-700 group-hover:text-blue-600"
-                                            )}>
-                                                {item.jalan.nama_ruas}
-                                            </h3>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1 shrink-0">
-                                            <span className={cn(
-                                                "text-[10px] font-bold",
-                                                progress >= 100 ? "text-emerald-500" : "text-blue-500"
-                                            )}>
-                                                {progress}%
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-2 mt-1.5">
-                                        <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
-                                            <div
-                                                className={cn("h-full transition-all duration-500 rounded-full", progress >= 100 ? "bg-emerald-500" : "bg-blue-500")}
-                                                style={{ width: `${Math.min(100, progress)}%` }}
-                                            />
-                                        </div>
-                                        <span className="text-[9px] font-medium text-slate-400 shrink-0">{item.jalan.panjang}m</span>
-                                    </div>
-
-                                    {isSelected && (
-                                        <div className="mt-3 flex gap-2 animate-in slide-in-from-top-1">
-                                            <Button
-                                                size="sm"
-                                                className="w-full h-8 text-[10px] font-bold bg-blue-600 hover:bg-blue-700 shadow-sm"
-                                                disabled={isDrawing}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onStartDraw();
-                                                }}
-                                            >
-                                                <Plus className="w-3.5 h-3.5 mr-1" />
-                                                MULAI DRAW SEGMEN
-                                            </Button>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })
                     ) : (
-                        <div className="p-8 text-center text-slate-400 text-sm italic">
-                            Tidak ada data jalan found
-                        </div>
+                        <MonitoringList
+                            data={roads}
+                            onSelectJalan={(id) => {
+                                const road = roads.find(r => r.jalan.id === id);
+                                if (road) onSelectRoad(road);
+                            }}
+                            selectedId={selectedRoad?.jalan.id}
+                        />
                     )}
                 </div>
             </div>

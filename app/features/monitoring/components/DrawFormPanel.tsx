@@ -1,4 +1,4 @@
-import { X, Save, Ruler, HardHat, Calendar, MapPin, Hash } from "lucide-react";
+import { X, Save, Ruler, HardHat, Calendar, MapPin, Maximize2 } from "lucide-react";
 import { type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -20,15 +20,32 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     const [formData, setFormData] = useState({
         panjang: "",
         lebar: "",
-        tahun: new Date().getFullYear().toString(),
+        tahun_pembangunan: new Date().getFullYear().toString(),
         jenis_perkerasan: "Aspal",
         kondisi: "Baik",
         verifikator: "",
+        check_melarosa: false,
+        status_jalan: "jalan_desa",
+        sumber_data: "Survey Lapangan",
+        status_kondisi: "Eksisting",
     });
 
     useEffect(() => {
-        // Basic calculation for length if we have GeoJSON (not implemented here but good to have)
-        setFormData(prev => ({ ...prev, lebar: selectedRoad?.jalan.lebar.toString() || "" }));
+        if (selectedRoad) {
+            setFormData(prev => ({
+                ...prev,
+                lebar: selectedRoad.jalan.lebar.toString() || "",
+                panjang: "",
+                verifikator: "",
+                tahun_pembangunan: new Date().getFullYear().toString(),
+                check_melarosa: false,
+                status_jalan: "jalan_desa",
+                sumber_data: "Survey Lapangan",
+                status_kondisi: "Eksisting",
+                kondisi: "Baik",
+                jenis_perkerasan: "Aspal"
+            }));
+        }
     }, [selectedRoad]);
 
     if (!selectedRoad) return null;
@@ -43,7 +60,15 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
         onSave({
             ...formData,
             kode_ruas: selectedRoad.jalan.kode_ruas,
-            geojson: drawnGeoJSON,
+            nama_jalan: selectedRoad.jalan.nama_ruas,
+            kecamatan_id: selectedRoad.jalan.id_kecamatan,
+            desa_id: selectedRoad.jalan.id_desa,
+            desa: selectedRoad.jalan.desa,
+            kecamatan: selectedRoad.jalan.kecamatan,
+            geom: drawnGeoJSON ? JSON.parse(drawnGeoJSON).geometry : undefined,
+            tahun_pembangunan: parseInt(formData.tahun_pembangunan) || 0,
+            panjang: parseFloat(formData.panjang) || 0,
+            lebar: parseFloat(formData.lebar) || 0,
         });
 
         toast.success("Segmen pembangunan berhasil disimpan!");
@@ -91,7 +116,6 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                 <Ruler className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <Input
                                     type="number"
-                                    placeholder="0.00"
                                     className="pl-9"
                                     value={formData.panjang}
                                     onChange={(e) => setFormData({ ...formData, panjang: e.target.value })}
@@ -101,10 +125,9 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Lebar (m)</Label>
                             <div className="relative">
-                                <HardHat className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                <Maximize2 className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                                 <Input
                                     type="number"
-                                    placeholder="0.00"
                                     className="pl-9"
                                     value={formData.lebar}
                                     onChange={(e) => setFormData({ ...formData, lebar: e.target.value })}
@@ -113,45 +136,47 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         </div>
                     </div>
 
-                    <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Kontruksi</Label>
-                        <div className="relative">
-                            <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input
-                                type="number"
-                                className="pl-9"
-                                value={formData.tahun}
-                                onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
-                            />
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Bangun</Label>
+                            <div className="relative">
+                                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input
+                                    type="number"
+                                    className="pl-9"
+                                    value={formData.tahun_pembangunan}
+                                    onChange={(e) => setFormData({ ...formData, tahun_pembangunan: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Perkerasan</Label>
+                            <Select
+                                value={formData.jenis_perkerasan}
+                                onValueChange={(v) => setFormData({ ...formData, jenis_perkerasan: v })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Aspal">Aspal</SelectItem>
+                                    <SelectItem value="Rabat Beton">Rabat Beton</SelectItem>
+                                    <SelectItem value="Telford">Telford</SelectItem>
+                                    <SelectItem value="Tanah">Tanah</SelectItem>
+                                    <SelectItem value="Paving">Paving</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Jenis Perkerasan</Label>
-                        <Select
-                            value={formData.jenis_perkerasan}
-                            onValueChange={(v) => setFormData({ ...formData, jenis_perkerasan: v })}
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Pilih Perkerasan" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Aspal">Aspal</SelectItem>
-                                <SelectItem value="Rabat Beton">Rabat Beton</SelectItem>
-                                <SelectItem value="Telford">Telford</SelectItem>
-                                <SelectItem value="Tanah">Tanah</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-
-                    <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Kondisi</Label>
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Kondisi Jalan</Label>
                         <Select
                             value={formData.kondisi}
                             onValueChange={(v) => setFormData({ ...formData, kondisi: v })}
                         >
                             <SelectTrigger>
-                                <SelectValue placeholder="Pilih Kondisi" />
+                                <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="Baik">Baik</SelectItem>
