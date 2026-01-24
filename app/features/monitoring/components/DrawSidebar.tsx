@@ -14,6 +14,7 @@ interface DrawSidebarProps {
     isDrawing: boolean;
     isOpen?: boolean;
     onToggle?: (isOpen: boolean) => void;
+    refreshTrigger?: number;
 }
 
 export function DrawSidebar({
@@ -22,7 +23,8 @@ export function DrawSidebar({
     onStartDraw,
     isDrawing,
     isOpen,
-    onToggle
+    onToggle,
+    refreshTrigger
 }: DrawSidebarProps) {
     const [roads, setRoads] = useState<MonitoringJalanResult[]>([]);
     const [loading, setLoading] = useState(true);
@@ -40,7 +42,7 @@ export function DrawSidebar({
 
         const timer = setTimeout(fetchRoads, 500);
         return () => clearTimeout(timer);
-    }, [search]);
+    }, [search, refreshTrigger]);
 
     return (
         <MonitoringSidebar widthClass="w-80" isOpen={isOpen} onToggle={onToggle}>
@@ -64,22 +66,15 @@ export function DrawSidebar({
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2 space-y-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
-                    {loading ? (
-                        <div className="flex flex-col gap-2 p-2">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                                <div key={i} className="h-20 bg-white border border-slate-100 rounded-xl animate-pulse" />
-                            ))}
-                        </div>
-                    ) : (
-                        <MonitoringList
-                            data={roads}
-                            onSelectJalan={(id) => {
-                                const road = roads.find(r => r.jalan.id === id);
-                                if (road) onSelectRoad(road);
-                            }}
-                            selectedId={selectedRoad?.jalan.id}
-                        />
-                    )}
+                    <MonitoringList
+                        data={roads}
+                        isLoading={loading}
+                        onSelectJalan={(id) => {
+                            const road = roads.find(r => r.jalan.id === id);
+                            if (road) onSelectRoad(road);
+                        }}
+                        selectedId={selectedRoad?.jalan.id}
+                    />
                 </div>
             </div>
         </MonitoringSidebar>

@@ -155,6 +155,17 @@ export const monitoringService = {
         return response.json();
     },
 
+    deleteSegment: async (id: string): Promise<any> => {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
+            method: "DELETE",
+        });
+
+        if (!response.ok) {
+            throw new Error(`Failed to delete segment: ${response.statusText}`);
+        }
+        return response.json();
+    },
+
     getSegmentDetail: async (id: string): Promise<any> => {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`);
         if (!response.ok) {

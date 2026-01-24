@@ -1,4 +1,4 @@
-import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List } from "lucide-react";
+import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
@@ -11,6 +11,8 @@ interface RoadSegmentsPanelProps {
     segments: any[];
     onZoom: (feature: any) => void;
     onEdit: (feature: any) => void;
+    onDelete?: (feature: any) => void;
+    onAdd?: () => void;
     className?: string;
 }
 
@@ -20,6 +22,8 @@ export function RoadSegmentsPanel({
     segments,
     onZoom,
     onEdit,
+    onDelete,
+    onAdd,
     className
 }: RoadSegmentsPanelProps) {
     const [isOpen, setIsOpen] = useState(true);
@@ -45,7 +49,8 @@ export function RoadSegmentsPanel({
             <div key={index} className="flex flex-col gap-2 p-3 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-start justify-between gap-2">
                     <div>
-                        <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[10px] font-normal text-slate-600 italic">{props.id}</span>
+                        <div className="flex items-center gap-2 my-1">
                             <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0 h-5">
                                 {type}
                             </Badge>
@@ -80,6 +85,19 @@ export function RoadSegmentsPanel({
                             Edit
                         </Button>
                     )}
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
+                        onClick={() => {
+                            if (window.confirm("Apakah Anda yakin ingin menghapus segmen ini?")) {
+                                onDelete?.(segment);
+                            }
+                        }}
+                    >
+                        <Trash2 className="w-3 h-3" />
+                        Delete
+                    </Button>
                 </div>
             </div>
         );
@@ -101,21 +119,23 @@ export function RoadSegmentsPanel({
                 {isOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
             </Button>
 
-            <div className="p-4 border-b bg-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-2 bg-blue-600 rounded-lg text-white">
-                        <List className="w-5 h-5" />
+            <div className="p-4 border-b bg-slate-50 space-y-3">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-600 rounded-lg text-white">
+                            <List className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-bold text-slate-900 tracking-tight">DAFTAR SEGMEN</h2>
+                            <p className="text-[10px] text-slate-500 uppercase font-semibold">
+                                {segments.length} segment ditemukan
+                            </p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">DAFTAR SEGMEN</h2>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">
-                            {segments.length} segment ditemukan
-                        </p>
-                    </div>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200" onClick={handleToggle}>
+                        <X className="w-4 h-4 text-slate-500" />
+                    </Button>
                 </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200" onClick={handleToggle}>
-                    <X className="w-4 h-4 text-slate-500" />
-                </Button>
             </div>
 
             <ScrollArea className="flex-1 p-3">
@@ -126,6 +146,16 @@ export function RoadSegmentsPanel({
                         </div>
                     ) : (
                         segments.map((seg, idx) => renderSegmentItem(seg, idx))
+                    )}
+
+                    {onAdd && (
+                        <Button
+                            onClick={onAdd}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 gap-2 shadow-lg shadow-emerald-200 rounded"
+                        >
+                            <Plus className="w-4 h-4" />
+                            TAMBAH SEGMEN BARU
+                        </Button>
                     )}
                 </div>
             </ScrollArea>

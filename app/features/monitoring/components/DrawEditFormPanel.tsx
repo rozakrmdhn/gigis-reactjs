@@ -43,7 +43,9 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
     });
 
     useEffect(() => {
-        console.log("selectedRoad", selectedRoad);
+        console.log("kondisi:", initialData?.kondisi);
+        console.log("jenis_perkerasan:", initialData?.jenis_perkerasan);
+        console.log("status_kondisi:", initialData?.status_kondisi);
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,

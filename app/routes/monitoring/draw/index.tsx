@@ -57,6 +57,7 @@ export default function DrawPage() {
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
     const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
     const [editingFeatureData, setEditingFeatureData] = useState<any>(null);
+    const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
     const originalEditFeatureRef = useRef<any>(null);
     const isMobile = useIsMobile();
 
@@ -224,40 +225,68 @@ export default function DrawPage() {
     const refreshSegmentData = async (roadId: string) => {
         setIsFetchingDetail(true);
         try {
-            // Use new endpoint with kode_ruas via jalan.id
-            const response = await monitoringService.getSegmenByKodeRuas(roadId);
+            // 1. Fetch data from both services
+            const [segmentsResponse, backgroundResponse] = await Promise.all([
+                monitoringService.getSegmenByKodeRuas(roadId),
+                monitoringService.getMonitoringJalanById(roadId)
+            ]);
 
-            if (response.status === "success" && response.result) {
-                existingSourceRef.current.clear();
-                const format = new GeoJSON();
-                const features: any[] = [];
+            existingSourceRef.current.clear();
+            const format = new GeoJSON();
+            const panelFeatures: any[] = [];
+            const backgroundFeatures: any[] = [];
 
-                if (response.result.features) {
-                    const parsed = format.readFeatures(response.result, {
+            // 2. Process Segment Data (For Panel & Map)
+            if (segmentsResponse.status === "success" && segmentsResponse.result?.features) {
+                const features = format.readFeatures(segmentsResponse.result, {
+                    dataProjection: "EPSG:4326",
+                    featureProjection: "EPSG:3857",
+                });
+                features.forEach(f => {
+                    const id = f.get("id");
+                    if (id) f.setId(id);
+                });
+                panelFeatures.push(...features);
+            }
+
+            // 3. Process Background Data (For Map Only)
+            if (backgroundResponse) {
+                // Process Jalan Utama
+                if (backgroundResponse.jalan) {
+                    const jalanFeatures = format.readFeatures(backgroundResponse.jalan, {
                         dataProjection: "EPSG:4326",
                         featureProjection: "EPSG:3857",
                     });
-
-                    parsed.forEach(f => {
-                        // Ensure ID is set on the feature object itself for OpenLayers interactions
-                        const id = f.get("id");
-                        if (id) f.setId(id);
+                    jalanFeatures.forEach(f => {
+                        f.set("is_base_jalan", true);
+                        f.set("hidden_from_panel", true);
                     });
-                    features.push(...parsed);
+                    backgroundFeatures.push(...jalanFeatures);
                 }
 
-                if (features.length > 0) {
-                    existingSourceRef.current.addFeatures(features);
-                    setFeaturesList(features);
-                    setSegmentPanelVisible(true);
-                } else {
-                    // toast.info("Belum ada data GeoJSON untuk jalan ini");
-                    setFeaturesList([]);
+                // Process Segmen Kabupaten
+                if (backgroundResponse.segmenkab) {
+                    const segmenKabFeatures = format.readFeatures(backgroundResponse.segmenkab, {
+                        dataProjection: "EPSG:4326",
+                        featureProjection: "EPSG:3857",
+                    });
+                    segmenKabFeatures.forEach(f => {
+                        f.set("hidden_from_panel", true);
+                    });
+                    backgroundFeatures.push(...segmenKabFeatures);
                 }
+            }
+
+            // 4. Update Map and State
+            const allFeatures = [...panelFeatures, ...backgroundFeatures];
+            if (allFeatures.length > 0) {
+                existingSourceRef.current.addFeatures(allFeatures);
+                setFeaturesList(panelFeatures); // Only segments for the panel
+                setSegmentPanelVisible(true);
             } else {
                 setFeaturesList([]);
-                existingSourceRef.current.clear();
             }
+
         } catch (error) {
             console.error("Error fetching detail:", error);
             toast.error("Gagal mengambil data segmen jalan");
@@ -344,6 +373,9 @@ export default function DrawPage() {
                 toast.success("Berhasil menambahkan segmen jalan baru!");
             }
 
+            // Trigger sidebar refresh
+            setSidebarRefreshTrigger(prev => prev + 1);
+
             // Refresh data using the centralized function
             if (selectedRoad) {
                 await refreshSegmentData(selectedRoad.jalan.id);
@@ -384,6 +416,50 @@ export default function DrawPage() {
         // Show panel again if road selected
         if (selectedRoad) {
             setSegmentPanelVisible(true);
+        }
+    };
+
+    const handleDeleteSegment = async (feature: any) => {
+        const id = feature.getId() || feature.get("id");
+        if (!id) {
+            toast.error("ID segmen tidak ditemukan");
+            return;
+        }
+
+        try {
+            await monitoringService.deleteSegment(id);
+            toast.success("Segmen berhasil dihapus");
+
+            // 1. Clear from OpenLayers sources immediately
+            existingSourceRef.current.removeFeature(feature);
+
+            // 2. Also clear from draw layer if it was being edited
+            const drawnFeatures = sourceRef.current.getFeatures();
+            drawnFeatures.forEach(f => {
+                const fId = f.getId() || f.get("id");
+                if (fId === id) {
+                    sourceRef.current.removeFeature(f);
+                }
+            });
+
+            // 3. Clear related editing states if this was the active feature
+            if (editingFeatureId === id) {
+                setEditingFeatureId(null);
+                setEditingFeatureData(null);
+                setDrawnGeoJSON(null);
+                setHasTemporaryFeature(false);
+                setIsPanelVisible(false);
+                setMode("view");
+            }
+
+            // 4. Refresh data from server
+            setSidebarRefreshTrigger(prev => prev + 1);
+            if (selectedRoad) {
+                await refreshSegmentData(selectedRoad.jalan.id);
+            }
+        } catch (error) {
+            console.error("Error deleting segment:", error);
+            toast.error("Gagal menghapus segmen");
         }
     };
 
@@ -470,6 +546,7 @@ export default function DrawPage() {
                 isDrawing={mode.startsWith("draw-")}
                 isOpen={isSidebarOpen}
                 onToggle={setIsSidebarOpen}
+                refreshTrigger={sidebarRefreshTrigger}
             />
 
             <div className="flex-1 flex flex-col relative">
@@ -595,6 +672,11 @@ export default function DrawPage() {
                 segments={featuresList}
                 onZoom={handleZoomToSegment}
                 onEdit={handleEditSegment}
+                onDelete={handleDeleteSegment}
+                onAdd={() => {
+                    setSegmentPanelVisible(false); // Close panel to make room for map interaction
+                    setMode("draw-line");
+                }}
                 className="z-30"
             />
         </div>

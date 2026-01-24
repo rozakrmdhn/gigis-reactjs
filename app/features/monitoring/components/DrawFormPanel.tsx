@@ -1,9 +1,11 @@
-import { X, Save, Ruler, HardHat, Calendar, MapPin, Maximize2 } from "lucide-react";
+import { X, Save, Ruler, HardHat, Calendar, MapPin, Hash, CheckCircle2, FileText, Camera, User, Maximize2 } from "lucide-react";
 import { type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+import { Textarea } from "~/components/ui/textarea";
+import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -18,32 +20,39 @@ interface DrawFormPanelProps {
 
 export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave }: DrawFormPanelProps) {
     const [formData, setFormData] = useState({
+        check_melarosa: false,
+        status_jalan: "",
+        sumber_data: "",
+        tahun_pembangunan: new Date().getFullYear().toString(),
+        verifikator: "",
+        desa: "",
+        kecamatan: "",
         panjang: "",
         lebar: "",
-        tahun_pembangunan: new Date().getFullYear().toString(),
-        jenis_perkerasan: "Aspal",
-        kondisi: "Baik",
-        verifikator: "",
-        check_melarosa: false,
-        status_jalan: "jalan_desa",
-        sumber_data: "Survey Lapangan",
-        status_kondisi: "Eksisting",
+        jenis_perkerasan: "",
+        tahun_renovasi_terakhir: new Date().getFullYear().toString(),
+        kondisi: "",
+        nama_jalan: "",
+        kode_ruas: "",
+        kecamatan_id: "",
+        desa_id: "",
+        keterangan: "",
+        foto_url: "",
+        status_kondisi: ""
     });
 
     useEffect(() => {
+        console.log("selectedRoad", selectedRoad);
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,
+                desa: selectedRoad.jalan.desa,
+                kecamatan: selectedRoad.jalan.kecamatan,
+                kode_ruas: selectedRoad.jalan.kode_ruas.toString(),
+                kecamatan_id: selectedRoad.jalan.id_kecamatan?.toString() || "",
+                desa_id: selectedRoad.jalan.id_desa || "",
+                nama_jalan: selectedRoad.jalan.nama_ruas,
                 lebar: selectedRoad.jalan.lebar.toString() || "",
-                panjang: "",
-                verifikator: "",
-                tahun_pembangunan: new Date().getFullYear().toString(),
-                check_melarosa: false,
-                status_jalan: "jalan_desa",
-                sumber_data: "Survey Lapangan",
-                status_kondisi: "Eksisting",
-                kondisi: "Baik",
-                jenis_perkerasan: "Aspal"
             }));
         }
     }, [selectedRoad]);
@@ -57,20 +66,19 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
             return;
         }
 
-        onSave({
+        const payload = {
             ...formData,
-            kode_ruas: selectedRoad.jalan.kode_ruas,
-            nama_jalan: selectedRoad.jalan.nama_ruas,
-            kecamatan_id: selectedRoad.jalan.id_kecamatan,
-            desa_id: selectedRoad.jalan.id_desa,
-            desa: selectedRoad.jalan.desa,
-            kecamatan: selectedRoad.jalan.kecamatan,
             geom: drawnGeoJSON ? JSON.parse(drawnGeoJSON).geometry : undefined,
             tahun_pembangunan: parseInt(formData.tahun_pembangunan) || 0,
+            tahun_renovasi_terakhir: formData.tahun_renovasi_terakhir ? parseInt(formData.tahun_renovasi_terakhir) : null,
             panjang: parseFloat(formData.panjang) || 0,
             lebar: parseFloat(formData.lebar) || 0,
-        });
+            kecamatan_id: parseInt(formData.kecamatan_id) || null,
+            desa_id: parseInt(formData.desa_id) || null,
+            check_melarosa: formData.check_melarosa ? "Ya" : "Tidak"
+        };
 
+        onSave(payload);
         toast.success("Segmen pembangunan berhasil disimpan!");
         onClose();
     };
@@ -78,11 +86,11 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     return (
         <div
             className={cn(
-                "absolute inset-y-0 right-0 z-50 w-full sm:w-[400px] bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
+                "absolute inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
                 isVisible ? "translate-x-0" : "translate-x-full"
             )}
         >
-            <div className="p-4 border-b bg-slate-50 flex items-center justify-between">
+            <div className="p-3 border-b bg-slate-50 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-blue-600 rounded-lg text-white">
                         <Save className="w-5 h-5" />
@@ -97,15 +105,52 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                 </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-6">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3 space-y-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
                 <div className="space-y-4">
-                    <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-center gap-3">
-                        <div className="p-2 bg-white rounded-xl shadow-sm border border-blue-200">
-                            <MapPin className="w-4 h-4 text-blue-600" />
+
+                    {/* Basic Info Readonly/Disabled */}
+                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                        <div className="space-y-1">
+                            <Label className="text-[10px] uppercase font-bold text-slate-400">Desa</Label>
+                            <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
                         </div>
-                        <div>
-                            <p className="text-[10px] uppercase font-bold text-blue-500 tracking-wider">Jalan Target</p>
-                            <h3 className="text-xs font-bold text-slate-800">{selectedRoad.jalan.nama_ruas}</h3>
+                        <div className="space-y-1">
+                            <Label className="text-[10px] uppercase font-bold text-slate-400">Kecamatan</Label>
+                            <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                        </div>
+                        <div className="col-span-2 space-y-1">
+                            <Label className="text-[10px] uppercase font-bold text-slate-400">Nama Jalan</Label>
+                            <div className="font-bold text-xs text-slate-700">{formData.nama_jalan}</div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 border-blue-100">
+                        <Checkbox
+                            id="melarosa-new"
+                            checked={formData.check_melarosa}
+                            onCheckedChange={(c) => setFormData({ ...formData, check_melarosa: c as boolean })}
+                        />
+                        <Label htmlFor="melarosa-new" className="text-xs font-bold text-slate-700 cursor-pointer">
+                            Check Melarosa
+                        </Label>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status Jalan</Label>
+                            <Select value={formData.status_jalan} onValueChange={(v) => setFormData({ ...formData, status_jalan: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Jalan Kabupaten">Jalan Kabupaten</SelectItem>
+                                    <SelectItem value="Jalan Poros Antar Desa">Jalan Poros Antar Desa</SelectItem>
+                                    <SelectItem value="Jalan Poros Desa">Jalan Poros Desa</SelectItem>
+                                    <SelectItem value="Jalan Lingkungan">Jalan Lingkungan</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Data</Label>
+                            <Input value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
                         </div>
                     </div>
 
@@ -114,24 +159,14 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Panjang (m)</Label>
                             <div className="relative">
                                 <Ruler className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <Input
-                                    type="number"
-                                    className="pl-9"
-                                    value={formData.panjang}
-                                    onChange={(e) => setFormData({ ...formData, panjang: e.target.value })}
-                                />
+                                <Input type="number" className="pl-9" value={formData.panjang} onChange={(e) => setFormData({ ...formData, panjang: e.target.value })} />
                             </div>
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Lebar (m)</Label>
                             <div className="relative">
                                 <Maximize2 className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <Input
-                                    type="number"
-                                    className="pl-9"
-                                    value={formData.lebar}
-                                    onChange={(e) => setFormData({ ...formData, lebar: e.target.value })}
-                                />
+                                <Input type="number" className="pl-9" value={formData.lebar} onChange={(e) => setFormData({ ...formData, lebar: e.target.value })} />
                             </div>
                         </div>
                     </div>
@@ -139,67 +174,83 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Bangun</Label>
-                            <div className="relative">
-                                <Calendar className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                                <Input
-                                    type="number"
-                                    className="pl-9"
-                                    value={formData.tahun_pembangunan}
-                                    onChange={(e) => setFormData({ ...formData, tahun_pembangunan: e.target.value })}
-                                />
-                            </div>
+                            <Input type="number" value={formData.tahun_pembangunan} onChange={(e) => setFormData({ ...formData, tahun_pembangunan: e.target.value })} />
                         </div>
                         <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Renovasi</Label>
+                            <Input type="number" placeholder="-" value={formData.tahun_renovasi_terakhir} onChange={(e) => setFormData({ ...formData, tahun_renovasi_terakhir: e.target.value })} />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Perkerasan</Label>
-                            <Select
-                                value={formData.jenis_perkerasan}
-                                onValueChange={(v) => setFormData({ ...formData, jenis_perkerasan: v })}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
+                            <Select value={formData.jenis_perkerasan} onValueChange={(v) => setFormData({ ...formData, jenis_perkerasan: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Aspal">Aspal</SelectItem>
-                                    <SelectItem value="Rabat Beton">Rabat Beton</SelectItem>
-                                    <SelectItem value="Telford">Telford</SelectItem>
+                                    <SelectItem value="Beton">Beton</SelectItem>
                                     <SelectItem value="Tanah">Tanah</SelectItem>
                                     <SelectItem value="Paving">Paving</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="space-y-2">
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Kondisi</Label>
+                            <Select value={formData.kondisi} onValueChange={(v) => setFormData({ ...formData, kondisi: v })}>
+                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="baik">Baik</SelectItem>
+                                    <SelectItem value="sedang">Sedang</SelectItem>
+                                    <SelectItem value="rusak ringan">Rusak Ringan</SelectItem>
+                                    <SelectItem value="rusak berat">Rusak Berat</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Kondisi Jalan</Label>
-                        <Select
-                            value={formData.kondisi}
-                            onValueChange={(v) => setFormData({ ...formData, kondisi: v })}
-                        >
-                            <SelectTrigger>
-                                <SelectValue />
-                            </SelectTrigger>
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status Kondisi</Label>
+                        <Select value={formData.status_kondisi} onValueChange={(v) => setFormData({ ...formData, status_kondisi: v })}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="Baik">Baik</SelectItem>
-                                <SelectItem value="Sedang">Sedang</SelectItem>
-                                <SelectItem value="Rusak Ringan">Rusak Ringan</SelectItem>
-                                <SelectItem value="Rusak Berat">Rusak Berat</SelectItem>
+                                <SelectItem value="Eksisting">Eksisting</SelectItem>
+                                <SelectItem value="Riwayat">Riwayat</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
 
                     <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Verifikator</Label>
-                        <Input
-                            placeholder="Nama Verifikator"
-                            value={formData.verifikator}
-                            onChange={(e) => setFormData({ ...formData, verifikator: e.target.value })}
+                        <div className="relative">
+                            <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                            <Input className="pl-9" value={formData.verifikator} onChange={(e) => setFormData({ ...formData, verifikator: e.target.value })} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">URL Foto</Label>
+                        <div className="relative">
+                            <Camera className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                            <Input className="pl-9" placeholder="https://..." value={formData.foto_url} onChange={(e) => setFormData({ ...formData, foto_url: e.target.value })} />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Keterangan</Label>
+                        <Textarea
+                            placeholder="Keterangan tambahan..."
+                            value={formData.keterangan}
+                            onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+                            className="min-h-[80px]"
                         />
                     </div>
+
                 </div>
             </form>
 
-            <div className="p-4 border-t bg-slate-50">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 h-11 text-sm font-bold shadow-lg shadow-blue-200" onClick={handleSubmit}>
+            <div className="p-3 border-t bg-slate-50">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 h-10 text-sm font-bold shadow-lg shadow-blue-200" onClick={handleSubmit}>
                     <Save className="w-4 h-4 mr-2" />
                     SIMPAN DATA SEGMEN
                 </Button>
