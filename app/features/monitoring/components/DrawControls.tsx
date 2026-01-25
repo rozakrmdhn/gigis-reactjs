@@ -48,7 +48,7 @@ export function DrawControls({
                                     "h-8 w-8 rounded-xl transition-all duration-300",
                                     mode === tool.id
                                         ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                                        : "hover:bg-blue-50 hover:text-blue-600"
+                                        : "hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
                                 )}
                                 onClick={() => onSetMode(tool.id as DrawMode)}
                             >
@@ -69,7 +69,7 @@ export function DrawControls({
                             <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all duration-300"
+                                className="h-8 w-8 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all duration-300 cursor-pointer"
                                 onClick={onCancelReshape}
                             >
                                 <X className="h-4 w-4" />
@@ -89,7 +89,7 @@ export function DrawControls({
                             className={cn(
                                 "h-8 w-8 rounded-xl transition-all duration-300",
                                 canFinishReshape
-                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 animate-pulse"
+                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 animate-pulse cursor-pointer"
                                     : "opacity-50 cursor-not-allowed"
                             )}
                             onClick={onFinishReshape}
@@ -108,7 +108,7 @@ export function DrawControls({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all duration-300"
+                            className="h-8 w-8 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all duration-300 cursor-pointer"
                             onClick={onClear}
                         >
                             <Trash2 className="h-4 w-4" />
@@ -124,7 +124,7 @@ export function DrawControls({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all duration-300"
+                            className="h-8 w-8 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all duration-300 cursor-pointer"
                             onClick={onExport}
                         >
                             <Download className="h-4 w-4" />

@@ -19,7 +19,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all duration-300"
+                            className="h-8 w-8 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all duration-300 cursor-pointer"
                             onClick={onZoomIn}
                         >
                             <Plus className="h-4 w-4" />
@@ -35,7 +35,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all duration-300"
+                            className="h-8 w-8 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all duration-300 cursor-pointer"
                             onClick={onZoomOut}
                         >
                             <Minus className="h-4 w-4" />
@@ -53,7 +53,7 @@ export function MapControls({ onZoomIn, onZoomOut, onResetBearing, className }: 
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all duration-300"
+                            className="h-8 w-8 rounded-xl hover:bg-emerald-50 hover:text-emerald-600 transition-all duration-300 cursor-pointer"
                             onClick={onResetBearing}
                         >
                             <Compass className="h-4 w-4" />
