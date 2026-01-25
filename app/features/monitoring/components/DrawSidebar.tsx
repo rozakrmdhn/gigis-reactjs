@@ -4,11 +4,11 @@ import { MonitoringList } from "./MonitoringList";
 import { monitoringService, type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Search, MapPin, PencilLine, Plus } from "lucide-react";
-import { cn } from "~/lib/utils";
+import { Search, MapPin, Plus } from "lucide-react";
+import { ScrollArea } from "~/components/ui/scroll-area";
 
 interface DrawSidebarProps {
-    onSelectRoad: (road: MonitoringJalanResult) => void;
+    onSelectRoad: (road: MonitoringJalanResult | null) => void;
     selectedRoad: MonitoringJalanResult | null;
     onStartDraw: () => void;
     isDrawing: boolean;
@@ -44,10 +44,23 @@ export function DrawSidebar({
         return () => clearTimeout(timer);
     }, [search, refreshTrigger]);
 
+    // Auto-scroll to selected road
+    useEffect(() => {
+        if (selectedRoad?.jalan.id) {
+            const timer = setTimeout(() => {
+                const element = document.getElementById(`road-${selectedRoad.jalan.id}`);
+                if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [selectedRoad?.jalan.id, roads]);
+
     return (
         <MonitoringSidebar widthClass="w-80" isOpen={isOpen} onToggle={onToggle}>
-            <div className="flex flex-col h-full bg-slate-50/50">
-                <div className="p-3 bg-white border-b sticky top-0 z-10 space-y-3">
+            <div className="flex flex-col h-full bg-slate-50/50 min-h-0">
+                <div className="p-3 bg-white border-b sticky top-0 z-10 space-y-3 shrink-0">
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-blue-50 text-blue-600 rounded-md">
                             <MapPin className="w-4 h-4" />
@@ -65,16 +78,20 @@ export function DrawSidebar({
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-2 space-y-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
-                    <MonitoringList
-                        data={roads}
-                        isLoading={loading}
-                        onSelectJalan={(id) => {
-                            const road = roads.find(r => r.jalan.id === id);
-                            if (road) onSelectRoad(road);
-                        }}
-                        selectedId={selectedRoad?.jalan.id}
-                    />
+                <div className="flex-1 overflow-hidden min-h-0">
+                    <ScrollArea className="h-full">
+                        <div className="p-2 space-y-2">
+                            <MonitoringList
+                                data={roads}
+                                isLoading={loading}
+                                onSelectJalan={(id) => {
+                                    const road = roads.find(r => r.jalan.id === id);
+                                    if (road) onSelectRoad(road);
+                                }}
+                                selectedId={selectedRoad?.jalan.id}
+                            />
+                        </div>
+                    </ScrollArea>
                 </div>
             </div>
         </MonitoringSidebar>

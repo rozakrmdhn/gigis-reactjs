@@ -37,7 +37,7 @@ export function MonitoringSidebar({
                 className
             )}
         >
-            <div className={cn("flex-1 overflow-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent", !isOpen && "hidden")}>
+            <div className={cn("flex-1 overflow-hidden flex flex-col", !isOpen && "hidden")}>
                 {children}
             </div>
 

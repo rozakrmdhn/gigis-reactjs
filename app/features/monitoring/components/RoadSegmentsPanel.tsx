@@ -4,6 +4,7 @@ import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
 import { useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 
 interface RoadSegmentsPanelProps {
     isVisible: boolean;
@@ -12,7 +13,8 @@ interface RoadSegmentsPanelProps {
     onZoom: (feature: any) => void;
     onEdit: (feature: any) => void;
     onDelete?: (feature: any) => void;
-    onAdd?: () => void;
+    onAddRuas?: () => void;
+    onAddLingkungan?: () => void;
     className?: string;
 }
 
@@ -23,17 +25,28 @@ export function RoadSegmentsPanel({
     onZoom,
     onEdit,
     onDelete,
-    onAdd,
+    onAddRuas,
+    onAddLingkungan,
     className
 }: RoadSegmentsPanelProps) {
     const [isOpen, setIsOpen] = useState(true);
+    const [activeTab, setActiveTab] = useState("ruas");
 
     if (!isVisible) return null;
 
     const handleToggle = () => setIsOpen(!isOpen);
 
-    // Group segments by type/source if possible, or just list them.
-    // Assuming segments are OL features or objects with properties.
+    // Split segments into categories
+    const ruasSegments = segments.filter(s => {
+        const props = s.getProperties ? s.getProperties() : s;
+        return !props.is_lingkungan_segment;
+    });
+
+    const lingkunganSegments = segments.filter(s => {
+        const props = s.getProperties ? s.getProperties() : s;
+        return props.is_lingkungan_segment === true;
+    });
+
     const renderSegmentItem = (segment: any, index: number) => {
         const props = segment.getProperties ? segment.getProperties() : segment;
         const condition = props.kondisi || "Unknown";
@@ -68,7 +81,7 @@ export function RoadSegmentsPanel({
                     <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200"
+                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 shadow-sm"
                         onClick={() => onZoom(segment)}
                     >
                         <Search className="w-3 h-3" />
@@ -78,7 +91,7 @@ export function RoadSegmentsPanel({
                         <Button
                             size="sm"
                             variant="outline"
-                            className="h-7 text-xs flex-1 gap-1.5 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200"
+                            className="h-7 text-xs flex-1 gap-1.5 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 shadow-sm"
                             onClick={() => onEdit(segment)}
                         >
                             <Pencil className="w-3 h-3" />
@@ -88,7 +101,7 @@ export function RoadSegmentsPanel({
                     <Button
                         size="sm"
                         variant="outline"
-                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200"
+                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
                         onClick={() => {
                             if (window.confirm("Apakah Anda yakin ingin menghapus segmen ini?")) {
                                 onDelete?.(segment);
@@ -103,9 +116,34 @@ export function RoadSegmentsPanel({
         );
     };
 
+    const SegmentList = ({ items, emptyMessage, onAdd, addLabel }: { items: any[], emptyMessage: string, onAdd?: () => void, addLabel: string }) => (
+        <ScrollArea className="h-[calc(100vh-14rem)]">
+            <div className="flex flex-col gap-3 p-3">
+                {items.length === 0 ? (
+                    <div className="text-center py-12 px-4 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
+                        <List className="w-8 h-8 text-slate-300 mx-auto mb-2 opacity-50" />
+                        <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{emptyMessage}</p>
+                    </div>
+                ) : (
+                    items.map((seg, idx) => renderSegmentItem(seg, idx))
+                )}
+
+                {onAdd && (
+                    <Button
+                        onClick={onAdd}
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-black text-[10px] h-10 gap-2 shadow-lg shadow-blue-200 rounded-xl uppercase tracking-widest mt-2 shrink-0"
+                    >
+                        <Plus className="w-4 h-4" />
+                        {addLabel}
+                    </Button>
+                )}
+            </div>
+        </ScrollArea>
+    );
+
     return (
         <div className={cn(
-            "absolute inset-y-0 right-0 z-30 w-full sm:w-80 bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
+            "absolute inset-y-0 right-0 z-30 w-full sm:w-80 bg-white/95 backdrop-blur-md border-l border-slate-200 shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
             isOpen ? "translate-x-0" : "translate-x-full",
             className
         )}>
@@ -113,52 +151,59 @@ export function RoadSegmentsPanel({
             <Button
                 variant="secondary"
                 size="icon"
-                className="absolute top-1/2 -translate-y-1/2 -left-8 h-10 w-8 rounded-r-none shadow-md z-50 bg-white border border-l-0 cursor-pointer"
+                className="absolute top-1/2 -translate-y-1/2 -left-8 h-10 w-8 rounded-r-none shadow-md z-50 bg-white border border-l-0 cursor-pointer border-slate-200"
                 onClick={handleToggle}
             >
-                {isOpen ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                {isOpen ? <ChevronRight className="h-4 w-4 text-slate-600" /> : <ChevronLeft className="h-4 w-4 text-slate-600" />}
             </Button>
 
-            <div className="p-4 border-b bg-slate-50 space-y-3">
+            <div className="p-4 border-b bg-white space-y-3 shrink-0">
                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 bg-blue-600 rounded-lg text-white">
+                    <div className="flex items-center gap-3">
+                        <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-100">
                             <List className="w-5 h-5" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-bold text-slate-900 tracking-tight">DAFTAR SEGMEN</h2>
-                            <p className="text-[10px] text-slate-500 uppercase font-semibold">
-                                {segments.length} segment ditemukan
+                            <h2 className="text-sm font-black text-slate-800 tracking-tight uppercase">Dashboard Segmen</h2>
+                            <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-0.5">
+                                {segments.length} total entry
                             </p>
                         </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-200" onClick={handleToggle}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full hover:bg-slate-100" onClick={handleToggle}>
                         <X className="w-4 h-4 text-slate-500" />
                     </Button>
                 </div>
             </div>
 
-            <ScrollArea className="flex-1 p-3">
-                <div className="flex flex-col gap-3">
-                    {segments.length === 0 ? (
-                        <div className="text-center py-8 text-slate-400 text-xs">
-                            Tidak ada segmen data.
-                        </div>
-                    ) : (
-                        segments.map((seg, idx) => renderSegmentItem(seg, idx))
-                    )}
+            <div className="flex-1 flex flex-col min-h-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
+                    <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100">
+                        <TabsList className="grid w-full grid-cols-2 h-9 p-1 bg-slate-200/50 rounded-xl">
+                            <TabsTrigger
+                                value="ruas"
+                                className="text-[10px] font-black uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                            >
+                                Ruas Jalan
+                            </TabsTrigger>
+                            <TabsTrigger
+                                value="lingkungan"
+                                className="text-[10px] font-black uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                            >
+                                Lingkungan
+                            </TabsTrigger>
+                        </TabsList>
+                    </div>
 
-                    {onAdd && (
-                        <Button
-                            onClick={onAdd}
-                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs h-9 gap-2 shadow-lg shadow-emerald-200 rounded"
-                        >
-                            <Plus className="w-4 h-4" />
-                            TAMBAH SEGMEN BARU
-                        </Button>
-                    )}
-                </div>
-            </ScrollArea>
+                    <TabsContent value="ruas" className="flex-1 min-h-0 p-0 mt-0 focus-visible:outline-none">
+                        <SegmentList items={ruasSegments} emptyMessage="Tidak ada segmen ruas jalan" onAdd={onAddRuas} addLabel="TAMBAH SEGMEN RUAS" />
+                    </TabsContent>
+
+                    <TabsContent value="lingkungan" className="flex-1 min-h-0 p-0 mt-0 focus-visible:outline-none">
+                        <SegmentList items={lingkunganSegments} emptyMessage="Tidak ada jalan lingkungan" onAdd={onAddLingkungan} addLabel="TAMBAH JALAN LINGKUNGAN" />
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
     );
 }

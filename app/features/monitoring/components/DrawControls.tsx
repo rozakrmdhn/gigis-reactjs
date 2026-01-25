@@ -14,6 +14,7 @@ interface DrawControlsProps {
     onFinishReshape?: () => void;
     canFinishReshape?: boolean;
     onCancelReshape?: () => void;
+
 }
 
 export function DrawControls({
@@ -24,7 +25,8 @@ export function DrawControls({
     className,
     onFinishReshape,
     canFinishReshape,
-    onCancelReshape
+    onCancelReshape,
+
 }: DrawControlsProps) {
     const tools = [
         { id: "view", icon: MousePointer2, label: "View/Select" },
@@ -103,6 +105,8 @@ export function DrawControls({
                     </TooltipContent>
                 </Tooltip>
 
+
+
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
@@ -134,6 +138,7 @@ export function DrawControls({
                         <p className="text-xs font-semibold text-blue-600">Export GeoJSON</p>
                     </TooltipContent>
                 </Tooltip>
+
             </div>
         </TooltipProvider>
     );

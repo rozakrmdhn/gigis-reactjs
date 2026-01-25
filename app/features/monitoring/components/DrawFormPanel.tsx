@@ -1,5 +1,5 @@
 import { X, Save, Ruler, HardHat, Calendar, MapPin, Hash, CheckCircle2, FileText, Camera, User, Maximize2 } from "lucide-react";
-import { type MonitoringJalanResult } from "../services/monitoring.service";
+import { monitoringService, type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -16,9 +16,10 @@ interface DrawFormPanelProps {
     selectedRoad: MonitoringJalanResult | null;
     drawnGeoJSON: string | null;
     onSave: (data: any) => void;
+    drawnLength?: number;
 }
 
-export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave }: DrawFormPanelProps) {
+export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, drawnLength }: DrawFormPanelProps) {
     const [formData, setFormData] = useState({
         check_melarosa: false,
         status_jalan: "",
@@ -41,23 +42,74 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
         status_kondisi: ""
     });
 
+    const [kecamatans, setKecamatans] = useState<any[]>([]);
+    const [desas, setDesas] = useState<any[]>([]);
+    const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
     useEffect(() => {
-        console.log("selectedRoad", selectedRoad);
+        if (drawnLength) {
+            setFormData(prev => ({
+                ...prev,
+                panjang: drawnLength.toFixed(1)
+            }));
+        }
+    }, [drawnLength]);
+
+    useEffect(() => {
+        const fetchKecamatans = async () => {
+            const resp = await monitoringService.getKecamatan();
+            if (resp.status === "success") {
+                setKecamatans(resp.result);
+            }
+        };
+        fetchKecamatans();
+    }, []);
+
+    useEffect(() => {
+        const fetchDesas = async () => {
+            if (formData.kecamatan_id) {
+                setIsLoadingLocations(true);
+                const resp = await monitoringService.getDesa(formData.kecamatan_id as string);
+                if (resp.status === "success") {
+                    setDesas(resp.result);
+                }
+                setIsLoadingLocations(false);
+            } else {
+                setDesas([]);
+            }
+        };
+        fetchDesas();
+    }, [formData.kecamatan_id]);
+
+    useEffect(() => {
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,
-                desa: selectedRoad.jalan.desa,
-                kecamatan: selectedRoad.jalan.kecamatan,
-                kode_ruas: selectedRoad.jalan.kode_ruas.toString(),
+                desa: selectedRoad.jalan.desa || "",
+                kecamatan: selectedRoad.jalan.kecamatan || "",
+                kode_ruas: selectedRoad.jalan.kode_ruas?.toString() || "0",
                 kecamatan_id: selectedRoad.jalan.id_kecamatan?.toString() || "",
                 desa_id: selectedRoad.jalan.id_desa || "",
-                nama_jalan: selectedRoad.jalan.nama_ruas,
-                lebar: selectedRoad.jalan.lebar.toString() || "",
+                nama_jalan: selectedRoad.jalan.nama_ruas || "",
+                lebar: selectedRoad.jalan.lebar?.toString() || "",
+                check_melarosa: true
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                desa: "",
+                kecamatan: "",
+                kode_ruas: "0",
+                kecamatan_id: "",
+                desa_id: "",
+                nama_jalan: "Jalan Lingkungan",
+                lebar: "",
+                check_melarosa: false
             }));
         }
     }, [selectedRoad]);
 
-    if (!selectedRoad) return null;
+    // if (!selectedRoad) return null; (Removed to allow Free Draw)
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -96,8 +148,8 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         <Save className="w-5 h-5" />
                     </div>
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">SIMPAN SEGMEN BARU</h2>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Ruas #{selectedRoad.jalan.kode_ruas}</p>
+                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">{selectedRoad ? "SIMPAN SEGMEN BARU" : "TAMBAH JALAN LINGKUNGAN"}</h2>
+                        <p className="text-[10px] text-slate-500 uppercase font-semibold">{selectedRoad ? `Ruas #${selectedRoad.jalan.kode_ruas}` : "Non-Ruas (Jalan Lingkungan)"}</p>
                     </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
@@ -112,15 +164,77 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Desa</Label>
-                            <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
+                            {selectedRoad ? (
+                                <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
+                            ) : (
+                                <Select
+                                    value={formData.desa_id}
+                                    onValueChange={(v) => {
+                                        const selectedDesa = desas.find(d => d.id.toString() === v);
+                                        setFormData({
+                                            ...formData,
+                                            desa_id: v,
+                                            desa: selectedDesa?.nama_desa || ""
+                                        });
+                                    }}
+                                    disabled={!formData.kecamatan_id || isLoadingLocations}
+                                >
+                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                        <SelectValue placeholder={isLoadingLocations ? "Loading..." : "Pilih Desa"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {desas.map((d) => (
+                                            <SelectItem key={d.id} value={d.id.toString()}>
+                                                {d.nama_desa}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Kecamatan</Label>
-                            <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                            {selectedRoad ? (
+                                <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                            ) : (
+                                <Select
+                                    value={formData.kecamatan_id}
+                                    onValueChange={(v) => {
+                                        const selectedKec = kecamatans.find(k => k.id.toString() === v);
+                                        setFormData({
+                                            ...formData,
+                                            kecamatan_id: v,
+                                            kecamatan: selectedKec?.nama_kecamatan || "",
+                                            desa_id: "",
+                                            desa: ""
+                                        });
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                        <SelectValue placeholder="Pilih Kecamatan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {kecamatans.map((k) => (
+                                            <SelectItem key={k.id} value={k.id.toString()}>
+                                                {k.nama_kecamatan}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
                         <div className="col-span-2 space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Nama Jalan</Label>
-                            <div className="font-bold text-xs text-slate-700">{formData.nama_jalan}</div>
+                            {selectedRoad ? (
+                                <div className="font-bold text-xs text-slate-700">{formData.nama_jalan}</div>
+                            ) : (
+                                <Input
+                                    value={formData.nama_jalan}
+                                    onChange={(e) => setFormData({ ...formData, nama_jalan: e.target.value })}
+                                    className="h-8 text-xs font-bold"
+                                    placeholder="Isi nama jalan lingkungan"
+                                />
+                            )}
                         </div>
                     </div>
 

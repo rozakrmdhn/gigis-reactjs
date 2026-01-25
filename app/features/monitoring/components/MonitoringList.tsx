@@ -52,6 +52,7 @@ export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isL
                 return (
                     <button
                         key={item.jalan.id}
+                        id={`road-${item.jalan.id}`}
                         className={cn(
                             "group relative flex flex-col gap-2 rounded-lg border cursor-pointer px-3 py-3 text-sm text-left w-full",
                             "transition-all active:scale-[0.98]",

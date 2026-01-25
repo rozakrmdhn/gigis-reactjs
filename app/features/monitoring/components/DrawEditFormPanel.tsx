@@ -1,5 +1,5 @@
 import { X, Save, Ruler, HardHat, Calendar, MapPin, Hash, CheckCircle2, FileText, Camera, User } from "lucide-react";
-import { type MonitoringJalanResult } from "../services/monitoring.service";
+import { monitoringService, type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -17,9 +17,10 @@ interface DrawEditFormPanelProps {
     drawnGeoJSON: string | null;
     onSave: (data: any) => void;
     initialData?: any;
+    drawnLength?: number;
 }
 
-export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, initialData }: DrawEditFormPanelProps) {
+export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, initialData, drawnLength }: DrawEditFormPanelProps) {
     const [formData, setFormData] = useState({
         check_melarosa: false,
         status_jalan: "",
@@ -42,19 +43,56 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
         status_kondisi: ""
     });
 
+    const [kecamatans, setKecamatans] = useState<any[]>([]);
+    const [desas, setDesas] = useState<any[]>([]);
+    const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+
     useEffect(() => {
-        console.log("kondisi:", initialData?.kondisi);
-        console.log("jenis_perkerasan:", initialData?.jenis_perkerasan);
-        console.log("status_kondisi:", initialData?.status_kondisi);
+        const fetchKecamatans = async () => {
+            const resp = await monitoringService.getKecamatan();
+            if (resp.status === "success") {
+                setKecamatans(resp.result);
+            }
+        };
+        fetchKecamatans();
+    }, []);
+
+    useEffect(() => {
+        const fetchDesas = async () => {
+            if (formData.kecamatan_id) {
+                setIsLoadingLocations(true);
+                const resp = await monitoringService.getDesa(formData.kecamatan_id as string);
+                if (resp.status === "success") {
+                    setDesas(resp.result);
+                }
+                setIsLoadingLocations(false);
+            } else {
+                setDesas([]);
+            }
+        };
+        fetchDesas();
+    }, [formData.kecamatan_id]);
+
+    useEffect(() => {
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,
-                desa: selectedRoad.jalan.desa,
-                kecamatan: selectedRoad.jalan.kecamatan,
-                kode_ruas: selectedRoad.jalan.kode_ruas.toString(),
+                desa: selectedRoad.jalan.desa || "",
+                kecamatan: selectedRoad.jalan.kecamatan || "",
+                kode_ruas: selectedRoad.jalan.kode_ruas?.toString() || "0",
                 kecamatan_id: selectedRoad.jalan.id_kecamatan?.toString() || "",
                 desa_id: selectedRoad.jalan.id_desa || "",
-                nama_jalan: selectedRoad.jalan.nama_ruas
+                nama_jalan: selectedRoad.jalan.nama_ruas || ""
+            }));
+        } else {
+            setFormData(prev => ({
+                ...prev,
+                desa: "",
+                kecamatan: "",
+                kode_ruas: "0",
+                kecamatan_id: "",
+                desa_id: "",
+                nama_jalan: "Jalan Lingkungan"
             }));
         }
 
@@ -76,14 +114,19 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 foto_url: initialData.foto_url || "",
                 status_kondisi: initialData.status_kondisi || prev.status_kondisi
             }));
-
-            if (initialData.geom) {
-                // If geom is passed in initialData, we might use it, but `drawnGeoJSON` is usually the *edited* geometry
-            }
         }
     }, [selectedRoad, initialData]);
 
-    if (!selectedRoad) return null;
+    useEffect(() => {
+        if (drawnLength) {
+            setFormData(prev => ({
+                ...prev,
+                panjang: drawnLength.toFixed(1)
+            }));
+        }
+    }, [drawnLength]);
+
+    // if (!selectedRoad) return null; (Removed to allow Free Draw Edit)
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -120,7 +163,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                     </div>
                     <div>
                         <h2 className="text-sm font-bold text-slate-900 tracking-tight">EDIT DATA SEGMEN</h2>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Ruas #{selectedRoad.jalan.kode_ruas}</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-semibold">{selectedRoad ? `Ruas #${selectedRoad.jalan.kode_ruas}` : "Non-Ruas (Jalan Lingkungan)"}</p>
                     </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
@@ -135,11 +178,64 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                     <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Desa</Label>
-                            <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
+                            {selectedRoad ? (
+                                <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
+                            ) : (
+                                <Select
+                                    value={formData.desa_id}
+                                    onValueChange={(v) => {
+                                        const selectedDesa = desas.find(d => d.id.toString() === v);
+                                        setFormData({
+                                            ...formData,
+                                            desa_id: v,
+                                            desa: selectedDesa?.nama_desa || ""
+                                        });
+                                    }}
+                                    disabled={!formData.kecamatan_id || isLoadingLocations}
+                                >
+                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                        <SelectValue placeholder={isLoadingLocations ? "Loading..." : "Pilih Desa"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {desas.map((d) => (
+                                            <SelectItem key={d.id} value={d.id.toString()}>
+                                                {d.nama_desa}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Kecamatan</Label>
-                            <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                            {selectedRoad ? (
+                                <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                            ) : (
+                                <Select
+                                    value={formData.kecamatan_id}
+                                    onValueChange={(v) => {
+                                        const selectedKec = kecamatans.find(k => k.id.toString() === v);
+                                        setFormData({
+                                            ...formData,
+                                            kecamatan_id: v,
+                                            kecamatan: selectedKec?.nama_kecamatan || "",
+                                            desa_id: "",
+                                            desa: ""
+                                        });
+                                    }}
+                                >
+                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                        <SelectValue placeholder="Pilih Kecamatan" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {kecamatans.map((k) => (
+                                            <SelectItem key={k.id} value={k.id.toString()}>
+                                                {k.nama_kecamatan}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
                         </div>
                         <div className="col-span-2 space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Nama Jalan</Label>

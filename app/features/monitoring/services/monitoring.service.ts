@@ -236,5 +236,52 @@ export const monitoringService = {
                 }
             };
         }
+    },
+    getKecamatan: async (): Promise<any> => {
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch kecamatans: ${response.statusText}`);
+            }
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching kecamatans:", error);
+            return { status: "error", message: "Failed to fetch data", result: [] };
+        }
+    },
+    getDesa: async (id_kecamatan: string | number): Promise<any> => {
+        try {
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch desas: ${response.statusText}`);
+            }
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching desas:", error);
+            return { status: "error", message: "Failed to fetch data", result: [] };
+        }
+    },
+    getNonBaseSegments: async (id_desa?: string | number): Promise<any> => {
+        try {
+            let url = `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?check_melarosa=Tidak`;
+            if (id_desa) {
+                url += `&desa_id=${id_desa}`;
+            }
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch non-base segments: ${response.statusText}`);
+            }
+            return response.json();
+        } catch (error) {
+            console.error("Error fetching non-base segments:", error);
+            return {
+                status: "error",
+                message: "Failed to fetch data",
+                result: {
+                    type: "FeatureCollection",
+                    features: []
+                }
+            };
+        }
     }
 };
