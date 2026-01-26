@@ -52,7 +52,7 @@ export default function LaporanPage() {
             }
         }
         fetchData();
-    }, [filters.kecamatan, filters.tahun_pembangunan, filters.check_melarosa]);
+    }, [filters.kecamatan, filters.desa, filters.tahun_pembangunan, filters.check_melarosa]);
 
     useEffect(() => {
         const timer = setTimeout(() => {

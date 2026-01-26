@@ -81,6 +81,7 @@ interface DataTableProps<TData, TValue> {
     searchValue?: string
     onSearchChange?: (value: string) => void
     defaultPageSize?: number
+    pageSizeOptions?: number[]
 }
 
 function DraggableRow<TData>({ row }: { row: Row<TData> }) {
@@ -118,6 +119,7 @@ export function DataTable<TData, TValue>({
     searchValue,
     onSearchChange,
     defaultPageSize = 10,
+    pageSizeOptions = [10, 20, 30, 40, 50],
 }: DataTableProps<TData, TValue>) {
     const [data, setData] = React.useState(() => initialData)
 
@@ -315,15 +317,15 @@ export function DataTable<TData, TValue>({
                                     table.setPageSize(Number(value))
                                 }}
                             >
-                                <SelectTrigger size="sm" className="w-20" id="rows-per-page">
+                                <SelectTrigger size="sm" className="w-24" id="rows-per-page">
                                     <SelectValue
-                                        placeholder={table.getState().pagination.pageSize}
+                                        placeholder={table.getState().pagination.pageSize === 9999 ? "All" : table.getState().pagination.pageSize}
                                     />
                                 </SelectTrigger>
                                 <SelectContent side="top">
-                                    {[10, 20, 30, 40, 50].map((pageSize) => (
+                                    {pageSizeOptions.map((pageSize) => (
                                         <SelectItem key={pageSize} value={`${pageSize}`}>
-                                            {pageSize}
+                                            {pageSize === 9999 ? "All" : pageSize}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

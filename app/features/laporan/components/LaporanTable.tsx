@@ -2,6 +2,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { type RekapDibangun } from "../types/laporan.types";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "~/components/ui/card";
 import { DataTable } from "~/components/ui/data-table";
+import { Badge } from "~/components/ui/badge";
+import { cn } from "~/lib/utils";
 import { Skeleton } from "~/components/ui/skeleton";
 
 interface LaporanTableProps {
@@ -43,6 +45,22 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
             header: () => <div className="text-right">Selisih (m)</div>,
             cell: ({ row }) => <div className="text-right font-mono text-orange-600 font-medium">{formatNumber(row.getValue("selisih"))}</div>,
         },
+        {
+            accessorKey: "status_pembangunan",
+            header: "Status",
+            cell: ({ row }) => {
+                const status = row.getValue("status_pembangunan") as string;
+                const isTuntas = status.toLowerCase() === "tuntas";
+                return (
+                    <Badge variant={isTuntas ? "default" : "secondary"} className={cn(
+                        "font-medium",
+                        isTuntas ? "bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200" : "bg-orange-100 text-orange-700 hover:bg-orange-100/80 border-orange-200"
+                    )}>
+                        {status}
+                    </Badge>
+                );
+            },
+        },
     ];
 
     return (
@@ -73,6 +91,7 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
                                 searchValue={search}
                                 onSearchChange={setSearch}
                                 defaultPageSize={50}
+                                pageSizeOptions={[10, 20, 30, 40, 50, 9999]}
                             />
                         )}
                     </div>
