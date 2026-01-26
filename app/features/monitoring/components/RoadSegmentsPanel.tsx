@@ -15,6 +15,8 @@ interface RoadSegmentsPanelProps {
     onDelete?: (feature: any) => void;
     onAddRuas?: () => void;
     onAddLingkungan?: () => void;
+    isOpen?: boolean;
+    onOpenChange?: (open: boolean) => void;
     className?: string;
 }
 
@@ -27,14 +29,24 @@ export function RoadSegmentsPanel({
     onDelete,
     onAddRuas,
     onAddLingkungan,
+    isOpen: propIsOpen,
+    onOpenChange,
     className
 }: RoadSegmentsPanelProps) {
-    const [isOpen, setIsOpen] = useState(true);
+    const [internalIsOpen, setInternalIsOpen] = useState(true);
+
+    const isOpen = propIsOpen !== undefined ? propIsOpen : internalIsOpen;
     const [activeTab, setActiveTab] = useState("ruas");
 
     if (!isVisible) return null;
 
-    const handleToggle = () => setIsOpen(!isOpen);
+    const handleToggle = () => {
+        if (onOpenChange) {
+            onOpenChange(!isOpen);
+        } else {
+            setInternalIsOpen(!isOpen);
+        }
+    };
 
     // Split segments into categories
     const ruasSegments = segments.filter(s => {

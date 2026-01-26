@@ -2,15 +2,17 @@ import { useRef, useEffect } from "react";
 import { type GeoJSONFeatureCollection } from "~/features/peta/types";
 import { useMonitoringMap } from "~/features/monitoring/hooks/useMonitoringMap";
 import { useIsMobile } from "~/hooks/use-mobile";
+import { cn } from "~/lib/utils";
 import { MapControls } from "./MapControls";
 
 interface MonitoringMapProps {
     jalanFeatures?: GeoJSONFeatureCollection | null;
     segmenFeatures?: GeoJSONFeatureCollection | null;
     segmenKabFeatures?: GeoJSONFeatureCollection | null;
+    isSidebarOpen?: boolean;
 }
 
-export function MonitoringMap({ jalanFeatures, segmenFeatures, segmenKabFeatures }: MonitoringMapProps) {
+export function MonitoringMap({ jalanFeatures, segmenFeatures, segmenKabFeatures, isSidebarOpen = true }: MonitoringMapProps) {
     const isMobile = useIsMobile();
     const mapboxToken = import.meta.env.VITE_MAPBOX_TOKEN;
     const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -53,7 +55,10 @@ export function MonitoringMap({ jalanFeatures, segmenFeatures, segmenKabFeatures
                 onZoomIn={zoomIn}
                 onZoomOut={zoomOut}
                 onResetBearing={resetBearing}
-                className="absolute top-4 right-4 z-40"
+                className={cn(
+                    "absolute bottom-4 transition-all duration-500 z-30",
+                    isSidebarOpen ? "left-[336px]" : "left-4"
+                )}
             />
         </div>
     );

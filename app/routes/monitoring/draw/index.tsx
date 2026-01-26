@@ -17,6 +17,20 @@ import * as turf from "@turf/turf";
 import { LineString, Polygon } from "ol/geom";
 import "ol/ol.css";
 import "./map.css";
+
+// Performance Optimization: Reusable static instances and helpers
+const geojsonFormat = new GeoJSON();
+
+function throttle<T extends (...args: any[]) => any>(func: T, limit: number): T {
+    let inThrottle = false;
+    return ((...args: any[]) => {
+        if (!inThrottle) {
+            func(...args);
+            inThrottle = true;
+            setTimeout(() => (inThrottle = false), limit);
+        }
+    }) as T;
+}
 import {
     Square,
     Type,
@@ -30,7 +44,8 @@ import {
     Eraser,
     Map as MapIcon,
     Loader2,
-    Check
+    Check,
+    X
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { toast } from "sonner";
@@ -52,6 +67,7 @@ export default function DrawPage() {
     const existingSourceRef = useRef<VectorSource | null>(null);
     const nonBaseSourceRef = useRef<VectorSource | null>(null);
     const nonBaseLayerRef = useRef<VectorLayer | null>(null);
+    const searchSourceRef = useRef<VectorSource | null>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [mode, setMode] = useState<DrawMode>("view");
     const [selectedRoad, setSelectedRoad] = useState<MonitoringJalanResult | null>(null);
@@ -66,16 +82,26 @@ export default function DrawPage() {
     const [editingFeatureId, setEditingFeatureId] = useState<string | null>(null);
     const [editingFeatureData, setEditingFeatureData] = useState<any>(null);
     const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
+    const [isSegmentPanelOpen, setIsSegmentPanelOpen] = useState(true);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true }
     ]);
+    const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [lastCopiedCoords, setLastCopiedCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [isCopied, setIsCopied] = useState(false);
+    const [isRoadInfoVisible, setIsRoadInfoVisible] = useState(false);
 
     const tooltipRef = useRef<Overlay | null>(null);
     const tooltipElementRef = useRef<HTMLDivElement | null>(null);
     const originalEditFeatureRef = useRef<any>(null);
     const isMobile = useIsMobile();
 
-
+    // Sidebar state initialization for mobile
+    useEffect(() => {
+        if (isMobile) {
+            setIsSidebarOpen(false);
+        }
+    }, [isMobile]);
 
     // SSR Fix: Initialize browser-only components on mount
     useEffect(() => {
@@ -83,6 +109,7 @@ export default function DrawPage() {
         if (!sourceRef.current) sourceRef.current = new VectorSource();
         if (!existingSourceRef.current) existingSourceRef.current = new VectorSource();
         if (!nonBaseSourceRef.current) nonBaseSourceRef.current = new VectorSource();
+        if (!searchSourceRef.current) searchSourceRef.current = new VectorSource();
     }, []);
 
     // Auto-collapse sidebar on mobile
@@ -131,7 +158,7 @@ export default function DrawPage() {
                 const kondisi = feature.get("kondisi") || "baik";
                 const isKabupaten = feature.get("is_kabupaten_jalan");
 
-                let color = "#10b981"; // emerald 500
+                let color = "#22c55e"; // emerald 500
                 if (isKabupaten) color = "#3b82f6"; // blue 500
                 else if (kondisi.toLowerCase().includes("rusak berat")) color = "#f43f5e"; // rose 500
                 else if (kondisi.toLowerCase().includes("rusak ringan")) color = "#f59e0b"; // amber 500
@@ -142,7 +169,7 @@ export default function DrawPage() {
                 return new Style({
                     stroke: new Stroke({
                         color: color,
-                        width: isKabupaten ? 5 : 4,
+                        width: isKabupaten ? 6 : 5,
                         lineJoin: 'round',
                         lineCap: 'round'
                     }),
@@ -171,6 +198,28 @@ export default function DrawPage() {
         });
         nonBaseLayerRef.current = nonBaseLayer;
 
+        const searchLayer = new VectorLayer({
+            source: searchSourceRef.current as any,
+            style: (feature) => {
+                const label = feature.get("label") || "Point";
+                return new Style({
+                    image: new CircleStyle({
+                        radius: 8,
+                        fill: new Fill({ color: "#f43f5e" }), // rose 500
+                        stroke: new Stroke({ color: "#fff", width: 2 })
+                    }),
+                    text: new Text({
+                        text: label,
+                        font: "bold 12px sans-serif",
+                        fill: new Fill({ color: "#f43f5e" }),
+                        stroke: new Stroke({ color: "#fff", width: 3 }),
+                        offsetY: -15
+                    })
+                });
+            },
+            zIndex: 100
+        });
+
         const map = new OLMap({
             target: mapElement.current,
             layers: [
@@ -179,6 +228,7 @@ export default function DrawPage() {
                 }),
                 existingLayer,
                 nonBaseLayer,
+                searchLayer,
                 vectorLayer,
             ],
             controls: defaultControls({
@@ -206,6 +256,63 @@ export default function DrawPage() {
         });
         map.addOverlay(overlay);
         tooltipRef.current = overlay;
+
+        // Pointer move for coordinate display (Throttled for performance)
+        const throttledPointerMove = throttle((evt: any) => {
+            if (evt.dragging) return;
+            const coordinate = toLonLat(evt.coordinate);
+            setCursorCoords({
+                lng: coordinate[0],
+                lat: coordinate[1]
+            });
+        }, 50);
+
+        map.on('pointermove', throttledPointerMove);
+
+        // Click to copy coordinates
+        map.on('click', (evt) => {
+            const coordinate = toLonLat(evt.coordinate);
+            const lng = coordinate[0];
+            const lat = coordinate[1];
+            const textToCopy = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+
+            // Update both display and last copied state on click
+            setCursorCoords({ lat, lng });
+            setLastCopiedCoords({ lat, lng });
+
+            const performCopy = async () => {
+                let success = false;
+                try {
+                    if (navigator.clipboard) {
+                        await navigator.clipboard.writeText(textToCopy);
+                        success = true;
+                    } else {
+                        throw new Error('Clipboard API unavailable');
+                    }
+                } catch (err) {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = textToCopy;
+                    textArea.style.position = "fixed";
+                    textArea.style.opacity = "0";
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    try {
+                        success = document.execCommand('copy');
+                    } catch (copyErr) {
+                        console.error('Fallback copy failed:', copyErr);
+                    }
+                    document.body.removeChild(textArea);
+                }
+
+                if (success) {
+                    toast.success("Koordinat berhasil disalin!");
+                    setIsCopied(true);
+                    setTimeout(() => setIsCopied(false), 2000);
+                }
+            };
+
+            performCopy();
+        });
 
         return () => {
             map.setTarget(undefined);
@@ -237,10 +344,12 @@ export default function DrawPage() {
             const snap = new Snap({ source: sourceRef.current as any });
             const snapExisting = new Snap({ source: existingSourceRef.current as any });
             const snapNonBase = new Snap({ source: nonBaseSourceRef.current as any });
+            const snapSearch = new Snap({ source: searchSourceRef.current as any });
             mapRef.current.addInteraction(modify);
             mapRef.current.addInteraction(snap);
             mapRef.current.addInteraction(snapExisting);
             mapRef.current.addInteraction(snapNonBase);
+            mapRef.current.addInteraction(snapSearch);
         } else if (mode.startsWith("draw-")) {
             let type: any = "Point";
             let geometryFunction = undefined;
@@ -295,27 +404,26 @@ export default function DrawPage() {
             const snap = new Snap({ source: sourceRef.current });
             const snapExisting = new Snap({ source: existingSourceRef.current });
             const snapNonBase = new Snap({ source: nonBaseSourceRef.current });
-
+            const snapSearch = new Snap({ source: searchSourceRef.current as any });
             mapRef.current.addInteraction(draw);
             mapRef.current.addInteraction(snap);
             mapRef.current.addInteraction(snapExisting);
             mapRef.current.addInteraction(snapNonBase);
+            mapRef.current.addInteraction(snapSearch);
 
             draw.on("drawstart", (event) => {
                 const sketch = event.feature;
                 const tooltipEl = tooltipElementRef.current;
 
-                sketch.getGeometry()?.on('change', (evt: any) => {
-                    const geom = evt.target;
+                // Throttled drawing updates to prevent UI lag during heavy Turf calculations
+                const throttledDrawUpdate = throttle((geom: any) => {
                     if (!(geom instanceof LineString)) return;
 
                     let distance = 0;
-                    let lastCoord = null;
                     let isValid = true;
 
-                    const format = new GeoJSON();
                     try {
-                        const gj = format.writeGeometryObject(geom, {
+                        const gj = geojsonFormat.writeGeometryObject(geom, {
                             dataProjection: 'EPSG:4326',
                             featureProjection: 'EPSG:3857'
                         }) as any;
@@ -324,14 +432,18 @@ export default function DrawPage() {
                         const kinks = turf.kinks(turf.lineString(gj.coordinates));
                         isValid = kinks.features.length === 0;
                     } catch (e) { }
-                    lastCoord = geom.getLastCoordinate();
 
+                    const lastCoord = geom.getLastCoordinate();
                     if (tooltipEl && lastCoord) {
                         tooltipEl.innerText = !isValid ? "⚠ Jalur Berpotongan" : `${distance.toFixed(1)} m`;
                         tooltipEl.style.background = isValid ? 'rgba(15, 23, 42, 0.9)' : '#e11d48';
                         tooltipRef.current?.setPosition(lastCoord);
                         tooltipEl.style.display = 'block';
                     }
+                }, 100);
+
+                sketch.getGeometry()?.on('change', (evt: any) => {
+                    throttledDrawUpdate(evt.target);
                 });
             });
 
@@ -454,6 +566,11 @@ export default function DrawPage() {
             // Set features for panel display
             setFeaturesList(panelFeatures);
             setSegmentPanelVisible(true);
+            if (isMobile) {
+                setIsSegmentPanelOpen(false);
+            } else {
+                setIsSegmentPanelOpen(true);
+            }
 
             // 3. ZOOM TO BOUNDING BOX (Extent of map features)
             if (mapFeatures.length > 0) {
@@ -687,19 +804,80 @@ export default function DrawPage() {
         sourceRef.current?.clear();
         setDrawnGeoJSON(null);
         setHasTemporaryFeature(false);
+        setDrawnLength(0);
+        setIsRoadInfoVisible(false);
         toast.info("Map cleared");
     };
 
+    const handleCoordinateSearch = (coords: { lat: number, lng: number }[]) => {
+        if (!searchSourceRef.current) return;
+
+        searchSourceRef.current.clear();
+        if (!mapRef.current || coords.length === 0) return;
+
+        const features = coords.map((c, index) => {
+            const f = new GeoJSON().readFeature({
+                type: "Feature",
+                geometry: {
+                    type: "Point",
+                    coordinates: [c.lng, c.lat]
+                },
+                properties: {
+                    label: `Point ${index + 1}`
+                }
+            }, {
+                dataProjection: "EPSG:4326",
+                featureProjection: "EPSG:3857"
+            });
+            return f;
+        });
+
+        const allFeatures = features.flat() as any[];
+        searchSourceRef.current.addFeatures(allFeatures);
+
+        const view = mapRef.current.getView();
+        if (allFeatures.length === 1) {
+            const coord = (allFeatures[0].getGeometry() as any).getCoordinates();
+            view.animate({
+                center: coord,
+                zoom: 17,
+                duration: 1000
+            });
+        } else {
+            const extent = searchSourceRef.current.getExtent();
+            view.fit(extent, {
+                padding: [100, 100, 100, 100],
+                duration: 1000,
+                maxZoom: 17
+            });
+        }
+        if (isMobile) {
+            setIsSidebarOpen(false);
+            setIsSegmentPanelOpen(false);
+        }
+
+        toast.success(`Berhasil menemukan ${allFeatures.length} lokasi`);
+    };
+
+    const handleSelectRoadOnMobile = (road: MonitoringJalanResult | null) => {
+        setSelectedRoad(road);
+        if (road) setIsRoadInfoVisible(true);
+        if (isMobile && road) {
+            setIsSidebarOpen(false);
+        }
+    };
+
     return (
-        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden relative">
+        <div className="flex flex-1 min-h-0 w-full overflow-hidden relative">
             <DrawSidebar
-                onSelectRoad={setSelectedRoad}
+                onSelectRoad={handleSelectRoadOnMobile}
                 selectedRoad={selectedRoad}
                 onStartDraw={() => setMode("draw-line")}
                 isDrawing={mode.startsWith("draw-")}
                 isOpen={isSidebarOpen}
                 onToggle={setIsSidebarOpen}
                 refreshTrigger={sidebarRefreshTrigger}
+                onCoordinateSearch={handleCoordinateSearch}
             />
 
             <div className="flex-1 flex flex-col relative">
@@ -711,7 +889,7 @@ export default function DrawPage() {
                         onZoomOut={handleZoomOut}
                         onResetBearing={handleResetView}
                         className={cn(
-                            "absolute bottom-4 transition-all duration-500 z-40",
+                            "absolute bottom-4 transition-all duration-500 z-30",
                             isSidebarOpen ? "left-[336px]" : "left-4"
                         )}
                     />
@@ -725,7 +903,7 @@ export default function DrawPage() {
                         canFinishReshape={mode === "edit" && hasTemporaryFeature && !isPanelVisible}
                         onCancelReshape={handleCancelReshape}
                         className={cn(
-                            "absolute top-4 transition-all duration-500 z-40",
+                            "absolute top-4 transition-all duration-500 z-30",
                             isSidebarOpen ? "left-[336px]" : "left-4"
                         )}
                     />
@@ -774,9 +952,15 @@ export default function DrawPage() {
                         </div>
                     )}
 
-                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
-                        {selectedRoad ? (
-                            <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-blue-100 shadow-xl max-w-xs animate-in slide-in-from-bottom-4">
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none">
+                        {selectedRoad && isRoadInfoVisible && (
+                            <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-blue-100 shadow-xl max-w-xs animate-in slide-in-from-bottom-full duration-500 pointer-events-auto relative">
+                                <button
+                                    onClick={() => setIsRoadInfoVisible(false)}
+                                    className="absolute -top-2 -right-2 h-6 w-6 bg-white border border-slate-200 rounded-full flex items-center justify-center shadow-md hover:bg-slate-50 transition-colors z-10"
+                                >
+                                    <X className="w-3 h-3 text-slate-400" />
+                                </button>
                                 <p className="text-[10px] uppercase font-bold text-blue-500 mb-1">Ruas Terpilih</p>
                                 <h4 className="text-sm font-bold text-slate-800 mb-2 truncate">{selectedRoad.jalan.nama_ruas}</h4>
                                 <div className="flex gap-4">
@@ -790,14 +974,57 @@ export default function DrawPage() {
                                     </div>
                                 </div>
                             </div>
-                        ) : mode !== "view" ? (
+                        )}
+                    </div>
+
+                    <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+                        {!selectedRoad && mode !== "view" ? (
                             <div className="bg-blue-600/90 backdrop-blur-md p-3 rounded-xl border border-blue-400 shadow-xl text-[10px] font-bold text-white uppercase tracking-widest animate-in slide-in-from-bottom-4">
                                 Menggambar Jalan Lingkungan (Non-Ruas)
                             </div>
-                        ) : (
+                        ) : !selectedRoad ? (
                             <div className="bg-white/80 backdrop-blur p-3 rounded-xl border shadow-sm text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                                 Pilih jalan di sidebar untuk mulai
                             </div>
+                        ) : null}
+                    </div>
+
+                    <div
+                        className={cn(
+                            "absolute bottom-4 right-4 bg-blue-600/90 backdrop-blur-md p-1.5 z-30 rounded-md border border-blue-400 shadow-xl text-[9px] font-bold text-white uppercase tracking-widest animate-in slide-in-from-bottom-4 flex items-center gap-2 cursor-pointer hover:bg-blue-500/90 transition-all active:scale-95",
+                            isCopied && "ring-2 ring-emerald-400 ring-offset-1 ring-offset-blue-600"
+                        )}
+                        onClick={() => {
+                            const coords = isMobile ? lastCopiedCoords : cursorCoords;
+                            if (coords) {
+                                const text = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
+                                navigator.clipboard.writeText(text);
+                                toast.success("Koordinat berhasil disalin!");
+                                setLastCopiedCoords(coords);
+                                setIsCopied(true);
+                                setTimeout(() => setIsCopied(false), 2000);
+                            }
+                        }}
+                    >
+                        <span className="opacity-70">
+                            {isMobile || isCopied ? "Lat Long :" : "Lat Long :"}
+                        </span>
+                        {(isMobile ? lastCopiedCoords : (isCopied ? lastCopiedCoords : cursorCoords)) ? (
+                            <div className="flex items-center gap-1.5">
+                                <code className="bg-blue-700/50 px-1.5 py-0.5 rounded font-mono">
+                                    {(isMobile ? lastCopiedCoords : (isCopied ? lastCopiedCoords : cursorCoords))?.lat.toFixed(6)}, {(isMobile ? lastCopiedCoords : (isCopied ? lastCopiedCoords : cursorCoords))?.lng.toFixed(6)}
+                                </code>
+                                {isCopied && (
+                                    <div className="flex items-center gap-1 text-emerald-300 animate-in zoom-in-50 duration-200">
+                                        <Check className="w-3.5 h-3.5 stroke-3" />
+                                        <span className="text-[9px] font-black italic">COPIED</span>
+                                    </div>
+                                )}
+                            </div>
+                        ) : (
+                            <span className="opacity-50">
+                                {isMobile ? "Ketuk Peta..." : "Gerakkan Mouse..."}
+                            </span>
                         )}
                     </div>
                 </div>
@@ -831,7 +1058,9 @@ export default function DrawPage() {
             )}
 
             <RoadSegmentsPanel
-                isVisible={segmentPanelVisible && !!selectedRoad}
+                isVisible={segmentPanelVisible}
+                isOpen={isSegmentPanelOpen}
+                onOpenChange={setIsSegmentPanelOpen}
                 onClose={() => setSegmentPanelVisible(false)}
                 segments={featuresList}
                 onZoom={handleZoomToSegment}
@@ -846,7 +1075,7 @@ export default function DrawPage() {
                     setSegmentPanelVisible(false);
                     setMode("draw-line");
                 }}
-                className="z-30"
+                className="z-40"
             />
         </div>
     );

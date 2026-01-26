@@ -31,9 +31,9 @@ export function DrawControls({
     const tools = [
         { id: "view", icon: MousePointer2, label: "View/Select" },
         { id: "draw-line", icon: Spline, label: "Draw Line" },
-        { id: "draw-polygon", icon: Pentagon, label: "Draw Polygon" },
-        { id: "draw-point", icon: Circle, label: "Draw Point" },
-        { id: "draw-box", icon: Square, label: "Draw Box" },
+        // { id: "draw-polygon", icon: Pentagon, label: "Draw Polygon" },
+        // { id: "draw-point", icon: Circle, label: "Draw Point" },
+        // { id: "draw-box", icon: Square, label: "Draw Box" },
         { id: "edit", icon: SplinePointer, label: "Edit & Snap" },
     ];
 

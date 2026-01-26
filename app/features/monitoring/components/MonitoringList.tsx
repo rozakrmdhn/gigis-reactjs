@@ -54,86 +54,95 @@ export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isL
                         key={item.jalan.id}
                         id={`road-${item.jalan.id}`}
                         className={cn(
-                            "group relative flex flex-col gap-2 rounded-lg border cursor-pointer px-3 py-3 text-sm text-left w-full",
+                            "group relative flex flex-col gap-0 rounded-xl border cursor-pointer text-[13px] sm:text-sm text-left w-full overflow-hidden",
                             "transition-all active:scale-[0.98]",
-                            "bg-gradient-to-br from-white/80 via-white/60 to-emerald-50/30 backdrop-blur",
-                            "hover:shadow-md hover:from-white hover:to-emerald-100/40",
+                            "bg-gradient-to-br from-white via-white/80 to-slate-50",
+                            "hover:shadow-lg hover:border-blue-200 transition-all duration-300",
                             isSelected
-                                ? "border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-md"
-                                : "border-transparent"
+                                ? "border-blue-500 bg-blue-50/50 ring-1 sm:ring-2 ring-blue-500/20 shadow-xl z-10 sm:scale-[1.02] sm:-translate-y-0.5"
+                                : "border-slate-100"
                         )}
                         onClick={() => onSelectJalan(item.jalan.id)}
                     >
-                        <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 font-medium">
-                                <span className={cn(
-                                    "line-clamp-1 transition-colors",
-                                    isSelected ? "text-primary font-semibold" : "text-slate-900 group-hover:text-primary"
-                                )}>
-                                    {item.jalan.nama_ruas}
+                        <div className="flex flex-col gap-2 p-3">
+                            <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2 font-medium min-w-0">
+                                    <span className={cn(
+                                        "line-clamp-1 transition-colors text-sm sm:text-base",
+                                        isSelected ? "text-primary font-bold" : "text-slate-900 group-hover:text-primary font-semibold"
+                                    )}>
+                                        {item.jalan.nama_ruas}
+                                    </span>
+                                </div>
+                                <Badge
+                                    variant="secondary"
+                                    className={cn(
+                                        "shrink-0 text-[10px] sm:text-[11px] px-1.5 h-5 font-normal capitalize bg-slate-100 text-slate-600 border border-slate-200",
+                                        (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'baik' && "bg-emerald-50 text-emerald-700 border-emerald-200",
+                                        (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase().includes('rusak') && "bg-rose-50 text-rose-700 border-rose-200",
+                                        (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'sedang' && "bg-yellow-50 text-yellow-700 border-yellow-200"
+                                    )}
+                                >
+                                    {item.summary?.kondisi_jalan?.nama || item.jalan.kondisi}
+                                </Badge>
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground/80 font-medium">
+                                <span className="flex items-center gap-1">
+                                    {item.jalan.desa}
                                 </span>
+                                <span className="h-0.5 w-0.5 rounded-full bg-slate-300 hidden sm:block" />
+                                <span>{item.jalan.kecamatan}</span>
                             </div>
-                            <Badge
-                                variant="secondary"
-                                className={cn(
-                                    "shrink-0 text-[10px] px-1.5 h-5 font-normal capitalize bg-slate-100 text-slate-600 border border-slate-200",
-                                    (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'baik' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                                    (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase().includes('rusak') && "bg-rose-50 text-rose-700 border-rose-200",
-                                    (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'sedang' && "bg-yellow-50 text-yellow-700 border-yellow-200"
-                                )}
-                            >
-                                {item.summary?.kondisi_jalan?.nama || item.jalan.kondisi}
-                            </Badge>
                         </div>
 
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                                {item.jalan.desa}
-                            </span>
-                            <span className="h-0.5 w-0.5 rounded-full bg-slate-300" />
-                            <span>{item.jalan.kecamatan}</span>
-                        </div>
-
-                        <div className={cn(
-                            "grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1 p-2 rounded border transition-colors",
-                            isSelected
-                                ? "bg-white border-primary/10"
-                                : "bg-slate-50/50 border-slate-100 group-hover:bg-white group-hover:border-slate-200"
-                        )}>
-                            <div className="flex justify-between">
-                                <span className="opacity-70">Panjang</span>
-                                <span className="font-medium text-slate-700">{formatNumber(item.jalan.panjang)} m</span>
-                            </div>
-                            <div className="flex justify-between">
-                                <span className="opacity-70">Lebar</span>
-                                <span className="font-medium text-slate-700">{item.jalan.lebar} m</span>
+                        <div className="w-full px-3 pb-3">
+                            <div className={cn(
+                                "grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] uppercase font-bold p-2.5 rounded-xl border transition-all",
+                                isSelected
+                                    ? "bg-white/80 border-blue-200 text-blue-700 shadow-sm"
+                                    : "bg-slate-50 border-slate-100 text-slate-500 group-hover:bg-white group-hover:border-slate-200"
+                            )}>
+                                <div className="flex justify-between items-center min-w-0">
+                                    <span className="opacity-70 shrink-0">Panjang</span>
+                                    <span className="text-slate-600 truncate ml-1">{formatNumber(item.jalan.panjang)}m</span>
+                                </div>
+                                <div className="flex justify-between items-center border-l pl-3 border-slate-200/50 min-w-0">
+                                    <span className="opacity-70 shrink-0">Lebar</span>
+                                    <span className="text-slate-600 truncate ml-1">{item.jalan.lebar}m</span>
+                                </div>
                             </div>
                         </div>
 
                         {item.summary && (
-                            <div className="mt-2 space-y-1.5 border-t pt-2">
-                                <div className="flex items-center justify-between text-[11px]">
-                                    <span className="text-muted-foreground font-medium flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                                        Terbangun: {formatNumber(item.summary.fisik.total)} m
-                                    </span>
-                                    <span className="text-muted-foreground font-medium flex items-center gap-1.5">
-                                        <div className="w-1.5 h-1.5 rounded-full bg-slate-300" />
-                                        Sisa: {formatNumber(item.summary.panjang_belum_tertangani)} m
-                                    </span>
+                            <div className={cn(
+                                "border-t p-3 space-y-2.5 w-full transition-colors",
+                                isSelected ? "border-blue-200/50 bg-blue-50/20" : "border-slate-100 bg-slate-50/30"
+                            )}>
+                                <div className="flex flex-row items-center justify-between text-[10px] gap-2 w-full">
+                                    <div className="text-muted-foreground font-bold flex items-center gap-1.5 min-w-0 flex-1">
+                                        <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-500" />
+                                        <span className="truncate">Dibangun: {formatNumber(item.summary.fisik.total)}m</span>
+                                    </div>
+                                    <div className="text-muted-foreground font-bold flex items-center gap-1.5 min-w-0 flex-1 justify-end">
+                                        <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-slate-300" />
+                                        <span className="truncate">Sisa: {formatNumber(item.summary.panjang_belum_tertangani)}m</span>
+                                    </div>
                                 </div>
 
-                                <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden flex shadow-inner">
+                                <div className="h-1.5 w-full bg-slate-200/50 rounded-full overflow-hidden flex shadow-inner border border-slate-200/30">
                                     <div
-                                        className="h-full bg-emerald-500 transition-all duration-500 ease-out"
+                                        className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] transition-all duration-700 ease-out"
                                         style={{
                                             width: `${Math.min(100, (item.summary.fisik.total / item.summary.total_panjang_jalan) * 100)}%`
                                         }}
                                     />
                                 </div>
 
-                                <div className="flex justify-between text-[10px] text-muted-foreground/80 italic">
-                                    <span>{(item.segmen.desa?.length || 0) + (item.segmen.kabupaten?.length || 0)} Segmen</span>
+                                <div className="flex justify-between text-[10px] text-slate-500 font-bold uppercase tracking-tight italic">
+                                    <span className="flex items-center gap-1">
+                                        {(item.segmen.desa?.length || 0) + (item.segmen.kabupaten?.length || 0)} <span className="text-[8px] opacity-70">Segmen</span>
+                                    </span>
                                     <span>{Math.round((item.summary.fisik.total / item.summary.total_panjang_jalan) * 100)}% Selesai</span>
                                 </div>
 

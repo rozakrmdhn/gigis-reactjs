@@ -12,6 +12,7 @@ import { MonitoringList } from '~/features/monitoring/components/MonitoringList'
 import { ConstructionHistoryPanel } from '~/features/monitoring/components/ConstructionHistoryPanel';
 import { MonitoringSidebarSkeleton } from '~/features/monitoring/components/MonitoringSidebarSkeleton';
 import { MonitoringMapSkeleton } from '~/features/monitoring/components/MonitoringMapSkeleton';
+import { MapControls } from '~/features/monitoring/components/MapControls';
 import { type GeoJSONFeatureCollection } from '~/features/peta/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import {
@@ -98,6 +99,15 @@ export default function MonitoringPage() {
     const [isDebouncing, setIsDebouncing] = useState(false);
 
     const isLoadingData = isInitialLoading || revalidator.state === "loading";
+    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+
+    // Sidebar state initialization for mobile
+    useEffect(() => {
+        // Force closed on mobile by default
+        if (isMobile) {
+            setIsSidebarOpen(false);
+        }
+    }, [isMobile]);
 
     // Fetch kecamatan list once on mount (doesn't change)
     useEffect(() => {
@@ -151,6 +161,9 @@ export default function MonitoringPage() {
             setSegmenFeatures(result.segmen);
             setSegmenKabFeatures(result.segmenkab);
             setIsPanelVisible(true);
+            if (isMobile) {
+                setIsSidebarOpen(false);
+            }
         }
         setFetchingGeojson(false);
     }, [monitoringData, isMobile]);
@@ -197,8 +210,12 @@ export default function MonitoringPage() {
     ), [monitoringData, handleSelectJalan, selectedId, isLoadingData]);
 
     return (
-        <div className="flex h-[calc(100vh-4rem)] w-full overflow-hidden relative">
-            <MonitoringSidebar className="z-30">
+        <div className="flex flex-1 min-h-0 w-full overflow-hidden relative">
+            <MonitoringSidebar
+                isOpen={isSidebarOpen}
+                onToggle={setIsSidebarOpen}
+                className="z-30"
+            >
                 <div className="flex flex-col min-h-full">
                     <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-2 border-b shadow-sm">
                         <div className="flex items-center gap-3">
@@ -331,6 +348,7 @@ export default function MonitoringPage() {
                     jalanFeatures={jalanFeatures}
                     segmenFeatures={segmenFeatures}
                     segmenKabFeatures={segmenKabFeatures}
+                    isSidebarOpen={isSidebarOpen}
                 />
 
                 {/* Search Overlay */}
