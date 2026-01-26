@@ -302,10 +302,10 @@ export function DrawSidebar({
                                     <MonitoringList
                                         data={roads}
                                         isLoading={loading}
-                                        onSelectJalan={(id) => {
+                                        onSelectJalan={useCallback((id: string) => {
                                             const road = roads.find(r => r.jalan.id === id);
                                             if (road) onSelectRoad(road);
-                                        }}
+                                        }, [roads, onSelectRoad])}
                                         selectedId={selectedRoad?.jalan.id}
                                     />
                                 </div>
@@ -323,7 +323,7 @@ export function DrawSidebar({
                                             <MapPin className="h-4 w-4" />
                                         </div>
                                         <Textarea
-                                            placeholder="Contoh:\n-7.22, 111.83\n-7.23, 111.84"
+                                            placeholder="Contoh: -7.22, 111.83 (enter) -7.23, 111.84"
                                             className="pl-10 h-32 text-xs bg-white border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl shadow-sm resize-none py-3 overflow-y-auto"
                                             value={coordSearch}
                                             onChange={(e) => setCoordSearch(e.target.value)}
@@ -337,7 +337,7 @@ export function DrawSidebar({
                                             </button>
                                         )}
                                     </div>
-                                    <p className="text-[9px] text-slate-400 italic px-1">Gunakan format: Lat, Long (satu koordinat per baris)</p>
+                                    <p className="text-[10px] text-slate-400 italic px-1">Gunakan format: Lat, Long (satu koordinat per baris)</p>
                                 </div>
 
                                 <Button
@@ -348,16 +348,16 @@ export function DrawSidebar({
                                     CARI LOKASI
                                 </Button>
 
-                                <div className="pt-6 space-y-3">
+                                <div className="space-y-3">
                                     <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
-                                        <h5 className="text-[10px] font-bold text-blue-700 uppercase mb-1 tracking-tight">Pencarian Koordinat</h5>
+                                        <h5 className="text-[12px] font-bold text-blue-700 uppercase mb-1 tracking-tight">Pencarian Koordinat</h5>
                                         <p className="text-[10px] text-blue-600 leading-relaxed opacity-80">
                                             Fitur ini memungkinkan Anda untuk langsung menuju titik tertentu di peta dengan koordinat GPS.
                                             Marker akan muncul untuk menandai lokasi tersebut.
                                         </p>
                                     </div>
                                     <div className="p-3 rounded-xl bg-slate-100/50 border border-slate-200">
-                                        <h5 className="text-[10px] font-bold text-slate-700 uppercase mb-1 tracking-tight">Tip</h5>
+                                        <h5 className="text-[12px] font-bold text-slate-700 uppercase mb-1 tracking-tight">Tip</h5>
                                         <p className="text-[10px] text-slate-500 leading-relaxed">
                                             Anda bisa mendapatkan koordinat dengan cara klik kiri di mana saja pada peta.
                                         </p>

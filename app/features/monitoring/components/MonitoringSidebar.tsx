@@ -32,12 +32,13 @@ export function MonitoringSidebar({
     return (
         <div
             className={cn(
-                "absolute top-0 left-0 bottom-0 bg-background/95 backdrop-blur-sm border-r transition-all duration-500 ease-in-out flex flex-col z-30 shadow-xl",
-                isOpen ? widthClass : "w-0",
+                "absolute top-0 left-0 bottom-0 bg-background/95 backdrop-blur-sm border-r transition-transform duration-500 ease-in-out flex flex-col z-30 shadow-xl will-change-transform",
+                widthClass,
+                !isOpen && "-translate-x-full",
                 className
             )}
         >
-            <div className={cn("flex-1 overflow-hidden flex flex-col", !isOpen && "hidden")}>
+            <div className="flex-1 overflow-hidden flex flex-col">
                 {children}
             </div>
 

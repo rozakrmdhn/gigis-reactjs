@@ -169,15 +169,15 @@ export function RoadSegmentsPanel({
                 {isOpen ? <ChevronRight className="h-4 w-4 text-slate-600" /> : <ChevronLeft className="h-4 w-4 text-slate-600" />}
             </Button>
 
-            <div className="p-4 border-b bg-white space-y-3 shrink-0">
+            <div className="p-3 border-b bg-white space-y-3 shrink-0">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <div className="p-2 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-100">
                             <List className="w-5 h-5" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-slate-800 tracking-tight uppercase">Dashboard Segmen</h2>
-                            <p className="text-[10px] text-slate-400 uppercase font-black tracking-widest mt-0.5">
+                            <h2 className="text-sm font-bold text-slate-600 tracking-tight uppercase">Segmen List</h2>
+                            <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest mt-0.5">
                                 {segments.length} total entry
                             </p>
                         </div>
@@ -189,18 +189,18 @@ export function RoadSegmentsPanel({
             </div>
 
             <div className="flex-1 flex flex-col min-h-0">
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full flex-1 flex flex-col min-h-0 gap-0">
                     <div className="px-4 py-2 bg-slate-50/50 border-b border-slate-100">
                         <TabsList className="grid w-full grid-cols-2 h-9 p-1 bg-slate-200/50 rounded-xl">
                             <TabsTrigger
                                 value="ruas"
-                                className="text-[10px] font-black uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                                className="text-[10px] font-bold uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
                             >
                                 Ruas Jalan
                             </TabsTrigger>
                             <TabsTrigger
                                 value="lingkungan"
-                                className="text-[10px] font-black uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
+                                className="text-[10px] font-bold uppercase tracking-tight data-[state=active]:bg-white data-[state=active]:text-blue-600 data-[state=active]:shadow-sm rounded-lg transition-all"
                             >
                                 Lingkungan
                             </TabsTrigger>
