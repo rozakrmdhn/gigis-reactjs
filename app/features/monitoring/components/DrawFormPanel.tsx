@@ -20,7 +20,7 @@ interface DrawFormPanelProps {
 }
 
 export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, drawnLength }: DrawFormPanelProps) {
-    const [formData, setFormData] = useState({
+    const defaultFormData = {
         check_melarosa: false,
         status_jalan: "",
         sumber_data: "",
@@ -39,8 +39,11 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
         desa_id: "",
         keterangan: "",
         foto_url: "",
-        status_kondisi: ""
-    });
+        status_kondisi: "",
+        sumber_dana: ""
+    };
+
+    const [formData, setFormData] = useState(defaultFormData);
 
     const [kecamatans, setKecamatans] = useState<any[]>([]);
     const [desas, setDesas] = useState<any[]>([]);
@@ -82,6 +85,8 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     }, [formData.kecamatan_id]);
 
     useEffect(() => {
+        if (!isVisible) return;
+
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,
@@ -107,7 +112,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                 check_melarosa: false
             }));
         }
-    }, [selectedRoad]);
+    }, [selectedRoad, isVisible]);
 
     // if (!selectedRoad) return null; (Removed to allow Free Draw)
 
@@ -132,6 +137,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
 
         onSave(payload);
         toast.success("Segmen pembangunan berhasil disimpan!");
+        setFormData(defaultFormData);
         onClose();
     };
 
@@ -266,6 +272,11 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Data</Label>
                             <Input value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Dana</Label>
+                        <Input value={formData.sumber_dana} onChange={(e) => setFormData({ ...formData, sumber_dana: e.target.value })} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">

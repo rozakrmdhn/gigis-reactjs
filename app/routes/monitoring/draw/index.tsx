@@ -17,7 +17,7 @@ import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
 import { altKeyOnly } from "ol/events/condition";
 import Overlay from "ol/Overlay";
 import * as turf from "@turf/turf";
-import { LineString, Polygon } from "ol/geom";
+import { LineString, Polygon, MultiPoint } from "ol/geom";
 import "ol/ol.css";
 import "./map.css";
 
@@ -111,6 +111,7 @@ export default function DrawPage() {
     const segmenDesaLayerRef = useRef<VectorLayer | null>(null);
     const jalanKabupatenLayerRef = useRef<VectorLayer | null>(null);
     const existingLayerRef = useRef<VectorLayer | null>(null); // Deprecated, but keep for now if needed for other refs
+    const vectorLayerRef = useRef<VectorLayer | null>(null);
 
     const nonBaseSourceRef = useRef<VectorSource | null>(null);
     const nonBaseLayerRef = useRef<VectorLayer | null>(null);
@@ -194,13 +195,14 @@ export default function DrawPage() {
                 }),
             }),
         });
+        vectorLayerRef.current = vectorLayer;
 
         // Individual Layers for Stacking
         const ruasUtamaLayer = new VectorLayer({
             source: ruasUtamaSourceRef.current ?? undefined,
             style: new Style({
                 stroke: new Stroke({
-                    color: "rgba(148, 163, 184, 0.4)", // slate 400 light
+                    color: "rgba(255, 176, 72, 0.5)", // orange 400 light
                     width: 8,
                     lineCap: 'round'
                 })
@@ -468,6 +470,68 @@ export default function DrawPage() {
     }, [activeBasemap, isMounted]);
 
     useEffect(() => {
+        if (mode.startsWith("draw-")) {
+            setEditingFeatureId(null);
+            setEditingFeatureData(null);
+        }
+    }, [mode]);
+
+    // Dynamic style for drawing and editing
+    useEffect(() => {
+        if (!vectorLayerRef.current) return;
+
+        const dynamicStyle = (feature: any) => {
+            const isLingkungan = feature.get("is_lingkungan_segment") === true;
+            // Determine if it should be treated as Lingkungan (Non-Ruas)
+            // A feature is Lingkungan if it has the flag OR if no road is selected while drawing a new feature
+            const currentIsLingkungan = isLingkungan || (!feature.get("id") && mode.startsWith("draw-") && !selectedRoad);
+
+            const color = currentIsLingkungan ? "#f43f5e" : "#3b82f6"; // Rose for Lingkungan, Blue for Ruas
+            const fillColor = currentIsLingkungan ? "rgba(244, 63, 94, 0.2)" : "rgba(59, 130, 246, 0.2)";
+
+            const styles = [
+                new Style({
+                    stroke: new Stroke({
+                        color: color,
+                        width: 4,
+                        lineDash: currentIsLingkungan ? [6, 6] : undefined,
+                        lineCap: "round",
+                    }),
+                    fill: new Fill({
+                        color: fillColor,
+                    }),
+                }),
+            ];
+
+            // Show vertices when in edit mode or actively drawing
+            if (mode === "edit" || mode.startsWith("draw-")) {
+                styles.push(
+                    new Style({
+                        image: new CircleStyle({
+                            radius: 5,
+                            fill: new Fill({ color: "#fff" }),
+                            stroke: new Stroke({ color: color, width: 2 }),
+                        }),
+                        geometry: (f) => {
+                            const geom = f.getGeometry();
+                            if (geom instanceof LineString) {
+                                return new MultiPoint(geom.getCoordinates());
+                            }
+                            if (geom instanceof Polygon) {
+                                return new MultiPoint(geom.getCoordinates()[0]);
+                            }
+                            return geom;
+                        },
+                    })
+                );
+            }
+            return styles;
+        };
+
+        vectorLayerRef.current.setStyle(dynamicStyle);
+    }, [mode, selectedRoad]);
+
+    useEffect(() => {
         if (!isMounted || !mapRef.current || !sourceRef.current || !existingSourceRef.current) return;
 
         // Clean up interactions
@@ -521,15 +585,15 @@ export default function DrawPage() {
             const drawStyle = (feature: any) => {
                 const geometry = feature.getGeometry();
                 const type = geometry.getType();
-                let color = "#EF4444";
-                let dash = undefined;
+                const isLingkungan = !selectedRoad;
+                let color = isLingkungan ? "#F43F5E" : "#3B82F6";
+                let dash = isLingkungan ? [6, 6] : undefined;
 
                 if (type === 'LineString') {
                     const coords = geometry.getCoordinates();
                     if (coords.length > 2) {
-                        const format = new GeoJSON();
                         try {
-                            const gj = format.writeGeometryObject(geometry, {
+                            const gj = geojsonFormat.writeGeometryObject(geometry, {
                                 dataProjection: 'EPSG:4326',
                                 featureProjection: 'EPSG:3857'
                             }) as any;
@@ -542,10 +606,28 @@ export default function DrawPage() {
                     }
                 }
 
-                return new Style({
-                    stroke: new Stroke({ color, width: 4, lineDash: dash }),
-                    image: new CircleStyle({ radius: 6, fill: new Fill({ color }) })
-                });
+                return [
+                    new Style({
+                        stroke: new Stroke({ color, width: 4, lineDash: dash, lineCap: 'round' }),
+                        fill: new Fill({ color: isLingkungan ? "rgba(244, 63, 94, 0.2)" : "rgba(59, 130, 246, 0.2)" }),
+                        image: new CircleStyle({ radius: 6, fill: new Fill({ color }) })
+                    }),
+                    // Show vertices while drawing
+                    new Style({
+                        image: new CircleStyle({
+                            radius: 4,
+                            fill: new Fill({ color: "#fff" }),
+                            stroke: new Stroke({ color: color, width: 2 })
+                        }),
+                        geometry: (f) => {
+                            const geom = f.getGeometry();
+                            if (geom instanceof LineString) {
+                                return new MultiPoint(geom.getCoordinates());
+                            }
+                            return geom;
+                        }
+                    })
+                ];
             };
 
             const draw = new Draw({
@@ -1341,10 +1423,14 @@ export default function DrawPage() {
                     onEdit={handleEditSegment}
                     onDelete={handleDeleteSegment}
                     onAddRuas={() => {
+                        setEditingFeatureId(null);
+                        setEditingFeatureData(null);
                         setSegmentPanelVisible(false);
                         setMode("draw-line");
                     }}
                     onAddLingkungan={() => {
+                        setEditingFeatureId(null);
+                        setEditingFeatureData(null);
                         setSelectedRoad(null);
                         setSegmentPanelVisible(false);
                         setMode("draw-line");

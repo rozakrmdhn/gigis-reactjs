@@ -23,6 +23,7 @@ export interface Segmen {
     check_melarosa?: string;
     status_jalan?: string;
     sumber_data?: string;
+    sumber_dana?: string;
     tahun_pembangunan?: number;
     verifikator?: string;
     desa: string;

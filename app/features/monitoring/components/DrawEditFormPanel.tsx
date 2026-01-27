@@ -21,7 +21,7 @@ interface DrawEditFormPanelProps {
 }
 
 export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, initialData, drawnLength }: DrawEditFormPanelProps) {
-    const [formData, setFormData] = useState({
+    const defaultFormData = {
         check_melarosa: false,
         status_jalan: "",
         sumber_data: "",
@@ -40,8 +40,11 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
         desa_id: "",
         keterangan: "",
         foto_url: "",
-        status_kondisi: ""
-    });
+        status_kondisi: "",
+        sumber_dana: ""
+    };
+
+    const [formData, setFormData] = useState(defaultFormData);
 
     const [kecamatans, setKecamatans] = useState<any[]>([]);
     const [desas, setDesas] = useState<any[]>([]);
@@ -74,6 +77,8 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
     }, [formData.kecamatan_id]);
 
     useEffect(() => {
+        if (!isVisible) return;
+
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,
@@ -108,14 +113,19 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 check_melarosa: initialData.check_melarosa === "Ya" || initialData.check_melarosa === true,
                 status_jalan: initialData.status_jalan || prev.status_jalan,
                 sumber_data: initialData.sumber_data || prev.sumber_data,
+                sumber_dana: initialData.sumber_dana || "",
                 tahun_renovasi_terakhir: initialData.tahun_renovasi_terakhir?.toString() || "",
                 nama_jalan: initialData.nama_jalan || prev.nama_jalan,
                 keterangan: initialData.keterangan || "",
                 foto_url: initialData.foto_url || "",
-                status_kondisi: initialData.status_kondisi || prev.status_kondisi
+                status_kondisi: initialData.status_kondisi || prev.status_kondisi,
+                kecamatan_id: initialData.kecamatan_id?.toString() || initialData.id_kecamatan?.toString() || prev.kecamatan_id,
+                desa_id: initialData.desa_id?.toString() || initialData.id_desa?.toString() || prev.desa_id,
+                desa: initialData.desa || prev.desa,
+                kecamatan: initialData.kecamatan || prev.kecamatan
             }));
         }
-    }, [selectedRoad, initialData]);
+    }, [selectedRoad, initialData, isVisible]);
 
     useEffect(() => {
         if (drawnLength) {
@@ -125,6 +135,25 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
             }));
         }
     }, [drawnLength]);
+
+    // Synchronize names when lists arrive
+    useEffect(() => {
+        if (kecamatans.length > 0 && formData.kecamatan_id) {
+            const found = kecamatans.find(k => k.id.toString() === formData.kecamatan_id.toString());
+            if (found && found.nama_kecamatan !== formData.kecamatan) {
+                setFormData(prev => ({ ...prev, kecamatan: found.nama_kecamatan }));
+            }
+        }
+    }, [kecamatans, formData.kecamatan_id]);
+
+    useEffect(() => {
+        if (desas.length > 0 && formData.desa_id) {
+            const found = desas.find(d => d.id.toString() === formData.desa_id.toString());
+            if (found && found.nama_desa !== formData.desa) {
+                setFormData(prev => ({ ...prev, desa: found.nama_desa }));
+            }
+        }
+    }, [desas, formData.desa_id]);
 
     // if (!selectedRoad) return null; (Removed to allow Free Draw Edit)
 
@@ -146,6 +175,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
 
         onSave(payload);
         toast.success("Segmen berhasil diperbarui!");
+        setFormData(defaultFormData);
         onClose();
     };
 
@@ -179,7 +209,9 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Desa</Label>
                             {selectedRoad ? (
-                                <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
+                                <div className="font-bold text-xs text-slate-700">
+                                    {desas.find(d => d.id.toString() === formData.desa_id.toString())?.nama_desa || formData.desa}
+                                </div>
                             ) : (
                                 <Select
                                     value={formData.desa_id}
@@ -209,7 +241,9 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400">Kecamatan</Label>
                             {selectedRoad ? (
-                                <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                                <div className="font-bold text-xs text-slate-700">
+                                    {kecamatans.find(k => k.id.toString() === formData.kecamatan_id.toString())?.nama_kecamatan || formData.kecamatan}
+                                </div>
                             ) : (
                                 <Select
                                     value={formData.kecamatan_id}
@@ -275,6 +309,11 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Data</Label>
                             <Input value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Dana</Label>
+                        <Input value={formData.sumber_dana} onChange={(e) => setFormData({ ...formData, sumber_dana: e.target.value })} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
