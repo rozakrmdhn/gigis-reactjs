@@ -56,8 +56,8 @@ export function MonitoringMap({ jalanFeatures, segmenFeatures, segmenKabFeatures
                 onZoomOut={zoomOut}
                 onResetBearing={resetBearing}
                 className={cn(
-                    "absolute bottom-4 transition-all duration-500 z-30",
-                    isSidebarOpen ? "left-[336px]" : "left-4"
+                    "absolute bottom-2 transition-transform duration-500 z-30 will-change-transform",
+                    isSidebarOpen ? "left-2 translate-x-80" : "left-2"
                 )}
             />
         </div>

@@ -1,4 +1,5 @@
 import { authService } from '~/services/auth.service';
+import { apiClient } from '~/lib/api-client';
 
 export interface Jalan {
     id: string;
@@ -133,41 +134,35 @@ export const monitoringService = {
     },
 
     createSegment: async (data: any): Promise<any> => {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, {
-            method: "POST",
-            headers: authService.getAuthHeaders(),
-            body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to create segment: ${response.statusText}`);
-        }
-        return response.json();
+        return await apiClient.post(
+            `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`,
+            data,
+            {
+                successMessage: "Segmen jalan berhasil ditambahkan!",
+                errorMessage: "Gagal menambahkan segmen jalan"
+            }
+        );
     },
 
     updateSegment: async (id: string, data: any): Promise<any> => {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
-            method: "PUT",
-            headers: authService.getAuthHeaders(),
-            body: JSON.stringify(data),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to update segment: ${response.statusText}`);
-        }
-        return response.json();
+        return await apiClient.put(
+            `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`,
+            data,
+            {
+                successMessage: "Segmen jalan berhasil diperbarui!",
+                errorMessage: "Gagal memperbarui segmen jalan"
+            }
+        );
     },
 
     deleteSegment: async (id: string): Promise<any> => {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
-            method: "DELETE",
-            headers: authService.getAuthHeaders(),
-        });
-
-        if (!response.ok) {
-            throw new Error(`Failed to delete segment: ${response.statusText}`);
-        }
-        return response.json();
+        return await apiClient.delete(
+            `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`,
+            {
+                successMessage: "Segmen jalan berhasil dihapus!",
+                errorMessage: "Gagal menghapus segmen jalan"
+            }
+        );
     },
 
     getSegmentDetail: async (id: string): Promise<any> => {

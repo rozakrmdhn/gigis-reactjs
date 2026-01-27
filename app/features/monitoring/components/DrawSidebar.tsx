@@ -369,7 +369,7 @@ export function DrawSidebar({
                 </Tabs>
 
                 {/* Footer Pagination & Refresh */}
-                <div className="sticky bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1 shrink-0">
+                <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1 shrink-0">
                     <Button
                         variant="ghost"
                         size="icon"
@@ -379,33 +379,35 @@ export function DrawSidebar({
                     >
                         <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />
                     </Button>
-                    <div className="flex-1 flex justify-end">
+                    <div className="flex-1">
                         {!loading && pagination && pagination.totalPages > 1 && (
-                            <div className="flex items-center gap-1">
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => setFilters(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
-                                    disabled={pagination.page <= 1}
-                                >
-                                    <span className="sr-only">Previous</span>
-                                    <span aria-hidden="true">‹</span>
-                                </Button>
-                                <div className="text-[10px] font-medium px-2 min-w-12 text-center">
-                                    {pagination.page} / {pagination.totalPages}
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    className="h-7 w-7"
-                                    onClick={() => setFilters(prev => ({ ...prev, page: Math.min(pagination.totalPages, prev.page + 1) }))}
-                                    disabled={pagination.page >= pagination.totalPages}
-                                >
-                                    <span className="sr-only">Next</span>
-                                    <span aria-hidden="true">›</span>
-                                </Button>
-                            </div>
+                            <Pagination>
+                                <PaginationContent>
+                                    <PaginationItem>
+                                        <PaginationPrevious
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                setFilters(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }));
+                                            }}
+                                            className={pagination.page <= 1 ? "pointer-events-none opacity-50" : ""}
+                                        />
+                                    </PaginationItem>
+                                    <div className="flex items-center text-[10px] font-medium px-2 whitespace-nowrap">
+                                        {pagination.page} / {pagination.totalPages}
+                                    </div>
+                                    <PaginationItem>
+                                        <PaginationNext
+                                            href="#"
+                                            onClick={(e) => {
+                                                e.preventDefault();
+                                                setFilters(prev => ({ ...prev, page: Math.min(pagination.totalPages, prev.page + 1) }));
+                                            }}
+                                            className={pagination.page >= pagination.totalPages ? "pointer-events-none opacity-50" : ""}
+                                        />
+                                    </PaginationItem>
+                                </PaginationContent>
+                            </Pagination>
                         )}
                     </div>
                 </div>

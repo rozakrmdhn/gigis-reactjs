@@ -5,6 +5,17 @@ import { cn } from "~/lib/utils";
 import { Badge } from "~/components/ui/badge";
 import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger,
+} from "~/components/ui/alert-dialog";
 
 interface RoadSegmentsPanelProps {
     isVisible: boolean;
@@ -110,19 +121,35 @@ export function RoadSegmentsPanel({
                             Edit
                         </Button>
                     )}
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
-                        onClick={() => {
-                            if (window.confirm("Apakah Anda yakin ingin menghapus segmen ini?")) {
-                                onDelete?.(segment);
-                            }
-                        }}
-                    >
-                        <Trash2 className="w-3 h-3" />
-                        Delete
-                    </Button>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 text-xs flex-1 gap-1.5 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 shadow-sm"
+                            >
+                                <Trash2 className="w-3 h-3" />
+                                Delete
+                            </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                                <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                    Tindakan ini tidak dapat dibatalkan. Ini akan menghapus data segmen jalan ini secara permanen dari server.
+                                </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                                <AlertDialogCancel>Batal</AlertDialogCancel>
+                                <AlertDialogAction
+                                    className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+                                    onClick={() => onDelete?.(segment)}
+                                >
+                                    Hapus
+                                </AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
                 </div>
             </div>
         );

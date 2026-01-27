@@ -12,6 +12,7 @@ import "./app.css";
 import "leaflet/dist/leaflet.css";
 import { Spinner } from "./components/ui/spinner";
 import { AuthProvider } from "./contexts/auth-context";
+import { Toaster } from "./components/ui/sonner";
 
 export function HydrateFallback() {
   return null;
@@ -41,6 +42,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </head>
       <body>
         {children}
+        <Toaster />
         <ScrollRestoration />
         <Scripts />
       </body>

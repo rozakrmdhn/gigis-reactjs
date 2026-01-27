@@ -448,7 +448,6 @@ export default function DrawPage() {
                 }
 
                 if (success) {
-                    toast.success("Koordinat berhasil disalin!");
                     setIsCopied(true);
                     setTimeout(() => setIsCopied(false), 2000);
                 }
@@ -987,10 +986,8 @@ export default function DrawPage() {
         try {
             if (editingFeatureId) {
                 await monitoringService.updateSegment(editingFeatureId, data);
-                toast.success("Berhasil memperbarui segmen jalan!");
             } else {
                 await monitoringService.createSegment(data);
-                toast.success("Berhasil menambahkan segmen jalan baru!");
             }
             setSidebarRefreshTrigger(prev => prev + 1);
             if (selectedRoad) await refreshSegmentData(selectedRoad.jalan.id);
@@ -1001,7 +998,7 @@ export default function DrawPage() {
             setEditingFeatureId(null);
             setSegmentPanelVisible(true);
         } catch (error) {
-            toast.error("Gagal menyimpan data segmen");
+            // Error toast is already handled by API client
         }
     };
 
@@ -1025,7 +1022,6 @@ export default function DrawPage() {
         if (!id) return;
         try {
             await monitoringService.deleteSegment(id);
-            toast.success("Segmen berhasil dihapus");
             existingSourceRef.current?.removeFeature(feature);
             if (editingFeatureId === id) {
                 setEditingFeatureId(null);
@@ -1034,7 +1030,7 @@ export default function DrawPage() {
             setSidebarRefreshTrigger(prev => prev + 1);
             if (selectedRoad) await refreshSegmentData(selectedRoad.jalan.id);
         } catch (error) {
-            toast.error("Gagal menghapus segmen");
+            // Error toast is already handled by API client
         }
     };
 
@@ -1339,7 +1335,6 @@ export default function DrawPage() {
                                 if (coords) {
                                     const text = `${coords.lat.toFixed(6)}, ${coords.lng.toFixed(6)}`;
                                     navigator.clipboard.writeText(text);
-                                    toast.success("Koordinat berhasil disalin!");
                                     setLastCopiedCoords(coords);
                                     setIsCopied(true);
                                     setTimeout(() => setIsCopied(false), 2000);

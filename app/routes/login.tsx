@@ -2,12 +2,13 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
+import { toast } from 'sonner';
 import { useAuth } from '../contexts/auth-context';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { IconLock, IconMail, IconAlertCircle } from '@tabler/icons-react';
+import { IconLock, IconMail } from '@tabler/icons-react';
 import { authService } from '../services/auth.service';
 
 const loginSchema = z.object({
@@ -20,7 +21,6 @@ type LoginFormData = z.infer<typeof loginSchema>;
 export default function Login() {
     const navigate = useNavigate();
     const { signin } = useAuth();
-    const [error, setError] = useState<string>('');
     const [isLoading, setIsLoading] = useState(false);
 
     const {
@@ -38,14 +38,17 @@ export default function Login() {
 
     const onSubmit = async (data: LoginFormData) => {
         setIsLoading(true);
-        setError('');
 
         try {
             await signin(data.email, data.password);
+            toast.success('Login berhasil! Mengalihkan ke dashboard...');
             // Use window.location for more reliable redirect after login
-            window.location.href = '/dashboard';
+            setTimeout(() => {
+                window.location.href = '/dashboard';
+            }, 500);
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Login gagal. Silakan coba lagi.');
+            const errorMessage = err instanceof Error ? err.message : 'Login gagal. Silakan coba lagi.';
+            toast.error(errorMessage);
             setIsLoading(false);
         }
     };
@@ -59,10 +62,10 @@ export default function Login() {
                         <IconLock className="w-8 h-8 text-white" />
                     </div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        GIGI'S ReactJS
+                        GIGI'S
                     </h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">
-                        Sistem Informasi Geografis Jalan
+                        GIGI'S Monitoring Jalan Poros
                     </p>
                 </div>
 
@@ -76,14 +79,6 @@ export default function Login() {
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-                            {/* Error Alert */}
-                            {error && (
-                                <div className="flex items-center gap-2 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                                    <IconAlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-                                    <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-                                </div>
-                            )}
-
                             {/* Email Field */}
                             <div className="space-y-2">
                                 <Label htmlFor="email">Email</Label>
@@ -147,7 +142,7 @@ export default function Login() {
 
                 {/* Footer */}
                 <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
-                    © 2026 GIGI'S ReactJS. All rights reserved.
+                    © 2026 GIGI'S Monitoring Jalan Poros. All rights reserved.
                 </p>
             </div>
         </div>
