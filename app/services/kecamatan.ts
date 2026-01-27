@@ -1,3 +1,5 @@
+import { authService } from './auth.service';
+
 export interface Kecamatan {
     id: number;
     nama_kecamatan: string;
@@ -14,7 +16,9 @@ export interface KecamatanResponse {
 export const kecamatanService = {
     getKecamatan: async (): Promise<Kecamatan[]> => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch kecamatan data: ${response.statusText}`);
             }

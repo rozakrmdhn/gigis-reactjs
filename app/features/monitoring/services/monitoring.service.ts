@@ -1,3 +1,5 @@
+import { authService } from '~/services/auth.service';
+
 export interface Jalan {
     id: string;
     kode_ruas: number;
@@ -100,7 +102,9 @@ export const monitoringService = {
                 url.searchParams.append("search", params.search);
             }
 
-            const response = await fetch(url.toString());
+            const response = await fetch(url.toString(), {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch monitoring data: ${response.statusText}`);
             }
@@ -114,7 +118,9 @@ export const monitoringService = {
 
     getMonitoringJalanById: async (id: string): Promise<{ jalan: any; segmen: any; segmenkab: any } | null> => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}/geojson`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}/geojson`, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch monitoring detail data: ${response.statusText}`);
             }
@@ -129,9 +135,7 @@ export const monitoringService = {
     createSegment: async (data: any): Promise<any> => {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, {
             method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: authService.getAuthHeaders(),
             body: JSON.stringify(data),
         });
 
@@ -144,9 +148,7 @@ export const monitoringService = {
     updateSegment: async (id: string, data: any): Promise<any> => {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
             method: "PUT",
-            headers: {
-                "Content-Type": "application/json",
-            },
+            headers: authService.getAuthHeaders(),
             body: JSON.stringify(data),
         });
 
@@ -159,6 +161,7 @@ export const monitoringService = {
     deleteSegment: async (id: string): Promise<any> => {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
             method: "DELETE",
+            headers: authService.getAuthHeaders(),
         });
 
         if (!response.ok) {
@@ -168,7 +171,9 @@ export const monitoringService = {
     },
 
     getSegmentDetail: async (id: string): Promise<any> => {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`);
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
+            headers: authService.getAuthHeaders(),
+        });
         if (!response.ok) {
             throw new Error(`Failed to fetch segment detail: ${response.statusText}`);
         }
@@ -182,7 +187,9 @@ export const monitoringService = {
                 url.searchParams.append("kode_ruas", kode_ruas.toString());
             }
 
-            const response = await fetch(url.toString());
+            const response = await fetch(url.toString(), {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch segment geojson: ${response.statusText}`);
             }
@@ -202,7 +209,9 @@ export const monitoringService = {
     },
     getAllSegmentsGeoJSON: async (): Promise<any> => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch all segments: ${response.statusText}`);
             }
@@ -221,7 +230,9 @@ export const monitoringService = {
     },
     getKabupatenSegmentsGeoJSON: async (): Promise<any> => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten`, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch kabupaten segments: ${response.statusText}`);
             }
@@ -240,7 +251,9 @@ export const monitoringService = {
     },
     getKecamatan: async (): Promise<any> => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch kecamatans: ${response.statusText}`);
             }
@@ -252,7 +265,9 @@ export const monitoringService = {
     },
     getDesa: async (id_kecamatan: string | number): Promise<any> => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}`);
+            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}`, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch desas: ${response.statusText}`);
             }
@@ -268,7 +283,9 @@ export const monitoringService = {
             if (id_desa) {
                 url += `&desa_id=${id_desa}`;
             }
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch non-base segments: ${response.statusText}`);
             }

@@ -1,4 +1,5 @@
 import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
+import { authService } from './auth.service';
 
 export interface DesaGeoJSONResponse {
     status: string;
@@ -18,7 +19,9 @@ export const desaService = {
                 ? `${import.meta.env.VITE_API_BASE_URL}/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan)}`
                 : `${import.meta.env.VITE_API_BASE_URL}/desa/geojson`;
 
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch desa geojson: ${response.statusText}`);
             }

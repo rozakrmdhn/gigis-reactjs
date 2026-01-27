@@ -1,4 +1,5 @@
 import { type Jalan, type JalanResponse } from '../types';
+import { authService } from '~/services/auth.service';
 
 export const jalanDropdownService = {
     getJalan: async (searchQuery?: string): Promise<Jalan[]> => {
@@ -7,7 +8,9 @@ export const jalanDropdownService = {
                 ? `${import.meta.env.VITE_API_BASE_URL}/jalan?nama_ruas=${encodeURIComponent(searchQuery)}`
                 : `${import.meta.env.VITE_API_BASE_URL}/jalan`;
 
-            const response = await fetch(url);
+            const response = await fetch(url, {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch data: ${response.statusText}`);
             }

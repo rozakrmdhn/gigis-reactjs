@@ -5,6 +5,7 @@ import {
   IconNotification,
   IconUserCircle,
 } from "@tabler/icons-react"
+import { useNavigate } from "react-router"
 
 import {
   Avatar,
@@ -26,17 +27,29 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "~/components/ui/sidebar"
+import { useAuth } from "~/contexts/auth-context"
 
-export function NavUser({
-  user,
-}: {
-  user: {
-    name: string
-    email: string
-    avatar: string
-  }
-}) {
+export function NavUser() {
   const { isMobile } = useSidebar()
+  const { user, signout } = useAuth()
+  const navigate = useNavigate()
+
+  if (!user) return null
+
+  const handleLogout = () => {
+    signout()
+    navigate("/")
+  }
+
+  // Get initials from name
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
 
   return (
     <SidebarMenu>
@@ -47,14 +60,19 @@ export function NavUser({
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
             >
-              <Avatar className="h-8 w-8 rounded-lg grayscale">
-                <AvatarImage src={'https://ui-avatars.com/api/?name=' + 'Abdul Rozak R'} alt={'Abdul Rozak R'} />
-                <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+              <Avatar className="h-8 w-8 rounded-lg">
+                <AvatarImage
+                  src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.nama)}&background=4f46e5&color=fff`}
+                  alt={user.nama}
+                />
+                <AvatarFallback className="rounded-lg bg-indigo-600 text-white">
+                  {getInitials(user.nama)}
+                </AvatarFallback>
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
-                <span className="truncate font-medium">{'Abdul Rozak R'}</span>
-                <span className="text-muted-foreground truncate text-xs">
-                  {'bappeda@bojonegorokab.go.id'}
+                <span className="truncate font-medium">{user.nama}</span>
+                <span className="text-muted-foreground truncate text-xs capitalize">
+                  {user.role.replace('_', ' ')}
                 </span>
               </div>
               <IconDotsVertical className="ml-auto size-4" />
@@ -69,13 +87,18 @@ export function NavUser({
             <DropdownMenuLabel className="p-0 font-normal">
               <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
                 <Avatar className="h-8 w-8 rounded-lg">
-                  <AvatarImage src={user.avatar} alt={user.name} />
-                  <AvatarFallback className="rounded-lg">CN</AvatarFallback>
+                  <AvatarImage
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(user.nama)}&background=4f46e5&color=fff`}
+                    alt={user.nama}
+                  />
+                  <AvatarFallback className="rounded-lg bg-indigo-600 text-white">
+                    {getInitials(user.nama)}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-medium">{user.name}</span>
-                  <span className="text-muted-foreground truncate text-xs">
-                    {user.email}
+                  <span className="truncate font-medium">{user.nama}</span>
+                  <span className="text-muted-foreground truncate text-xs capitalize">
+                    {user.role.replace('_', ' ')}
                   </span>
                 </div>
               </div>
@@ -96,7 +119,7 @@ export function NavUser({
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={handleLogout} className="text-red-600 dark:text-red-400 cursor-pointer">
               <IconLogout />
               Log out
             </DropdownMenuItem>

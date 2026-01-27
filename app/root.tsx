@@ -11,6 +11,7 @@ import type { Route } from "./+types/root";
 import "./app.css";
 import "leaflet/dist/leaflet.css";
 import { Spinner } from "./components/ui/spinner";
+import { AuthProvider } from "./contexts/auth-context";
 
 export function HydrateFallback() {
   return null;
@@ -48,7 +49,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
-  return <Outlet />;
+  return (
+    <AuthProvider>
+      <Outlet />
+    </AuthProvider>
+  );
 }
 
 export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {

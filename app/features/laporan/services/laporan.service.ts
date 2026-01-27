@@ -1,4 +1,5 @@
 import { type RekapDibangun, type RekapDibangunResponse } from "../types/laporan.types";
+import { authService } from '~/services/auth.service';
 
 export const laporanService = {
     getRekapJalanByDibangun: async (params?: { kecamatan?: string; desa?: string; tahun_pembangunan?: string; check_melarosa?: string }): Promise<RekapDibangun[]> => {
@@ -9,7 +10,9 @@ export const laporanService = {
             if (params?.tahun_pembangunan) url.searchParams.append("tahun_pembangunan", params.tahun_pembangunan);
             if (params?.check_melarosa) url.searchParams.append("check_melarosa", params.check_melarosa);
 
-            const response = await fetch(url.toString());
+            const response = await fetch(url.toString(), {
+                headers: authService.getAuthHeaders(),
+            });
             if (!response.ok) {
                 throw new Error(`Failed to fetch rekap data: ${response.statusText}`);
             }
