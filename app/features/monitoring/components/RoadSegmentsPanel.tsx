@@ -1,4 +1,4 @@
-import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2 } from "lucide-react";
+import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2, Info } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
@@ -85,10 +85,9 @@ export function RoadSegmentsPanel({
             <div key={index} className="flex flex-col gap-2 p-3 rounded-xl border border-slate-200 bg-white shadow-sm hover:shadow-md transition-all">
                 <div className="flex items-start justify-between gap-2">
                     <div>
-                        <span className="text-[10px] font-normal text-slate-600 italic">{props.id}</span>
-                        <div className="flex items-center gap-2 my-1">
+                        <div className="flex items-center gap-2 mb-2">
                             <Badge variant="outline" className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0 h-5">
-                                {type}
+                                {props.jenis_perkerasan}
                             </Badge>
                             <span className={cn("text-[10px] font-bold px-1.5 py-0.5 rounded-full uppercase", colorClass)}>
                                 {condition}
@@ -99,6 +98,14 @@ export function RoadSegmentsPanel({
                         </p>
                     </div>
                 </div>
+
+                <div className="p-2 rounded-lg bg-amber-50/50 border border-amber-100/50 text-[12px] text-slate-600 italic">
+                    <Info className="inline w-4 h-4 mr-2 text-amber-500 shrink-0" />
+                    {props.sumber_data}
+                    <span className="block text-[10px] text-slate-400">Update: {props.created_at ? new Date(props.created_at).toLocaleDateString() : '-'}</span>
+                </div>
+
+                <span className="text-[10px] font-normal text-slate-600 italic">{props.id}</span>
 
                 <div className="flex gap-2 mt-1">
                     <Button

@@ -51,9 +51,10 @@ export const apiClient = {
 
             // Handle authentication errors
             if (response.status === 401 || response.status === 403) {
-                toast.error("Sesi Anda telah berakhir. Silakan login kembali.");
                 authService.signout();
-                window.location.href = "/login";
+                if (typeof window !== "undefined") {
+                    window.dispatchEvent(new CustomEvent("auth-session-expired"));
+                }
                 throw new Error("Unauthorized");
             }
 

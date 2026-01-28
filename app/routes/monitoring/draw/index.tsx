@@ -98,6 +98,14 @@ function throttle<T extends (...args: any[]) => any>(func: T, limit: number): T 
     }) as T;
 }
 
+const getConditionColor = (kondisi: string = "baik") => {
+    const k = kondisi.toLowerCase();
+    if (k.includes("rusak berat")) return "#f43f5e"; // rose 500
+    if (k.includes("rusak ringan")) return "#f59e0b"; // amber 500
+    if (k.includes("sedang")) return "#3b82f6"; // blue 500
+    return "#22c55e"; // emerald 500
+};
+
 export default function DrawPage() {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<OLMap | null>(null);
@@ -307,14 +315,19 @@ export default function DrawPage() {
         const nonBaseLayer = new VectorLayer({
             source: nonBaseSourceRef.current ?? undefined,
             visible: visibleLayers.find(l => l.id === "non-base")?.visible,
-            style: new Style({
-                stroke: new Stroke({
-                    color: "#ef4444", // red 500
-                    width: 3,
-                    lineDash: [6, 6],
-                    lineCap: 'round'
-                })
-            })
+            style: (feature) => {
+                const kondisi = feature.get("kondisi") || "baik";
+                const color = getConditionColor(kondisi);
+
+                return new Style({
+                    stroke: new Stroke({
+                        color: color,
+                        width: 3,
+                        lineDash: [6, 6],
+                        lineCap: 'round'
+                    })
+                });
+            }
         });
         nonBaseLayerRef.current = nonBaseLayer;
 
@@ -485,8 +498,9 @@ export default function DrawPage() {
             // A feature is Lingkungan if it has the flag OR if no road is selected while drawing a new feature
             const currentIsLingkungan = isLingkungan || (!feature.get("id") && mode.startsWith("draw-") && !selectedRoad);
 
-            const color = currentIsLingkungan ? "#f43f5e" : "#3b82f6"; // Rose for Lingkungan, Blue for Ruas
-            const fillColor = currentIsLingkungan ? "rgba(244, 63, 94, 0.2)" : "rgba(59, 130, 246, 0.2)";
+            const kondisi = feature.get("kondisi") || "baik";
+            const color = getConditionColor(kondisi);
+            const fillColor = `${color}33`; // 20% opacity (0.2 in hex is roughly 33)
 
             const styles = [
                 new Style({
@@ -802,6 +816,7 @@ export default function DrawPage() {
                     f.set("is_lingkungan_segment", true);
                 });
                 panelFeatures.push(...filteredNonBase);
+                nonBaseSourceRef.current?.addFeatures(filteredNonBase);
             }
 
             // Set features for panel display
@@ -842,7 +857,10 @@ export default function DrawPage() {
     };
 
     useEffect(() => {
-        if (!isMounted || !selectedRoad || !existingSourceRef.current) {
+        if (!isMounted || !existingSourceRef.current) return;
+
+        // Skip clearing if we are in a drawing mode to maintain overlay context
+        if (!selectedRoad && !mode.startsWith("draw-")) {
             existingSourceRef.current?.clear();
             ruasUtamaSourceRef.current?.clear();
             segmenDesaSourceRef.current?.clear();
@@ -853,6 +871,8 @@ export default function DrawPage() {
             ));
             return;
         }
+
+        if (!selectedRoad) return;
 
         // Add Road Categories to layer toggle if they're not already there
         setVisibleLayers(prev => {
@@ -866,7 +886,7 @@ export default function DrawPage() {
         });
 
         refreshSegmentData(selectedRoad.jalan.id);
-    }, [selectedRoad, isMounted]);
+    }, [selectedRoad, isMounted, mode]);
 
     useEffect(() => {
         if (!isMounted || !nonBaseSourceRef.current) return;
@@ -881,6 +901,9 @@ export default function DrawPage() {
                 const features = format.readFeatures(response.result, {
                     dataProjection: 'EPSG:4326',
                     featureProjection: 'EPSG:3857'
+                });
+                features.forEach(f => {
+                    f.set("is_lingkungan_segment", true);
                 });
                 nonBaseSourceRef.current?.clear();
                 nonBaseSourceRef.current?.addFeatures(features);
@@ -1102,7 +1125,14 @@ export default function DrawPage() {
                 dataProjection: "EPSG:4326",
                 featureProjection: "EPSG:3857",
             });
-            setDrawnGeoJSON(json);
+            const featureJson = JSON.parse(json);
+            if (!selectedRoad || features[0].get("is_lingkungan_segment")) {
+                featureJson.properties = {
+                    ...featureJson.properties,
+                    is_lingkungan_segment: true
+                };
+            }
+            setDrawnGeoJSON(JSON.stringify(featureJson));
             setIsPanelVisible(true);
             setMode("view");
         }
@@ -1115,6 +1145,21 @@ export default function DrawPage() {
         setDrawnLength(0);
         setIsRoadInfoVisible(false);
         toast.info("Map cleared");
+    };
+
+    const handleRefreshAll = async () => {
+        toast.info("Memuat ulang data...");
+
+        // 1. Refresh MonitoringList in sidebar
+        setSidebarRefreshTrigger(prev => prev + 1);
+
+        // 2. Refresh OpenLayer Map and SegmenList if a road is selected
+        if (selectedRoad) {
+            await refreshSegmentData(selectedRoad.jalan.id);
+            toast.success("Data berhasil dimuat ulang");
+        } else {
+            toast.success("MonitoringList berhasil dimuat ulang");
+        }
     };
 
     const handleCoordinateSearch = (coords: { lat: number, lng: number }[]) => {
@@ -1189,6 +1234,7 @@ export default function DrawPage() {
                     onToggle={setIsSidebarOpen}
                     refreshTrigger={sidebarRefreshTrigger}
                     onCoordinateSearch={handleCoordinateSearch}
+                    onRefresh={handleRefreshAll}
                 />
 
                 <div className="flex-1 flex flex-col relative">

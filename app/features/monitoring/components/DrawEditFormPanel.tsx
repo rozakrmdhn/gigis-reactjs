@@ -169,7 +169,8 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
             lebar: parseFloat(formData.lebar) || 0,
             kecamatan_id: parseInt(formData.kecamatan_id) || null,
             desa_id: parseInt(formData.desa_id) || null,
-            // Ensure check_melarosa is Ya/Tidak string
+            // Ensure check_melarosa is Ya/Tidak string and override kode_ruas if needed
+            kode_ruas: formData.check_melarosa ? formData.kode_ruas : "0",
             check_melarosa: formData.check_melarosa ? "Ya" : "Tidak"
         };
 

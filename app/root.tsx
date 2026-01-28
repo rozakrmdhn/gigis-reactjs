@@ -13,6 +13,7 @@ import "leaflet/dist/leaflet.css";
 import { Spinner } from "./components/ui/spinner";
 import { AuthProvider } from "./contexts/auth-context";
 import { Toaster } from "./components/ui/sonner";
+import { SessionExpiredAlert } from "./features/auth/components/SessionExpiredAlert";
 
 export function HydrateFallback() {
   return null;
@@ -54,6 +55,7 @@ export default function App() {
   return (
     <AuthProvider>
       <Outlet />
+      <SessionExpiredAlert />
     </AuthProvider>
   );
 }

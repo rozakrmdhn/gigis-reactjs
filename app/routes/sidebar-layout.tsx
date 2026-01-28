@@ -15,7 +15,7 @@ export default function SidebarLayout() {
     // Client-side auth check - redirect if not authenticated
     useEffect(() => {
         if (!authService.isAuthenticated()) {
-            navigate("/", { replace: true });
+            navigate("/login", { replace: true });
         }
     }, [navigate]);
 

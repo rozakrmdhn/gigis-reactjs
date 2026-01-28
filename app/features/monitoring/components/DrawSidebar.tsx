@@ -41,6 +41,7 @@ interface DrawSidebarProps {
     onToggle?: (isOpen: boolean) => void;
     refreshTrigger?: number;
     onCoordinateSearch?: (coords: { lat: number; lng: number }[]) => void;
+    onRefresh?: () => void;
 }
 
 // Helper to parse DMS (Degrees, Minutes, Seconds) to Decimal Degrees
@@ -102,7 +103,8 @@ export function DrawSidebar({
     isOpen,
     onToggle,
     refreshTrigger,
-    onCoordinateSearch
+    onCoordinateSearch,
+    onRefresh
 }: DrawSidebarProps) {
     const [roads, setRoads] = useState<MonitoringJalanResult[]>([]);
     const [loading, setLoading] = useState(true);
@@ -374,7 +376,7 @@ export function DrawSidebar({
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8 text-muted-foreground hover:text-emerald-600 shrink-0"
-                        onClick={() => fetchRoads()}
+                        onClick={() => onRefresh ? onRefresh() : fetchRoads()}
                         disabled={loading}
                     >
                         <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />

@@ -132,6 +132,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
             lebar: parseFloat(formData.lebar) || 0,
             kecamatan_id: parseInt(formData.kecamatan_id) || null,
             desa_id: parseInt(formData.desa_id) || null,
+            kode_ruas: formData.check_melarosa ? formData.kode_ruas : "0",
             check_melarosa: formData.check_melarosa ? "Ya" : "Tidak"
         };
 
