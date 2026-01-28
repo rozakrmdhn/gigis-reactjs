@@ -148,7 +148,7 @@ export default function DrawPage() {
     const [lastCopiedCoords, setLastCopiedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isCopied, setIsCopied] = useState(false);
     const [isRoadInfoVisible, setIsRoadInfoVisible] = useState(false);
-    const [activeBasemap, setActiveBasemap] = useState<BasemapId>("osm");
+    const [activeBasemap, setActiveBasemap] = useState<BasemapId>("hybrid");
 
     const tileLayerRef = useRef<TileLayer<any> | null>(null);
     const tooltipRef = useRef<Overlay | null>(null);
@@ -1357,10 +1357,6 @@ export default function DrawPage() {
                             {!selectedRoad && mode !== "view" ? (
                                 <div className="text-[8px] bg-blue-600/90 backdrop-blur-md p-2 rounded-xl border border-blue-400 shadow-xl text-[10px] font-bold text-white uppercase tracking-widest animate-in slide-in-from-bottom-4">
                                     Menggambar Jalan Lingkungan (Non-Ruas)
-                                </div>
-                            ) : !selectedRoad ? (
-                                <div className="text-[8px] bg-white/80 backdrop-blur p-2 rounded-xl border shadow-sm text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                                    Pilih jalan di sidebar untuk mulai
                                 </div>
                             ) : null}
                         </div>

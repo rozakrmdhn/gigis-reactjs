@@ -1,4 +1,4 @@
-import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2, Info } from "lucide-react";
+import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2, Info, Ruler, RulerDimensionLineIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
@@ -49,6 +49,8 @@ export function RoadSegmentsPanel({
     const isOpen = propIsOpen !== undefined ? propIsOpen : internalIsOpen;
     const [activeTab, setActiveTab] = useState("ruas");
 
+    const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     if (!isVisible) return null;
 
     const handleToggle = () => {
@@ -96,6 +98,10 @@ export function RoadSegmentsPanel({
                         <p className="text-xs font-medium text-slate-600">
                             Tahun: <span className="font-bold text-slate-800">{year}</span>
                         </p>
+                    </div>
+                    <div className="text-xs font-medium text-slate-600">
+                        <RulerDimensionLineIcon className="inline w-4 h-4 mr-1 text-amber-500 shrink-0" />
+                        {formatNumber(props.panjang)} m
                     </div>
                 </div>
 
