@@ -1,4 +1,4 @@
-import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2, Info, Ruler, RulerDimensionLineIcon } from "lucide-react";
+import { MapPin, Pencil, Search, X, ChevronLeft, ChevronRight, List, Plus, Trash2, Info, Ruler, RulerDimensionLineIcon, Activity } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
@@ -24,6 +24,7 @@ interface RoadSegmentsPanelProps {
     onZoom: (feature: any) => void;
     onEdit: (feature: any) => void;
     onDelete?: (feature: any) => void;
+    onMonitoring?: (feature: any) => void;
     onAddRuas?: () => void;
     onAddLingkungan?: () => void;
     isOpen?: boolean;
@@ -38,6 +39,7 @@ export function RoadSegmentsPanel({
     onZoom,
     onEdit,
     onDelete,
+    onMonitoring,
     onAddRuas,
     onAddLingkungan,
     isOpen: propIsOpen,
@@ -99,9 +101,20 @@ export function RoadSegmentsPanel({
                             Tahun: <span className="font-bold text-slate-800">{year}</span>
                         </p>
                     </div>
-                    <div className="text-xs font-medium text-slate-600">
-                        <RulerDimensionLineIcon className="inline w-4 h-4 mr-1 text-amber-500 shrink-0" />
-                        {formatNumber(props.panjang)} m
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-600 bg-slate-50/50 px-2 py-1 rounded-lg border border-slate-100">
+                        <div className="flex items-center gap-1">
+                            <RulerDimensionLineIcon className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                            {formatNumber(props.panjang)} m
+                        </div>
+                        <div className="w-px h-3 bg-slate-200" />
+                        <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-6 w-6 text-blue-600 hover:bg-blue-100 rounded-full transition-colors"
+                            onClick={() => onZoom(segment)}
+                        >
+                            <Search className="w-3.5 h-3.5" />
+                        </Button>
                     </div>
                 </div>
 
@@ -114,15 +127,6 @@ export function RoadSegmentsPanel({
                 <span className="text-[10px] font-normal text-slate-600 italic">{props.id}</span>
 
                 <div className="flex gap-2 mt-1">
-                    <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 shadow-sm"
-                        onClick={() => onZoom(segment)}
-                    >
-                        <Search className="w-3 h-3" />
-                        Zoom
-                    </Button>
                     {!props.is_base_jalan && (
                         <Button
                             size="sm"
@@ -134,6 +138,15 @@ export function RoadSegmentsPanel({
                             Edit
                         </Button>
                     )}
+                    <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 text-xs flex-1 gap-1.5 hover:bg-emerald-50 hover:text-emerald-600 hover:border-emerald-200 shadow-sm"
+                        onClick={() => onMonitoring?.(segment)}
+                    >
+                        <Activity className="w-3 h-3" />
+                        Monitoring
+                    </Button>
                     <AlertDialog>
                         <AlertDialogTrigger asChild>
                             <Button

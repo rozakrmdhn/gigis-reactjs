@@ -86,10 +86,21 @@ export interface MonitoringJalanResponse {
     };
 }
 
+export interface MonitoringProgress {
+    id: string;
+    id_segmen: string;
+    kode_ruas: number;
+    tanggal: string;
+    progres: number;
+    catatan: string;
+    created_at?: string;
+    updated_at?: string;
+}
+
 export const monitoringService = {
     getMonitoringJalan: async (params?: { id_kecamatan?: string; page?: number; limit?: number; search?: string }): Promise<MonitoringJalanResponse> => {
         try {
-            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan`);
+            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan`, window.location.origin);
             if (params?.id_kecamatan) {
                 url.searchParams.append("id_kecamatan", params.id_kecamatan);
             }
@@ -177,7 +188,7 @@ export const monitoringService = {
 
     getSegmenByKodeRuas: async (kode_ruas: string | number): Promise<any> => {
         try {
-            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`);
+            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`, window.location.origin);
             if (kode_ruas) {
                 url.searchParams.append("kode_ruas", kode_ruas.toString());
             }
@@ -296,5 +307,68 @@ export const monitoringService = {
                 }
             };
         }
+    },
+
+    getMonitoringProgress: async (id_segmen: string): Promise<MonitoringProgress[]> => {
+        try {
+            // Using a query param or a specific route for list by segment if available, 
+            // but user only specified /monitoring/segmen/{id}. 
+            // Often list is GET /monitoring/segmen?id_segmen={id}
+            // I'll assume standard REST conventions or keep the one that worked if it was just field names?
+            // The user said "endpoint /monitoring/segmen/{id}". 
+            // I will try to use GET /monitoring/segmen?id_segmen=... for list if I can, 
+            // but likely I should check if the previous one `/jalan/segmen/${id_segmen}/monitoring` is still valid?
+            // User said "sesuaikan crud ... endpoint /monitoring/segmen/{id}".
+            // Probably Create is POST /monitoring/segmen
+            // Delete is DELETE /monitoring/segmen/{id}
+
+            // Let's assume list is GET /monitoring/segmen?id_segmen=...
+            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/segmen`, window.location.origin);
+            url.searchParams.append("id_segmen", id_segmen);
+
+            const response = await fetch(url.toString(), {
+                headers: authService.getAuthHeaders(),
+            });
+            if (!response.ok) {
+                throw new Error(`Failed to fetch monitoring progress: ${response.statusText}`);
+            }
+            const data = await response.json();
+            return data.result || [];
+        } catch (error) {
+            console.error("Error fetching monitoring progress:", error);
+            return [];
+        }
+    },
+
+    createMonitoringProgress: async (data: Partial<MonitoringProgress>): Promise<any> => {
+        return await apiClient.post(
+            `${import.meta.env.VITE_API_BASE_URL}/monitoring/segmen`,
+            data,
+            {
+                successMessage: "Data monitoring berhasil disimpan!",
+                errorMessage: "Gagal menyimpan data monitoring"
+            }
+        );
+    },
+
+    updateMonitoringProgress: async (id: string, data: Partial<MonitoringProgress>): Promise<any> => {
+        return await apiClient.put(
+            `${import.meta.env.VITE_API_BASE_URL}/monitoring/segmen/${id}`,
+            data,
+            {
+                successMessage: "Data monitoring berhasil diperbarui!",
+                errorMessage: "Gagal memperbarui data monitoring"
+            }
+        );
+    },
+
+    deleteMonitoringProgress: async (id: string): Promise<any> => {
+        return await apiClient.delete(
+            `${import.meta.env.VITE_API_BASE_URL}/monitoring/segmen/${id}`,
+            {
+                successMessage: "Data monitoring berhasil dihapus!",
+                errorMessage: "Gagal menghapus data monitoring"
+            }
+        );
     }
 };

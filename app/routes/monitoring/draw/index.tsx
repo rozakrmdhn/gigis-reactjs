@@ -53,6 +53,7 @@ import { DrawEditFormPanel } from "~/features/monitoring/components/DrawEditForm
 import { LayerToggle } from "~/features/monitoring/components/LayerToggle";
 import { BasemapToggle } from "~/features/monitoring/components/BasemapToggle";
 import { GeolocationControl } from "~/features/monitoring/components/GeolocationControl";
+import { MonitoringProgressPanel } from "~/features/monitoring/components/MonitoringProgressPanel";
 
 // Performance Optimization: Reusable static instances and helpers
 const geojsonFormat = new GeoJSON();
@@ -140,6 +141,8 @@ export default function DrawPage() {
     const [editingFeatureData, setEditingFeatureData] = useState<any>(null);
     const [sidebarRefreshTrigger, setSidebarRefreshTrigger] = useState(0);
     const [isSegmentPanelOpen, setIsSegmentPanelOpen] = useState(true);
+    const [isMonitoringPanelVisible, setIsMonitoringPanelVisible] = useState(false);
+    const [selectedSegmentForMonitoring, setSelectedSegmentForMonitoring] = useState<any | null>(null);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
         { id: "wms-bojonegoro", label: "WMS Bojonegoro", visible: false, color: "#94a3b8" }
@@ -1102,6 +1105,11 @@ export default function DrawPage() {
         });
     };
 
+    const handleMonitoringSegment = (segment: any) => {
+        setSelectedSegmentForMonitoring(segment);
+        setIsMonitoringPanelVisible(true);
+    };
+
     const handleFinishReshape = () => {
         if (!sourceRef.current) return;
         const features = sourceRef.current.getFeatures();
@@ -1459,6 +1467,7 @@ export default function DrawPage() {
                     onZoom={handleZoomToSegment}
                     onEdit={handleEditSegment}
                     onDelete={handleDeleteSegment}
+                    onMonitoring={handleMonitoringSegment}
                     onAddRuas={() => {
                         setEditingFeatureId(null);
                         setEditingFeatureData(null);
@@ -1473,6 +1482,12 @@ export default function DrawPage() {
                         setMode("draw-line");
                     }}
                     className="z-40"
+                />
+
+                <MonitoringProgressPanel
+                    isVisible={isMonitoringPanelVisible}
+                    onClose={() => setIsMonitoringPanelVisible(false)}
+                    segment={selectedSegmentForMonitoring}
                 />
             </div>
         </TooltipProvider>
