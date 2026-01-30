@@ -23,12 +23,12 @@ export function LaporanFilters({
     isLoading
 }: LaporanFiltersProps) {
     return (
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
             <Select
                 value={filters.tahun_pembangunan || "all"}
                 onValueChange={(value) => onFilterChange("tahun_pembangunan", value)}
             >
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-full sm:w-[120px]">
                     <SelectValue placeholder="Pilih Tahun" />
                 </SelectTrigger>
                 <SelectContent>
@@ -44,7 +44,7 @@ export function LaporanFilters({
                 value={filters.check_melarosa || "ya"}
                 onValueChange={(value) => onFilterChange("check_melarosa", value)}
             >
-                <SelectTrigger className="w-[120px]">
+                <SelectTrigger className="w-full sm:w-[120px]">
                     <SelectValue placeholder="Melarosa" />
                 </SelectTrigger>
                 <SelectContent>
@@ -56,7 +56,7 @@ export function LaporanFilters({
                 value={filters.kecamatan || "all"}
                 onValueChange={(value) => onFilterChange("kecamatan", value)}
             >
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-full sm:w-[180px]">
                     <SelectValue placeholder="Pilih Kecamatan" />
                 </SelectTrigger>
                 <SelectContent>
@@ -73,6 +73,7 @@ export function LaporanFilters({
                 size="sm"
                 onClick={onRefresh}
                 disabled={isLoading}
+                className="w-full sm:w-auto"
             >
                 <RotateCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>
