@@ -12,11 +12,13 @@ export interface AuthResponse {
     data: {
         user: User;
         accessToken: string;
+        accessTokenExpiresAt: number;
     };
 }
 
 const TOKEN_KEY = 'auth_token';
 const USER_KEY = 'auth_user';
+const TOKEN_EXPIRY_KEY = 'auth_token_expiry';
 
 // Helper to check if we're in browser environment
 const isBrowser = typeof window !== 'undefined';
@@ -42,6 +44,7 @@ export const authService = {
         if (isBrowser && data.status === 'success' && data.data) {
             localStorage.setItem(TOKEN_KEY, data.data.accessToken);
             localStorage.setItem(USER_KEY, JSON.stringify(data.data.user));
+            localStorage.setItem(TOKEN_EXPIRY_KEY, data.data.accessTokenExpiresAt.toString());
         }
 
         return data;
@@ -51,6 +54,7 @@ export const authService = {
         if (isBrowser) {
             localStorage.removeItem(TOKEN_KEY);
             localStorage.removeItem(USER_KEY);
+            localStorage.removeItem(TOKEN_EXPIRY_KEY);
         }
     },
 
@@ -71,12 +75,38 @@ export const authService = {
     },
 
     isAuthenticated: (): boolean => {
-        return !!authService.getToken();
+        if (!isBrowser) return false;
+
+        const token = authService.getToken();
+        const expiryStr = localStorage.getItem(TOKEN_EXPIRY_KEY);
+
+        if (!token || !expiryStr) return false;
+
+        const expiry = parseInt(expiryStr, 10);
+        const now = Date.now();
+
+        // Check if token has expired
+        if (now >= expiry) {
+            authService.signout();
+            // Dispatch event to show session expired alert
+            window.dispatchEvent(new CustomEvent("auth-session-expired"));
+            return false;
+        }
+
+        return true;
     },
 
     // Helper to get authorization headers for API requests
     getAuthHeaders: (): HeadersInit => {
         const token = authService.getToken();
+
+        // Also check authentication status which includes expiry check
+        if (!authService.isAuthenticated()) {
+            return {
+                'Content-Type': 'application/json',
+            };
+        }
+
         const headers: HeadersInit = {
             'Content-Type': 'application/json',
         };
@@ -88,3 +118,4 @@ export const authService = {
         return headers;
     },
 };
+

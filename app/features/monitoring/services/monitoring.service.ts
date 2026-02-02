@@ -99,49 +99,26 @@ export interface MonitoringProgress {
 
 export const monitoringService = {
     getMonitoringJalan: async (params?: { id_kecamatan?: string; page?: number; limit?: number; search?: string }): Promise<MonitoringJalanResponse> => {
-        try {
-            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan`, window.location.origin);
-            if (params?.id_kecamatan) {
-                url.searchParams.append("id_kecamatan", params.id_kecamatan);
-            }
-            if (params?.page) {
-                url.searchParams.append("page", params.page.toString());
-            }
-            if (params?.limit) {
-                url.searchParams.append("limit", params.limit.toString());
-            }
-            if (params?.search) {
-                url.searchParams.append("search", params.search);
-            }
-
-            const response = await fetch(url.toString(), {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch monitoring data: ${response.statusText}`);
-            }
-            const data: MonitoringJalanResponse = await response.json();
-            return data;
-        } catch (error) {
-            console.error("Error fetching monitoring jalan data:", error);
-            return { status: "error", message: "Failed to fetch", result: [], pagination: { total: 0, page: 1, limit: 10, totalPages: 0 } };
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan`, window.location.origin);
+        if (params?.id_kecamatan) {
+            url.searchParams.append("id_kecamatan", params.id_kecamatan);
         }
+        if (params?.page) {
+            url.searchParams.append("page", params.page.toString());
+        }
+        if (params?.limit) {
+            url.searchParams.append("limit", params.limit.toString());
+        }
+        if (params?.search) {
+            url.searchParams.append("search", params.search);
+        }
+
+        return await apiClient.get<MonitoringJalanResult[]>(url.toString()) as MonitoringJalanResponse;
     },
 
     getMonitoringJalanById: async (id: string): Promise<{ jalan: any; segmen: any; segmenkab: any } | null> => {
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}/geojson`, {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch monitoring detail data: ${response.statusText}`);
-            }
-            const data = await response.json();
-            return data.result || null;
-        } catch (error) {
-            console.error("Error fetching monitoring detail data:", error);
-            return null;
-        }
+        const response = await apiClient.get<any>(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}/geojson`);
+        return response.result || null;
     },
 
     createSegment: async (data: any): Promise<any> => {
@@ -177,167 +154,48 @@ export const monitoringService = {
     },
 
     getSegmentDetail: async (id: string): Promise<any> => {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`, {
-            headers: authService.getAuthHeaders(),
-        });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch segment detail: ${response.statusText}`);
-        }
-        return response.json();
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/${id}`);
     },
 
     getSegmenByKodeRuas: async (kode_ruas: string | number): Promise<any> => {
-        try {
-            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`, window.location.origin);
-            if (kode_ruas) {
-                url.searchParams.append("kode_ruas", kode_ruas.toString());
-            }
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`, window.location.origin);
+        if (kode_ruas) {
+            url.searchParams.append("kode_ruas", kode_ruas.toString());
+        }
 
-            const response = await fetch(url.toString(), {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch segment geojson: ${response.statusText}`);
-            }
-            return response.json();
-        } catch (error) {
-            console.error("Error fetching segment geojson:", error);
-            // Return empty feature collection on error to prevent UI crashes
-            return {
-                status: "error",
-                message: "Failed to fetch data",
-                result: {
-                    type: "FeatureCollection",
-                    features: []
-                }
-            };
-        }
+        return await apiClient.get(url.toString(), { showErrorToast: false });
     },
+
     getAllSegmentsGeoJSON: async (): Promise<any> => {
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch all segments: ${response.statusText}`);
-            }
-            return response.json();
-        } catch (error) {
-            console.error("Error fetching all segments geojson:", error);
-            return {
-                status: "error",
-                message: "Failed to fetch data",
-                result: {
-                    type: "FeatureCollection",
-                    features: []
-                }
-            };
-        }
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`);
     },
+
     getKabupatenSegmentsGeoJSON: async (): Promise<any> => {
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten`, {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch kabupaten segments: ${response.statusText}`);
-            }
-            return response.json();
-        } catch (error) {
-            console.error("Error fetching kabupaten segments geojson:", error);
-            return {
-                status: "success",
-                message: "Fallback empty collection",
-                result: {
-                    type: "FeatureCollection",
-                    features: []
-                }
-            };
-        }
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten`);
     },
+
     getKecamatan: async (): Promise<any> => {
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`, {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch kecamatans: ${response.statusText}`);
-            }
-            return response.json();
-        } catch (error) {
-            console.error("Error fetching kecamatans:", error);
-            return { status: "error", message: "Failed to fetch data", result: [] };
-        }
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
     },
+
     getDesa: async (id_kecamatan: string | number): Promise<any> => {
-        try {
-            const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}`, {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch desas: ${response.statusText}`);
-            }
-            return response.json();
-        } catch (error) {
-            console.error("Error fetching desas:", error);
-            return { status: "error", message: "Failed to fetch data", result: [] };
-        }
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}`);
     },
+
     getNonBaseSegments: async (id_desa?: string | number): Promise<any> => {
-        try {
-            let url = `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?check_melarosa=Tidak`;
-            if (id_desa) {
-                url += `&desa_id=${id_desa}`;
-            }
-            const response = await fetch(url, {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch non-base segments: ${response.statusText}`);
-            }
-            return response.json();
-        } catch (error) {
-            console.error("Error fetching non-base segments:", error);
-            return {
-                status: "error",
-                message: "Failed to fetch data",
-                result: {
-                    type: "FeatureCollection",
-                    features: []
-                }
-            };
+        let url = `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?check_melarosa=Tidak`;
+        if (id_desa) {
+            url += `&desa_id=${id_desa}`;
         }
+        return await apiClient.get(url);
     },
 
     getMonitoringProgress: async (id_segmen: string): Promise<MonitoringProgress[]> => {
-        try {
-            // Using a query param or a specific route for list by segment if available, 
-            // but user only specified /monitoring/segmen/{id}. 
-            // Often list is GET /monitoring/segmen?id_segmen={id}
-            // I'll assume standard REST conventions or keep the one that worked if it was just field names?
-            // The user said "endpoint /monitoring/segmen/{id}". 
-            // I will try to use GET /monitoring/segmen?id_segmen=... for list if I can, 
-            // but likely I should check if the previous one `/jalan/segmen/${id_segmen}/monitoring` is still valid?
-            // User said "sesuaikan crud ... endpoint /monitoring/segmen/{id}".
-            // Probably Create is POST /monitoring/segmen
-            // Delete is DELETE /monitoring/segmen/{id}
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/segmen`, window.location.origin);
+        url.searchParams.append("id_segmen", id_segmen);
 
-            // Let's assume list is GET /monitoring/segmen?id_segmen=...
-            const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/segmen`, window.location.origin);
-            url.searchParams.append("id_segmen", id_segmen);
-
-            const response = await fetch(url.toString(), {
-                headers: authService.getAuthHeaders(),
-            });
-            if (!response.ok) {
-                throw new Error(`Failed to fetch monitoring progress: ${response.statusText}`);
-            }
-            const data = await response.json();
-            return data.result || [];
-        } catch (error) {
-            console.error("Error fetching monitoring progress:", error);
-            return [];
-        }
+        const response = await apiClient.get<MonitoringProgress[]>(url.toString());
+        return response.result || [];
     },
 
     createMonitoringProgress: async (data: Partial<MonitoringProgress>): Promise<any> => {
@@ -372,3 +230,4 @@ export const monitoringService = {
         );
     }
 };
+

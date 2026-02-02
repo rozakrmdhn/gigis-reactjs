@@ -32,27 +32,28 @@ export default function LaporanPage() {
     const [search, setSearch] = useState(filters.desa || "");
     const isLoading = isInitialLoading || revalidator.state === "loading";
 
+    const fetchData = useCallback(async () => {
+        setIsInitialLoading(true);
+        try {
+            const [rekapResponse, kecamatanData] = await Promise.all([
+                laporanService.getRekapJalanByDibangun(filters),
+                kecamatanService.getKecamatan()
+            ]);
+            setRekapData(rekapResponse);
+            setKecamatanList(kecamatanData);
+        } catch (error) {
+            console.error("Error fetching data:", error);
+            setRekapData([]);
+            setKecamatanList([]);
+        } finally {
+            setIsInitialLoading(false);
+        }
+    }, [filters]);
+
     // Fetch data on mount and when filters change
     useEffect(() => {
-        async function fetchData() {
-            setIsInitialLoading(true);
-            try {
-                const [rekapResponse, kecamatanData] = await Promise.all([
-                    laporanService.getRekapJalanByDibangun(filters),
-                    kecamatanService.getKecamatan()
-                ]);
-                setRekapData(rekapResponse);
-                setKecamatanList(kecamatanData);
-            } catch (error) {
-                console.error("Error fetching data:", error);
-                setRekapData([]);
-                setKecamatanList([]);
-            } finally {
-                setIsInitialLoading(false);
-            }
-        }
         fetchData();
-    }, [filters.kecamatan, filters.desa, filters.tahun_pembangunan, filters.check_melarosa]);
+    }, [fetchData]);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -91,7 +92,7 @@ export default function LaporanPage() {
                     filters={filters}
                     kecamatanList={kecamatanList}
                     onFilterChange={handleFilterChange}
-                    onRefresh={() => revalidator.revalidate()}
+                    onRefresh={fetchData}
                     isLoading={isLoading}
                 />
             </div>
