@@ -10,6 +10,7 @@ import {
     AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { LogOut } from "lucide-react";
+import { authService } from "~/services/auth.service";
 
 export function SessionExpiredAlert() {
     const [isOpen, setIsOpen] = useState(false);
@@ -17,10 +18,12 @@ export function SessionExpiredAlert() {
 
     useEffect(() => {
         const handleSessionExpired = () => {
+            console.log("SessionExpiredAlert: Caught event");
             setIsOpen(true);
         };
 
         window.addEventListener("auth-session-expired", handleSessionExpired);
+
         return () => {
             window.removeEventListener("auth-session-expired", handleSessionExpired);
         };

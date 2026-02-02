@@ -41,15 +41,25 @@ export const apiClient = {
         } = options;
 
         try {
-            const response = await fetch(url, {
+            // Trigger session check (dispatches event if expired)
+            const isSessionValid = authService.checkSession();
+
+            // Only block the request if it's NOT a GET request and session is invalid
+            if (!isSessionValid && fetchOptions.method !== "GET" && fetchOptions.method !== undefined) {
+                // If we had a session but it just became invalid, block the write operation
+                throw new Error("Unauthorized");
+            }
+
+            let response = await fetch(url, {
                 ...fetchOptions,
                 headers: {
                     ...authService.getAuthHeaders(),
                     ...fetchOptions.headers,
                 },
+                credentials: 'include',
             });
 
-            // Handle authentication errors
+            // Handle 403 Forbidden (e.g., token expired or invalid after initial check)
             if (response.status === 401 || response.status === 403) {
                 authService.signout();
                 if (typeof window !== "undefined") {

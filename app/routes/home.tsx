@@ -50,7 +50,7 @@ export default function Home() {
               Sistem Monitoring Jalan Poros Desa
             </div>
             <h1 className="max-w-4xl text-5xl font-extrabold tracking-tight text-slate-900 lg:text-7xl">
-              Pantau Kondisi Infrasruktur <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Lebih Akurat</span>
+              Pantau Pembangunan Infrastruktur Bojonegoro <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Lebih Akurat</span>
             </h1>
             <p className="mt-8 max-w-2xl text-lg text-slate-600">
               GIGI'S (Geographic Information & Infrastructure System) memberikan visualisasi real-time

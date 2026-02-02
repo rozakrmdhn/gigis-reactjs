@@ -7,29 +7,31 @@ import { LaporanStatsCards } from "~/features/laporan/components/LaporanStatsCar
 import { LaporanTable } from "~/features/laporan/components/LaporanTable";
 import { laporanService } from "~/features/laporan/services/laporan.service";
 
-export async function loader({ request }: LoaderFunctionArgs) {
-    const url = new URL(request.url);
-    const kecamatan = url.searchParams.get("kecamatan") || undefined;
-    const desa = url.searchParams.get("desa") || undefined;
-    const tahun_pembangunan = url.searchParams.get("tahun_pembangunan") || undefined;
-    const check_melarosa = url.searchParams.get("check_melarosa") || "ya";
-
-    // Return only filters for instant navigation
-    // Data will be fetched client-side
-    return { filters: { kecamatan, desa, tahun_pembangunan, check_melarosa } };
+export async function loader() {
+    return {};
 }
 
 export default function LaporanPage() {
-    const { filters } = useLoaderData<typeof loader>();
     const revalidator = useRevalidator();
-    const [searchParams, setSearchParams] = useSearchParams();
 
-    // Client-side data state
+    // Manage filters purely in local state
+    const [filters, setFilters] = useState<{
+        kecamatan?: string;
+        desa?: string;
+        tahun_pembangunan?: string;
+        check_melarosa: string;
+    }>({
+        kecamatan: undefined,
+        desa: undefined,
+        tahun_pembangunan: undefined,
+        check_melarosa: "ya"
+    });
+
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [rekapData, setRekapData] = useState<any[]>([]);
     const [kecamatanList, setKecamatanList] = useState<any[]>([]);
 
-    const [search, setSearch] = useState(filters.desa || "");
+    const [search, setSearch] = useState("");
     const isLoading = isInitialLoading || revalidator.state === "loading";
 
     const fetchData = useCallback(async () => {
@@ -55,31 +57,21 @@ export default function LaporanPage() {
         fetchData();
     }, [fetchData]);
 
+    // Handle search input debounce
     useEffect(() => {
         const timer = setTimeout(() => {
-            const newParams = new URLSearchParams(searchParams);
-            if (search) {
-                newParams.set("desa", search);
-            } else {
-                newParams.delete("desa");
-            }
-            if (newParams.toString() !== searchParams.toString()) {
-                setSearchParams(newParams);
-            }
+            setFilters(prev => ({ ...prev, desa: search || undefined }));
         }, 500);
 
         return () => clearTimeout(timer);
-    }, [search, searchParams, setSearchParams]);
+    }, [search]);
 
     const handleFilterChange = useCallback((key: string, value: string) => {
-        const newParams = new URLSearchParams(searchParams);
-        if (value === "all") {
-            newParams.delete(key);
-        } else {
-            newParams.set(key, value);
-        }
-        setSearchParams(newParams);
-    }, [searchParams, setSearchParams]);
+        setFilters(prev => ({
+            ...prev,
+            [key]: value === "all" ? undefined : value
+        }));
+    }, []);
 
     return (
         <div className="flex flex-1 flex-col gap-4 p-4 relative">

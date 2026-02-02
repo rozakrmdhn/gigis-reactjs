@@ -3,7 +3,7 @@ import { apiClient } from '~/lib/api-client';
 
 export const laporanService = {
     getRekapJalanByDibangun: async (params?: { kecamatan?: string; desa?: string; tahun_pembangunan?: string; check_melarosa?: string }): Promise<RekapDibangun[]> => {
-        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/rekap/dibangun`);
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/rekap/dibangun`, window.location.origin);
         if (params?.kecamatan) url.searchParams.append("kecamatan", params.kecamatan);
         if (params?.desa) url.searchParams.append("desa", params.desa);
         if (params?.tahun_pembangunan) url.searchParams.append("tahun_pembangunan", params.tahun_pembangunan);

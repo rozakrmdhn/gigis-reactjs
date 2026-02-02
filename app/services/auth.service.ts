@@ -23,6 +23,8 @@ const TOKEN_EXPIRY_KEY = 'auth_token_expiry';
 // Helper to check if we're in browser environment
 const isBrowser = typeof window !== 'undefined';
 
+let refreshPromise: Promise<boolean> | null = null;
+
 export const authService = {
     signin: async (email: string, password: string): Promise<AuthResponse> => {
         const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/signin`, {
@@ -31,6 +33,7 @@ export const authService = {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({ email, password }),
+            credentials: 'include',
         });
 
         if (!response.ok) {
@@ -76,19 +79,28 @@ export const authService = {
 
     isAuthenticated: (): boolean => {
         if (!isBrowser) return false;
-
         const token = authService.getToken();
         const expiryStr = localStorage.getItem(TOKEN_EXPIRY_KEY);
-
         if (!token || !expiryStr) return false;
 
         const expiry = parseInt(expiryStr, 10);
         const now = Date.now();
 
-        // Check if token has expired
-        if (now >= expiry) {
+        // Strict check: session is valid ONLY if now is less than expiry
+        return now < expiry;
+    },
+
+    checkSession: (): boolean => {
+        if (!isBrowser) return false;
+
+        const token = authService.getToken();
+        if (!token) {
             authService.signout();
-            // Dispatch event to show session expired alert
+            return false;
+        }
+
+        if (!authService.isAuthenticated()) {
+            authService.signout();
             window.dispatchEvent(new CustomEvent("auth-session-expired"));
             return false;
         }
@@ -100,13 +112,6 @@ export const authService = {
     getAuthHeaders: (): HeadersInit => {
         const token = authService.getToken();
 
-        // Also check authentication status which includes expiry check
-        if (!authService.isAuthenticated()) {
-            return {
-                'Content-Type': 'application/json',
-            };
-        }
-
         const headers: HeadersInit = {
             'Content-Type': 'application/json',
         };
@@ -116,6 +121,12 @@ export const authService = {
         }
 
         return headers;
+    },
+
+    getExpiry: (): number | null => {
+        if (!isBrowser) return null;
+        const expiryStr = localStorage.getItem(TOKEN_EXPIRY_KEY);
+        return expiryStr ? parseInt(expiryStr, 10) : null;
     },
 };
 

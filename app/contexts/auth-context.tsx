@@ -29,6 +29,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
     }, []);
 
+    // Listen for session expiry event
+    useEffect(() => {
+        const handleSessionExpired = () => {
+            console.log("Session expired");
+            setUser(null);
+        };
+
+        window.addEventListener("auth-session-expired", handleSessionExpired);
+
+        // Global watchdog check every 1 second
+        const interval = setInterval(() => {
+            authService.checkSession();
+        }, 1000);
+
+        return () => {
+            window.removeEventListener("auth-session-expired", handleSessionExpired);
+            clearInterval(interval);
+        };
+    }, []);
+
     const signin = async (email: string, password: string) => {
         const response = await authService.signin(email, password);
         if (response.status === 'success' && response.data) {
