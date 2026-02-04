@@ -62,21 +62,16 @@ export default function Login() {
                         <IconLock className="w-8 h-8 text-white" />
                     </div>
                     <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-                        GIGI'S
+                        GIS Bappeda Infraswil
                     </h1>
                     <p className="text-gray-600 dark:text-gray-400 mt-2">
-                        GIGI'S Monitoring Jalan Poros
+                        Geospatial Information System
                     </p>
                 </div>
 
                 {/* Login Card */}
                 <Card className="backdrop-blur-sm bg-white/80 dark:bg-gray-800/80 shadow-2xl border-0">
-                    <CardHeader className="space-y-1">
-                        <CardTitle className="text-2xl font-bold text-center">Login</CardTitle>
-                        <CardDescription className="text-center">
-                            Masukkan email dan password Anda
-                        </CardDescription>
-                    </CardHeader>
+
                     <CardContent>
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                             {/* Email Field */}
@@ -142,7 +137,7 @@ export default function Login() {
 
                 {/* Footer */}
                 <p className="text-center text-sm text-gray-600 dark:text-gray-400 mt-6">
-                    © 2026 GIGI'S Monitoring Jalan Poros. All rights reserved.
+                    © 2026 GIS Bappeda Infraswil.
                 </p>
             </div>
         </div>

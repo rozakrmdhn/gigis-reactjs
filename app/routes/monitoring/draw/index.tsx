@@ -1327,8 +1327,17 @@ export default function DrawPage() {
             // Fetch road detail to get name for the layer label
             try {
                 const response = await monitoringService.getMonitoringJalanById(id);
-                if (response && response.jalan) {
-                    const roadName = response.jalan.nama_ruas || `Ruas ${response.jalan.kode_ruas}`;
+                if (response) {
+                    // Extract road data from GeoJSON for label
+                    const jalanData = response.jalan?.features?.[0]?.properties?.dataValues ||
+                        response.jalan?.features?.[0]?.properties ||
+                        response.features?.[0]?.properties?.dataValues ||
+                        response.features?.[0]?.properties ||
+                        {};
+
+                    const kodeRuas = jalanData.kode_ruas || id;
+                    const namaRuas = jalanData.nama_ruas || 'Nama tidak tersedia';
+                    const roadLabel = `${kodeRuas} - ${namaRuas}`;
                     const layerId = `road-${id}`;
 
                     // Add to visibleLayers if not already present
@@ -1336,9 +1345,9 @@ export default function DrawPage() {
                         if (prev.find(l => l.id === layerId)) return prev;
                         return [...prev, {
                             id: layerId,
-                            label: roadName,
+                            label: roadLabel,
                             visible: true,
-                            color: "#3b82f6" // Default blue for roads
+                            color: "#ffa500" // Default blue for roads
                         }];
                     });
 
@@ -1500,7 +1509,6 @@ export default function DrawPage() {
                             onReorder={handleReorderLayers}
                             onResetOrder={handleResetLayerOrder}
                             onClearAll={handleClearCheckedRoads}
-                            isShifted={segmentPanelVisible && isSegmentPanelOpen}
                         />
 
                         <BasemapToggle

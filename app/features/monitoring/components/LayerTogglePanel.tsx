@@ -172,13 +172,10 @@ export function LayerTogglePanel({
     return (
         <div
             className={cn(
-                "absolute inset-y-0 z-50 w-full sm:w-[320px] bg-white border-l shadow-2xl flex flex-col",
-                "transition-[transform,right] duration-500 ease-in-out",
+                "absolute inset-y-0 z-50 w-full sm:w-[320px] bg-white border-l shadow-2xl flex flex-col right-0",
+                "transition-transform duration-500 ease-in-out",
                 // Visibility handled by transform
                 isVisible ? "translate-x-0" : "translate-x-full",
-                // Positioning: Always slide from the right edge when opening/closing
-                // but shift left when both visible and isShifted
-                (isVisible && isShifted) ? "sm:right-80" : "right-0",
                 className
             )}
         >
