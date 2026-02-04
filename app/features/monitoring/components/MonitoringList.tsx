@@ -64,6 +64,7 @@ const MonitoringListItem = React.memo(({ item, isSelected, onSelect }: Monitorin
                     </span>
                     <span className="h-0.5 w-0.5 rounded-full bg-slate-300 hidden sm:block" />
                     <span>{item.jalan.kecamatan}</span>
+                    <span className="ml-auto font-bold text-blue-600/60">No. {item.jalan.kode_ruas}</span>
                 </div>
             </div>
 

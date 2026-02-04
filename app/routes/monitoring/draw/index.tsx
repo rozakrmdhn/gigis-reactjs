@@ -51,6 +51,7 @@ import { useIsMobile } from "~/hooks/use-mobile";
 import { monitoringService, type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
 import { DrawEditFormPanel } from "~/features/monitoring/components/DrawEditFormPanel";
 import { LayerToggle } from "~/features/monitoring/components/LayerToggle";
+import { LayerTogglePanel } from "~/features/monitoring/components/LayerTogglePanel";
 import { BasemapToggle } from "~/features/monitoring/components/BasemapToggle";
 import { GeolocationControl } from "~/features/monitoring/components/GeolocationControl";
 import { MonitoringProgressPanel } from "~/features/monitoring/components/MonitoringProgressPanel";
@@ -143,6 +144,7 @@ export default function DrawPage() {
     const [isSegmentPanelOpen, setIsSegmentPanelOpen] = useState(true);
     const [isMonitoringPanelVisible, setIsMonitoringPanelVisible] = useState(false);
     const [selectedSegmentForMonitoring, setSelectedSegmentForMonitoring] = useState<any | null>(null);
+    const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
         { id: "wms-bojonegoro", label: "WMS Bojonegoro", visible: false, color: "#94a3b8" }
@@ -883,7 +885,7 @@ export default function DrawPage() {
             return [
                 { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
                 { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
-                { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#94a3b8" },
+                { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
                 ...prev
             ];
         });
@@ -1282,14 +1284,21 @@ export default function DrawPage() {
                         />
 
                         <LayerToggle
-                            layers={visibleLayers}
-                            onToggle={handleToggleLayer}
-                            onReorder={handleReorderLayers}
-                            onResetOrder={handleResetLayerOrder}
+                            onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
+                            isActive={isLayerPanelOpen}
                             className={cn(
                                 "absolute top-2 right-2 transition-transform duration-500 z-40 will-change-transform",
                                 segmentPanelVisible && isSegmentPanelOpen && "-translate-x-80"
                             )}
+                        />
+
+                        <LayerTogglePanel
+                            isVisible={isLayerPanelOpen}
+                            onClose={() => setIsLayerPanelOpen(false)}
+                            layers={visibleLayers}
+                            onToggle={handleToggleLayer}
+                            onReorder={handleReorderLayers}
+                            onResetOrder={handleResetLayerOrder}
                         />
 
                         <BasemapToggle
