@@ -50,13 +50,13 @@ export const apiClient = {
                 throw new Error("Unauthorized");
             }
 
+
             let response = await fetch(url, {
                 ...fetchOptions,
                 headers: {
                     ...authService.getAuthHeaders(),
                     ...fetchOptions.headers,
                 },
-                credentials: 'include',
             });
 
             // Handle 403 Forbidden (e.g., token expired or invalid after initial check)
