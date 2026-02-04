@@ -2,6 +2,7 @@ import React from 'react';
 import { type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
 import { Badge } from "~/components/ui/badge";
 import { Skeleton } from "~/components/ui/skeleton";
+import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
 
 interface MonitoringListProps {
@@ -9,19 +10,35 @@ interface MonitoringListProps {
     onSelectJalan: (id: string) => void;
     selectedId?: string | null;
     isLoading?: boolean;
+    checkedIds?: string[];
+    onToggleCheck?: (id: string, checked: boolean) => void;
 }
 
 interface MonitoringListItemProps {
     item: MonitoringJalanResult;
     isSelected: boolean;
+    isChecked: boolean;
     onSelect: (id: string) => void;
+    onToggleCheck: (id: string, checked: boolean) => void;
 }
 
-const MonitoringListItem = React.memo(({ item, isSelected, onSelect }: MonitoringListItemProps) => {
-    const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, onToggleCheck }: MonitoringListItemProps) => {
+    const formatNumber = (val: any) => {
+        const num = typeof val === 'string' ? parseFloat(val) : val;
+        if (typeof num !== 'number' || isNaN(num)) return '0,00';
+        return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
+
+    const handleCheckClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+    };
+
+    const handleCheckboxChange = (checked: boolean) => {
+        onToggleCheck(item.jalan.id, checked);
+    };
 
     return (
-        <button
+        <div
             key={item.jalan.id}
             id={`road-${item.jalan.id}`}
             className={cn(
@@ -34,10 +51,25 @@ const MonitoringListItem = React.memo(({ item, isSelected, onSelect }: Monitorin
                     : "border-slate-100"
             )}
             onClick={() => onSelect(item.jalan.id)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelect(item.jalan.id);
+                }
+            }}
         >
             <div className="flex flex-col gap-1 p-3">
                 <div className="flex items-center justify-between gap-0">
-                    <div className="flex items-center gap-2 font-md min-w-0">
+                    <div className="flex items-center gap-3 font-md min-w-0">
+                        <div onClick={handleCheckClick}>
+                            <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={handleCheckboxChange}
+                                className="h-4 w-4 rounded border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                            />
+                        </div>
                         <span className={cn(
                             "line-clamp-1 transition-colors text-md",
                             isSelected ? "font-bold" : "text-slate-900 font-semibold"
@@ -141,11 +173,11 @@ const MonitoringListItem = React.memo(({ item, isSelected, onSelect }: Monitorin
                     )}
                 </div>
             )}
-        </button>
+        </div>
     );
 });
 
-export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isLoading }: MonitoringListProps) => {
+export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isLoading, checkedIds, onToggleCheck }: MonitoringListProps) => {
     if (isLoading) {
         return (
             <div className="space-y-3">
@@ -184,7 +216,9 @@ export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isL
                     key={item.jalan.id}
                     item={item}
                     isSelected={item.jalan.id === selectedId}
+                    isChecked={checkedIds?.includes(item.jalan.id) ?? false}
                     onSelect={onSelectJalan}
+                    onToggleCheck={onToggleCheck ?? (() => { })}
                 />
             ))}
         </div>

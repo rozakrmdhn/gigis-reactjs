@@ -145,9 +145,13 @@ export default function DrawPage() {
     const [isMonitoringPanelVisible, setIsMonitoringPanelVisible] = useState(false);
     const [selectedSegmentForMonitoring, setSelectedSegmentForMonitoring] = useState<any | null>(null);
     const [isLayerPanelOpen, setIsLayerPanelOpen] = useState(false);
+    const [checkedRoadIds, setCheckedRoadIds] = useState<string[]>([]);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
-        { id: "wms-bojonegoro", label: "WMS Bojonegoro", visible: false, color: "#94a3b8" }
+        { id: "wms-bojonegoro", label: "WMS Bojonegoro", visible: false, color: "#94a3b8" },
+        { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
+        { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
+        { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
     ]);
     const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [lastCopiedCoords, setLastCopiedCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -270,6 +274,12 @@ export default function DrawPage() {
                 const isEditableSegmen = !isBase && !isKabupaten && !feature.get("hidden_from_panel");
 
                 // Check visibility from LayerToggle
+                const isCheckedRoad = feature.get("kode_ruas_layer");
+                if (isCheckedRoad) {
+                    const isVisible = visibleLayers.find(l => l.id === `road-${isCheckedRoad}`)?.visible;
+                    if (isVisible === false) return [];
+                }
+
                 const ruasUtamaVisible = visibleLayers.find(l => l.id === "ruas-utama")?.visible ?? true;
                 const segmenDesaVisible = visibleLayers.find(l => l.id === "segmen-desa")?.visible ?? true;
                 const jalanKabupatenVisible = visibleLayers.find(l => l.id === "jalan-kabupaten")?.visible ?? true;
@@ -418,20 +428,82 @@ export default function DrawPage() {
         map.addOverlay(overlay);
         tooltipRef.current = overlay;
 
-        // Pointer move for coordinate display (Throttled for performance)
+        // Pointer move for coordinate display and cursor style (Throttled for performance)
         const throttledPointerMove = throttle((evt: any) => {
             if (evt.dragging) return;
+
             const coordinate = toLonLat(evt.coordinate);
             setCursorCoords({
                 lng: coordinate[0],
                 lat: coordinate[1]
             });
+
+            // Update cursor style if hovering over clickable road features
+            if (mapRef.current && !mode.startsWith("draw-")) {
+                const pixel = mapRef.current.getEventPixel(evt.originalEvent);
+                const hit = mapRef.current.hasFeatureAtPixel(pixel, {
+                    layerFilter: (layer) =>
+                        layer === ruasUtamaLayerRef.current ||
+                        layer === segmenDesaLayerRef.current ||
+                        layer === existingLayerRef.current
+                });
+
+                mapRef.current.getTargetElement().style.cursor = hit ? 'pointer' : '';
+            }
         }, 50);
 
         map.on('pointermove', throttledPointerMove);
 
-        // Click to copy coordinates
-        map.on('click', (evt) => {
+        // Click to copy coordinates OR select road
+        map.on('click', async (evt) => {
+            // Priority 1: Check if we clicked on a road feature
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const feature = map.forEachFeatureAtPixel(pixel, (f) => f, {
+                layerFilter: (layer) =>
+                    layer === ruasUtamaLayerRef.current ||
+                    layer === segmenDesaLayerRef.current ||
+                    layer === existingLayerRef.current
+            });
+
+            if (feature && !mode.startsWith("draw-")) {
+                const roadId = feature.get("id") || feature.get("id_jalan") || feature.get("kode_ruas_layer");
+                if (roadId) {
+                    try {
+                        const data = await monitoringService.getMonitoringJalanById(roadId);
+                        if (data && data.jalan) {
+                            // Normalize data to match MonitoringJalanResult structure if it's raw GeoJSON
+                            let normalizedRoad = data;
+                            if (data.jalan.type === "Feature" || data.jalan.features) {
+                                const properties = data.jalan.type === "Feature"
+                                    ? data.jalan.properties
+                                    : data.jalan.features[0]?.properties;
+
+                                normalizedRoad = {
+                                    jalan: {
+                                        ...properties,
+                                        id: roadId // Ensure ID is preserved
+                                    },
+                                    segmen: data.segmen,
+                                    summary: (data as any).summary || {
+                                        total_panjang_jalan: properties?.panjang || 0,
+                                        fisik: { total: 0 },
+                                        panjang_belum_tertangani: properties?.panjang || 0
+                                    }
+                                } as any;
+                            }
+
+                            handleSelectRoadOnMobile(normalizedRoad as any);
+                            return; // Stop here if we selected a road
+                        } else {
+                            toast.error("Data jalan tidak ditemukan di sistem");
+                        }
+                    } catch (error) {
+                        console.error("Error clicking road feature:", error);
+                    }
+                }
+            }
+
+            // Priority 2: Default click behavior (copy coordinates)
             const coordinate = toLonLat(evt.coordinate);
             const lng = coordinate[0];
             const lat = coordinate[1];
@@ -749,10 +821,20 @@ export default function DrawPage() {
             ]);
 
             if (!existingSourceRef.current) return;
+
+            // Selective clear: remove features that are NOT checked and NOT the current roadId
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+                const source = sourceRef.current;
+                if (source) {
+                    const featuresToRemove = source.getFeatures().filter(f => {
+                        const kId = f.get("kode_ruas_layer");
+                        return !kId || (!checkedRoadIds.includes(kId) && kId !== roadId);
+                    });
+                    featuresToRemove.forEach(f => source.removeFeature(f));
+                }
+            });
+
             existingSourceRef.current.clear();
-            ruasUtamaSourceRef.current?.clear();
-            segmenDesaSourceRef.current?.clear();
-            jalanKabupatenSourceRef.current?.clear();
 
             const format = new GeoJSON();
             const panelFeatures: any[] = [];
@@ -768,6 +850,7 @@ export default function DrawPage() {
                     jalanFeatures.forEach(f => {
                         f.set("is_base_jalan", true);
                         f.set("hidden_from_panel", true);
+                        f.set("kode_ruas_layer", roadId);
                     });
                     ruasUtamaSourceRef.current?.addFeatures(jalanFeatures);
                 }
@@ -779,6 +862,7 @@ export default function DrawPage() {
                     });
                     segmenFeatures.forEach(f => {
                         f.set("hidden_from_panel", true);
+                        f.set("kode_ruas_layer", roadId);
                     });
                     segmenDesaSourceRef.current?.addFeatures(segmenFeatures);
                 }
@@ -820,7 +904,7 @@ export default function DrawPage() {
                     if (id) f.setId(id);
                     f.set("is_lingkungan_segment", true);
                 });
-                panelFeatures.push(...filteredNonBase);
+                // panelFeatures.push(...filteredNonBase); // REMOVED: Don't show in panel
                 nonBaseSourceRef.current?.addFeatures(filteredNonBase);
             }
 
@@ -867,13 +951,26 @@ export default function DrawPage() {
         // Skip clearing if we are in a drawing mode to maintain overlay context
         if (!selectedRoad && !mode.startsWith("draw-")) {
             existingSourceRef.current?.clear();
-            ruasUtamaSourceRef.current?.clear();
-            segmenDesaSourceRef.current?.clear();
-            jalanKabupatenSourceRef.current?.clear();
-            // Remove road categories from layer toggle if cleared
-            setVisibleLayers(prev => prev.filter(l =>
-                !["ruas-utama", "segmen-desa", "jalan-kabupaten"].includes(l.id)
-            ));
+
+            // Only clear non-checked features
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+                const source = sourceRef.current;
+                if (source) {
+                    const featuresToRemove = source.getFeatures().filter(f => {
+                        const kId = f.get("kode_ruas_layer");
+                        return !kId || !checkedRoadIds.includes(kId);
+                    });
+                    featuresToRemove.forEach(f => source.removeFeature(f));
+                }
+            });
+
+            // Keep road categories in layer toggle if there are still checked roads
+            const hasCheckedRoads = checkedRoadIds.length > 0;
+            if (!hasCheckedRoads) {
+                setVisibleLayers(prev => prev.filter(l =>
+                    !["ruas-utama", "segmen-desa", "jalan-kabupaten"].includes(l.id)
+                ));
+            }
             return;
         }
 
@@ -891,7 +988,7 @@ export default function DrawPage() {
         });
 
         refreshSegmentData(selectedRoad.jalan.id);
-    }, [selectedRoad, isMounted, mode]);
+    }, [selectedRoad, isMounted, mode, checkedRoadIds]);
 
     useEffect(() => {
         if (!isMounted || !nonBaseSourceRef.current) return;
@@ -1222,15 +1319,116 @@ export default function DrawPage() {
         toast.success(`Berhasil menemukan ${allFeatures.length} lokasi`);
     };
 
+    // Multi-select handler
+    const handleToggleCheckRoad = async (id: string, checked: boolean) => {
+        if (checked) {
+            setCheckedRoadIds(prev => [...prev, id]);
+
+            // Fetch road detail to get name for the layer label
+            try {
+                const response = await monitoringService.getMonitoringJalanById(id);
+                if (response && response.jalan) {
+                    const roadName = response.jalan.nama_ruas || `Ruas ${response.jalan.kode_ruas}`;
+                    const layerId = `road-${id}`;
+
+                    // Add to visibleLayers if not already present
+                    setVisibleLayers(prev => {
+                        if (prev.find(l => l.id === layerId)) return prev;
+                        return [...prev, {
+                            id: layerId,
+                            label: roadName,
+                            visible: true,
+                            color: "#3b82f6" // Default blue for roads
+                        }];
+                    });
+
+                    // Render the segments on the map
+                    const format = new GeoJSON();
+
+                    // Add main road
+                    if (response.jalan) {
+                        const features = format.readFeatures(response.jalan, {
+                            dataProjection: "EPSG:4326",
+                            featureProjection: "EPSG:3857",
+                        });
+                        features.forEach(f => {
+                            f.set("is_base_jalan", true);
+                            f.set("kode_ruas_layer", id);
+                        });
+                        ruasUtamaSourceRef.current?.addFeatures(features);
+                    }
+
+                    // Add segments
+                    if (response.segmen) {
+                        const features = format.readFeatures(response.segmen, {
+                            dataProjection: "EPSG:4326",
+                            featureProjection: "EPSG:3857",
+                        });
+                        features.forEach(f => {
+                            f.set("kode_ruas_layer", id);
+                        });
+                        segmenDesaSourceRef.current?.addFeatures(features);
+                    }
+                }
+            } catch (error) {
+                console.error("Error checking road:", error);
+                toast.error("Gagal memuat data jalan");
+            }
+        } else {
+            setCheckedRoadIds(prev => prev.filter(roadId => roadId !== id));
+            const layerId = `road-${id}`;
+            setVisibleLayers(prev => prev.filter(l => l.id !== layerId));
+
+            // Remove features from map sources matching this road
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+                const source = sourceRef.current;
+                if (source) {
+                    const featuresToRemove = source.getFeatures().filter(f => f.get("kode_ruas_layer") === id);
+                    featuresToRemove.forEach(f => source.removeFeature(f));
+                }
+            });
+        }
+    };
+
+    const handleClearCheckedRoads = () => {
+        // Clear state
+        setCheckedRoadIds([]);
+
+        // Clear visible layers that are roads
+        setVisibleLayers(prev => prev.filter(l => !l.id.startsWith("road-")));
+
+        // Clear features from map
+        [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+            const source = sourceRef.current;
+            if (source) {
+                const featuresToRemove = source.getFeatures().filter(f => {
+                    const kId = f.get("kode_ruas_layer");
+                    return kId && kId !== selectedRoad?.jalan.id; // Keep selected road
+                });
+                featuresToRemove.forEach(f => source.removeFeature(f));
+            }
+        });
+
+        toast.info("Berhasil membersihkan checklist");
+    };
+
     const handleSelectRoadOnMobile = (road: MonitoringJalanResult | null) => {
         setSelectedRoad(road);
-        if (road) setIsRoadInfoVisible(true);
+        if (road) {
+            setIsRoadInfoVisible(true);
+            setSegmentPanelVisible(true);
+            setIsSegmentPanelOpen(true);
+        }
         if (isMobile && road) {
             setIsSidebarOpen(false);
         }
     };
 
-    const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const formatNumber = (val: any) => {
+        const num = typeof val === 'string' ? parseFloat(val) : val;
+        if (typeof num !== 'number' || isNaN(num)) return '0,00';
+        return num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    };
 
     return (
         <TooltipProvider>
@@ -1245,6 +1443,8 @@ export default function DrawPage() {
                     refreshTrigger={sidebarRefreshTrigger}
                     onCoordinateSearch={handleCoordinateSearch}
                     onRefresh={handleRefreshAll}
+                    checkedRoadIds={checkedRoadIds}
+                    onToggleCheckRoad={handleToggleCheckRoad}
                 />
 
                 <div className="flex-1 flex flex-col relative">
@@ -1299,6 +1499,8 @@ export default function DrawPage() {
                             onToggle={handleToggleLayer}
                             onReorder={handleReorderLayers}
                             onResetOrder={handleResetLayerOrder}
+                            onClearAll={handleClearCheckedRoads}
+                            isShifted={segmentPanelVisible && isSegmentPanelOpen}
                         />
 
                         <BasemapToggle
@@ -1372,7 +1574,7 @@ export default function DrawPage() {
 
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
                             {!selectedRoad && mode !== "view" ? (
-                                <div className="text-[8px] bg-blue-600/90 backdrop-blur-md p-2 rounded-xl border border-blue-400 shadow-xl text-[10px] font-bold text-white uppercase tracking-widest animate-in slide-in-from-bottom-4">
+                                <div className="bg-blue-600/90 backdrop-blur-md p-2 rounded-xl border border-blue-400 shadow-xl text-[10px] font-bold text-white uppercase tracking-widest animate-in slide-in-from-bottom-4">
                                     Menggambar Jalan Lingkungan (Non-Ruas)
                                 </div>
                             ) : null}

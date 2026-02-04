@@ -42,6 +42,8 @@ interface DrawSidebarProps {
     refreshTrigger?: number;
     onCoordinateSearch?: (coords: { lat: number; lng: number }[]) => void;
     onRefresh?: () => void;
+    checkedRoadIds?: string[];
+    onToggleCheckRoad?: (id: string, checked: boolean) => void;
 }
 
 // Helper to parse DMS (Degrees, Minutes, Seconds) to Decimal Degrees
@@ -104,7 +106,9 @@ export function DrawSidebar({
     onToggle,
     refreshTrigger,
     onCoordinateSearch,
-    onRefresh
+    onRefresh,
+    checkedRoadIds,
+    onToggleCheckRoad
 }: DrawSidebarProps) {
     const [roads, setRoads] = useState<MonitoringJalanResult[]>([]);
     const [loading, setLoading] = useState(true);
@@ -309,6 +313,8 @@ export function DrawSidebar({
                                             if (road) onSelectRoad(road);
                                         }, [roads, onSelectRoad])}
                                         selectedId={selectedRoad?.jalan.id}
+                                        checkedIds={checkedRoadIds}
+                                        onToggleCheck={onToggleCheckRoad}
                                     />
                                 </div>
                             </ScrollArea>

@@ -1,8 +1,9 @@
-import { Layers, X, GripVertical, RotateCcw } from "lucide-react";
+import { Layers, X, GripVertical, RotateCcw, Search, Trash2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Checkbox } from "~/components/ui/checkbox";
 import { Label } from "~/components/ui/label";
 import { cn } from "~/lib/utils";
+import { useState, useMemo, useEffect } from "react";
 import {
     DndContext,
     closestCenter,
@@ -37,6 +38,9 @@ interface LayerTogglePanelProps {
     onToggle: (id: string, visible: boolean) => void;
     onReorder: (layers: LayerItem[]) => void;
     onResetOrder?: () => void;
+    onClearAll?: () => void;
+    className?: string;
+    isShifted?: boolean;
 }
 
 function SortableLayerItem({
@@ -67,24 +71,24 @@ function SortableLayerItem({
             ref={setNodeRef}
             style={style}
             className={cn(
-                "flex items-center space-x-3 p-2 rounded-xl hover:bg-slate-50 transition-colors group border border-transparent",
+                "flex items-center space-x-2 p-1.5 rounded-xl hover:bg-slate-50 transition-colors group border border-transparent",
                 isDragging && "bg-blue-50/50 border-blue-200 shadow-lg opacity-90"
             )}
         >
             <div
-                className="flex flex-1 items-center space-x-3 cursor-pointer"
+                className="flex flex-1 items-center space-x-2 cursor-pointer min-w-0"
                 onClick={() => onToggle(layer.id, !layer.visible)}
             >
                 <Checkbox
                     id={layer.id}
                     checked={layer.visible}
                     onCheckedChange={(checked) => onToggle(layer.id, !!checked)}
-                    className="h-5 w-5 border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 rounded-md"
+                    className="h-4 w-4 border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 rounded-md shrink-0"
                 />
 
                 {/* Legend Icon */}
                 {layer.color && (
-                    <div className="flex items-center justify-center w-7 h-5 bg-slate-100/50 rounded-md overflow-hidden">
+                    <div className="flex items-center justify-center w-6 h-4 bg-slate-100/50 rounded-md overflow-hidden shrink-0">
                         <div
                             className={cn(
                                 "w-full h-1 rounded-full",
@@ -101,7 +105,8 @@ function SortableLayerItem({
 
                 <Label
                     htmlFor={layer.id}
-                    className="text-[11px] font-bold text-slate-700 group-hover:text-slate-900 cursor-pointer uppercase tracking-tight flex-1"
+                    className="text-[10px] font-bold text-slate-700 group-hover:text-slate-900 cursor-pointer uppercase tracking-tight truncate flex-1"
+                    title={layer.label}
                 >
                     {layer.label}
                 </Label>
@@ -109,9 +114,9 @@ function SortableLayerItem({
             <div
                 {...attributes}
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing p-2 -mr-1 text-slate-400 hover:text-blue-600 transition-colors touch-none"
+                className="cursor-grab active:cursor-grabbing p-1.5 -mr-1 text-slate-300 hover:text-blue-600 transition-colors touch-none shrink-0"
             >
-                <GripVertical className="w-4 h-4" />
+                <GripVertical className="w-3.5 h-3.5" />
             </div>
         </div>
     );
@@ -124,7 +129,17 @@ export function LayerTogglePanel({
     onToggle,
     onReorder,
     onResetOrder,
+    onClearAll,
+    className,
+    isShifted
 }: LayerTogglePanelProps) {
+    const [searchQuery, setSearchQuery] = useState("");
+    const [isMounted, setIsMounted] = useState(false);
+
+    useEffect(() => {
+        setIsMounted(true);
+    }, []);
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -147,65 +162,148 @@ export function LayerTogglePanel({
         }
     }
 
+    const filteredLayers = useMemo(() => {
+        if (!searchQuery) return layers;
+        return layers.filter(layer =>
+            layer.label.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+    }, [layers, searchQuery]);
+
     return (
         <div
             className={cn(
-                "absolute inset-y-0 right-0 z-[60] w-full sm:w-[320px] bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
-                isVisible ? "translate-x-0" : "translate-x-full"
+                "absolute inset-y-0 z-50 w-full sm:w-[320px] bg-white border-l shadow-2xl flex flex-col",
+                "transition-[transform,right] duration-500 ease-in-out",
+                // Visibility handled by transform
+                isVisible ? "translate-x-0" : "translate-x-full",
+                // Positioning: Always slide from the right edge when opening/closing
+                // but shift left when both visible and isShifted
+                (isVisible && isShifted) ? "sm:right-80" : "right-0",
+                className
             )}
         >
-            <div className="p-3 border-b bg-slate-50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-2 bg-blue-600 rounded-lg text-white">
-                        <Layers className="w-5 h-5" />
+            <div className="p-3 border-b bg-slate-50 flex flex-col gap-3 shrink-0">
+                <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-600 rounded-lg text-white">
+                            <Layers className="w-5 h-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-sm font-bold text-slate-900 tracking-tight">LAYER SETTINGS</h2>
+                            <p className="text-[10px] text-slate-500 uppercase font-semibold">Manage map layers</p>
+                        </div>
                     </div>
-                    <div>
-                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">LAYER SETTINGS</h2>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">Manage map layers</p>
-                    </div>
+                    <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-200">
+                        <X className="w-5 h-5" />
+                    </Button>
                 </div>
-                <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-200">
-                    <X className="w-5 h-5" />
-                </Button>
+
+                {/* Layer Search */}
+                <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                        type="text"
+                        placeholder="SEARCH LAYERS..."
+                        className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-[10px] font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                </div>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
                 <div className="space-y-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Visible Layers</h3>
-                        {onResetOrder && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={onResetOrder}
-                                className="h-7 px-2 text-[9px] font-bold text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 rounded-lg gap-2 uppercase tracking-tight transition-all"
-                            >
-                                <RotateCcw className="w-3 h-3" />
-                                Reset Order
-                            </Button>
-                        )}
+                        <div className="flex items-center gap-2">
+                            {onClearAll && layers.some(l => l.id.startsWith("road-")) && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onClearAll}
+                                    className="h-7 px-2 text-[9px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg gap-2 uppercase tracking-tight transition-all"
+                                >
+                                    <Trash2 className="w-3 h-3" />
+                                    Clear All
+                                </Button>
+                            )}
+                            {onResetOrder && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={onResetOrder}
+                                    className="h-7 px-2 text-[9px] font-bold text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 rounded-lg gap-2 uppercase tracking-tight transition-all"
+                                >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Reset Order
+                                </Button>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="space-y-1">
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleDragEnd}
-                            modifiers={[restrictToVerticalAxis]}
-                        >
-                            <SortableContext
-                                items={layers.map(l => l.id)}
-                                strategy={verticalListSortingStrategy}
+                    <div className="space-y-1 pb-10">
+                        {isMounted ? (
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={handleDragEnd}
+                                modifiers={[restrictToVerticalAxis]}
                             >
-                                {layers.map((layer) => (
-                                    <SortableLayerItem
-                                        key={layer.id}
-                                        layer={layer}
-                                        onToggle={onToggle}
+                                <SortableContext
+                                    items={filteredLayers.map((l: LayerItem) => l.id)}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    {filteredLayers.map((layer: LayerItem) => (
+                                        <SortableLayerItem
+                                            key={layer.id}
+                                            layer={layer}
+                                            onToggle={onToggle}
+                                        />
+                                    ))}
+                                </SortableContext>
+                            </DndContext>
+                        ) : (
+                            // Server-side fallback without drag functionality
+                            filteredLayers.map((layer: LayerItem) => (
+                                <div key={layer.id} className="flex items-center space-x-2 p-1.5 rounded-xl hover:bg-slate-50 transition-colors border border-transparent">
+                                    <Checkbox
+                                        id={layer.id}
+                                        checked={layer.visible}
+                                        onCheckedChange={(checked) => onToggle(layer.id, !!checked)}
+                                        className="h-4 w-4 border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 rounded-md shrink-0"
                                     />
-                                ))}
-                            </SortableContext>
-                        </DndContext>
+                                    {layer.color && (
+                                        <div className="flex items-center justify-center w-6 h-4 bg-slate-100/50 rounded-md overflow-hidden shrink-0">
+                                            <div
+                                                className={cn(
+                                                    "w-full h-1 rounded-full",
+                                                    layer.lineDash ? "border-t-[2px] border-dashed bg-transparent" : "bg-current"
+                                                )}
+                                                style={{
+                                                    background: layer.lineDash ? 'transparent' : layer.color,
+                                                    borderColor: layer.color,
+                                                    color: layer.color
+                                                }}
+                                            />
+                                        </div>
+                                    )}
+                                    <Label
+                                        htmlFor={layer.id}
+                                        className="text-[10px] font-bold text-slate-700 cursor-pointer uppercase tracking-tight truncate flex-1"
+                                        title={layer.label}
+                                    >
+                                        {layer.label}
+                                    </Label>
+                                </div>
+                            ))
+                        )}
+
+                        {filteredLayers.length === 0 && (
+                            <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 px-4">
+                                <Search className="w-8 h-8 text-slate-200 mx-auto mb-2" />
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No layers found</p>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
