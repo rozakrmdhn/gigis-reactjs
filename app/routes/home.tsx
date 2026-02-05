@@ -9,6 +9,14 @@ import {
   IconLogin,
   IconActivity
 } from "@tabler/icons-react";
+import type { MetaFunction } from "react-router";
+
+export const meta: MetaFunction = () => {
+  return [
+    { title: "Beranda - GIGI'S Monitoring" },
+    { name: "description", content: "Selamat datang di GIGI'S Monitoring Jalan Poros Desa Bojonegoro" },
+  ];
+};
 
 export default function Home() {
   const { isAuthenticated } = useAuth();

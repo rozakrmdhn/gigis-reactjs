@@ -6,6 +6,14 @@ import { LaporanFilters } from "~/features/laporan/components/LaporanFilters";
 import { LaporanStatsCards } from "~/features/laporan/components/LaporanStatsCards";
 import { LaporanTable } from "~/features/laporan/components/LaporanTable";
 import { laporanService } from "~/features/laporan/services/laporan.service";
+import type { MetaFunction } from "react-router";
+
+export const meta: MetaFunction = () => {
+    return [
+        { title: "Laporan Rekapitulasi - GIGI'S Monitoring" },
+        { name: "description", content: "Ringkasan data pembangunan jalan desa Bojonegoro" },
+    ];
+};
 
 export async function loader() {
     return {};

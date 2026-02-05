@@ -96,3 +96,39 @@
     border-style: solid;
     border-color: rgba(15, 23, 42, 0.9) transparent transparent transparent;
 }
+
+.context-menu-pulse {
+    width: 12px;
+    height: 12px;
+    background: #3b82f6;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(59, 130, 246, 0.8);
+    pointer-events: none;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.context-menu-pulse::after {
+    content: "";
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid #3b82f6;
+    animation: map-pulse 1.5s ease-out infinite;
+    pointer-events: none;
+}
+
+@keyframes map-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.8;
+    }
+    100% {
+        transform: scale(4);
+        opacity: 0;
+    }
+}

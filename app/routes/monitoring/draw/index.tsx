@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, type MutableRefObject } from "react";
 import OLMap from "ol/Map";
+import Feature from "ol/Feature";
 import View from "ol/View";
 import TileLayer from "ol/layer/Tile";
 import OSM from "ol/source/OSM";
@@ -13,11 +14,12 @@ import { defaults as defaultControls } from "ol/control";
 import GeoJSON from "ol/format/GeoJSON";
 import { fromLonLat, toLonLat } from "ol/proj";
 import { createEmpty as createEmptyExtent, extend as extendExtent } from 'ol/extent';
+import { getLength } from 'ol/sphere';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
 import { altKeyOnly } from "ol/events/condition";
 import Overlay from "ol/Overlay";
 import * as turf from "@turf/turf";
-import { LineString, Polygon, MultiPoint } from "ol/geom";
+import { LineString, Polygon, MultiPoint, Point } from "ol/geom";
 import "ol/ol.css";
 import "./map.css";
 
@@ -36,9 +38,17 @@ import {
     Loader2,
     Check,
     X,
-    Layers
+    Layers,
+    Copy
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import {
+    ContextMenu,
+    ContextMenuContent,
+    ContextMenuItem,
+    ContextMenuTrigger,
+    ContextMenuShortcut,
+} from "~/components/ui/context-menu";
 import { toast } from "sonner";
 import { DrawSidebar } from "~/features/monitoring/components/DrawSidebar";
 import { DrawFormPanel } from "~/features/monitoring/components/DrawFormPanel";
@@ -55,6 +65,14 @@ import { LayerTogglePanel } from "~/features/monitoring/components/LayerTogglePa
 import { BasemapToggle } from "~/features/monitoring/components/BasemapToggle";
 import { GeolocationControl } from "~/features/monitoring/components/GeolocationControl";
 import { MonitoringProgressPanel } from "~/features/monitoring/components/MonitoringProgressPanel";
+import type { MetaFunction } from "react-router";
+
+export const meta: MetaFunction = () => {
+    return [
+        { title: "Editor Peta - GIGI'S Monitoring" },
+        { name: "description", content: "Editor Peta Infrastruktur Jalan Poros Desa Bojonegoro" },
+    ];
+};
 
 // Performance Optimization: Reusable static instances and helpers
 const geojsonFormat = new GeoJSON();
@@ -62,13 +80,14 @@ const geojsonFormat = new GeoJSON();
 const BASEMAPS = {
     osm: {
         name: "Standard",
-        source: new OSM(),
+        source: new OSM({ crossOrigin: 'anonymous' }),
     },
     satellite: {
         name: "Satellite",
         source: new XYZ({
             url: 'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
             attributions: '© Google',
+            crossOrigin: 'anonymous'
         })
     },
     hybrid: {
@@ -76,6 +95,7 @@ const BASEMAPS = {
         source: new XYZ({
             url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
             attributions: '© Google',
+            crossOrigin: 'anonymous'
         })
     },
     terrain: {
@@ -83,6 +103,7 @@ const BASEMAPS = {
         source: new XYZ({
             url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}',
             attributions: '© Google',
+            crossOrigin: 'anonymous'
         })
     }
 };
@@ -127,6 +148,8 @@ export default function DrawPage() {
     const nonBaseLayerRef = useRef<VectorLayer | null>(null);
     const wmsLayerRef = useRef<TileLayer<any> | null>(null);
     const searchSourceRef = useRef<VectorSource | null>(null);
+    const pulseOverlayRef = useRef<Overlay | null>(null);
+    const pulseElementRef = useRef<HTMLDivElement | null>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [mode, setMode] = useState<DrawMode>("view");
     const [selectedRoad, setSelectedRoad] = useState<MonitoringJalanResult | null>(null);
@@ -154,6 +177,7 @@ export default function DrawPage() {
         { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
     ]);
     const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
+    const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [lastCopiedCoords, setLastCopiedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isCopied, setIsCopied] = useState(false);
     const [isRoadInfoVisible, setIsRoadInfoVisible] = useState(false);
@@ -217,13 +241,60 @@ export default function DrawPage() {
         // Individual Layers for Stacking
         const ruasUtamaLayer = new VectorLayer({
             source: ruasUtamaSourceRef.current ?? undefined,
-            style: new Style({
-                stroke: new Stroke({
-                    color: "rgba(255, 176, 72, 0.5)", // orange 400 light
-                    width: 8,
-                    lineCap: 'round'
-                })
-            })
+            style: (feature) => {
+                const geometry = feature.getGeometry() as any;
+                const styles = [
+                    new Style({
+                        stroke: new Stroke({
+                            color: "rgba(255, 176, 72, 0.5)", // orange 400 light
+                            width: 8,
+                            lineCap: 'round'
+                        })
+                    })
+                ];
+
+                if (geometry) {
+                    const type = geometry.getType();
+                    if (type === 'LineString' || type === 'MultiLineString') {
+                        const LABEL_ZINDEX = 999; // semakin besar, semakin di atas
+                        // STA Start (0+000)
+                        const startCoord = geometry.getFirstCoordinate();
+                        styles.push(new Style({
+                            zIndex: LABEL_ZINDEX,
+                            geometry: new Point(startCoord),
+                            text: new Text({
+                                text: "STA 0+000",
+                                font: "bold 12px sans-serif",
+                                fill: new Fill({ color: "#000" }),
+                                stroke: new Stroke({ color: "#fff", width: 3 }),
+                                offsetY: -10,
+                                offsetX: 0
+                            })
+                        }));
+
+                        // STA End
+                        const length = getLength(geometry);
+                        const km = Math.floor(length / 1000);
+                        const m = Math.floor(length % 1000);
+                        const endLabel = `STA ${km}+${m.toString().padStart(3, '0')}`;
+
+                        const endCoord = geometry.getLastCoordinate();
+                        styles.push(new Style({
+
+                            geometry: new Point(endCoord),
+                            text: new Text({
+                                text: endLabel,
+                                font: "bold 12px sans-serif",
+                                fill: new Fill({ color: "#000" }),
+                                stroke: new Stroke({ color: "#fff", width: 3 }),
+                                offsetY: -10,
+                                offsetX: 0
+                            })
+                        }));
+                    }
+                }
+                return styles;
+            }
         });
         ruasUtamaLayerRef.current = ruasUtamaLayer;
 
@@ -237,7 +308,7 @@ export default function DrawPage() {
                 else if (kondisi.toLowerCase().includes("sedang")) color = "#3b82f6";
 
                 return new Style({
-                    stroke: new Stroke({ color: color, width: 5, lineJoin: 'round', lineCap: 'round' }),
+                    stroke: new Stroke({ color: color, width: 6, lineJoin: 'round', lineCap: 'round' }),
                     text: new Text({
                         text: (feature.get("tahun_pembangunan") || "").toString(),
                         font: "bold 10px sans-serif",
@@ -428,6 +499,18 @@ export default function DrawPage() {
         map.addOverlay(overlay);
         tooltipRef.current = overlay;
 
+        // Pulse Overlay for Context Menu
+        const pulseEl = document.createElement('div');
+        pulseEl.className = 'context-menu-pulse';
+        pulseElementRef.current = pulseEl;
+        const pulseOverlay = new Overlay({
+            element: pulseEl,
+            positioning: 'center-center',
+            stopEvent: false,
+        });
+        map.addOverlay(pulseOverlay);
+        pulseOverlayRef.current = pulseOverlay;
+
         // Pointer move for coordinate display and cursor style (Throttled for performance)
         const throttledPointerMove = throttle((evt: any) => {
             if (evt.dragging) return;
@@ -466,34 +549,38 @@ export default function DrawPage() {
             });
 
             if (feature && !mode.startsWith("draw-")) {
-                const roadId = feature.get("id") || feature.get("id_jalan") || feature.get("kode_ruas_layer");
+                const roadId = feature.get("id") || feature.get("id_jalan") || feature.get("kode_ruas_layer") || feature.get("kode_ruas");
                 if (roadId) {
                     try {
                         const data = await monitoringService.getMonitoringJalanById(roadId);
                         if (data && data.jalan) {
-                            // Normalize data to match MonitoringJalanResult structure if it's raw GeoJSON
+                            // Normalize data to match MonitoringJalanResult structure
                             let normalizedRoad = data;
-                            if (data.jalan.type === "Feature" || data.jalan.features) {
-                                const properties = data.jalan.type === "Feature"
-                                    ? data.jalan.properties
-                                    : data.jalan.features[0]?.properties;
+                            const resp = data as any;
 
-                                normalizedRoad = {
-                                    jalan: {
-                                        ...properties,
-                                        id: roadId // Ensure ID is preserved
-                                    },
-                                    segmen: data.segmen,
-                                    summary: (data as any).summary || {
-                                        total_panjang_jalan: properties?.panjang || 0,
-                                        fisik: { total: 0 },
-                                        panjang_belum_tertangani: properties?.panjang || 0
-                                    }
-                                } as any;
-                            }
+                            // Robust property extraction (matches handleToggleCheckRoad)
+                            const properties = resp.jalan?.features?.[0]?.properties?.dataValues ||
+                                resp.jalan?.features?.[0]?.properties ||
+                                resp.jalan?.properties ||
+                                resp.features?.[0]?.properties?.dataValues ||
+                                resp.features?.[0]?.properties ||
+                                {};
+
+                            normalizedRoad = {
+                                jalan: {
+                                    ...properties,
+                                    id: roadId
+                                },
+                                segmen: data.segmen,
+                                summary: (data as any).summary || {
+                                    total_panjang_jalan: properties?.panjang || 0,
+                                    fisik: { total: 0 },
+                                    panjang_belum_tertangani: properties?.panjang || 0
+                                }
+                            } as any;
 
                             handleSelectRoadOnMobile(normalizedRoad as any);
-                            return; // Stop here if we selected a road
+                            return;
                         } else {
                             toast.error("Data jalan tidak ditemukan di sistem");
                         }
@@ -501,49 +588,56 @@ export default function DrawPage() {
                         console.error("Error clicking road feature:", error);
                     }
                 }
+            } else if (!mode.startsWith("draw-")) {
+                // Clear selection if clicking on empty space
+                setSelectedRoad(null);
+                setIsRoadInfoVisible(false);
+                setSegmentPanelVisible(false);
             }
 
-            // Priority 2: Default click behavior (copy coordinates)
-            const coordinate = toLonLat(evt.coordinate);
-            const lng = coordinate[0];
-            const lat = coordinate[1];
-            const textToCopy = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
+            // Priority 2: Default click behavior (copy coordinates) - ONLY ON MOBILE
+            if (isMobile) {
+                const coordinate = toLonLat(evt.coordinate);
+                const lng = coordinate[0];
+                const lat = coordinate[1];
+                const textToCopy = `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
 
-            // Update both display and last copied state on click
-            setCursorCoords({ lat, lng });
-            setLastCopiedCoords({ lat, lng });
+                // Update both display and last copied state on click
+                setCursorCoords({ lat, lng });
+                setLastCopiedCoords({ lat, lng });
 
-            const performCopy = async () => {
-                let success = false;
-                try {
-                    if (navigator.clipboard) {
-                        await navigator.clipboard.writeText(textToCopy);
-                        success = true;
-                    } else {
-                        throw new Error('Clipboard API unavailable');
-                    }
-                } catch (err) {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = textToCopy;
-                    textArea.style.position = "fixed";
-                    textArea.style.opacity = "0";
-                    document.body.appendChild(textArea);
-                    textArea.select();
+                const performCopy = async () => {
+                    let success = false;
                     try {
-                        success = document.execCommand('copy');
-                    } catch (copyErr) {
-                        console.error('Fallback copy failed:', copyErr);
+                        if (navigator.clipboard) {
+                            await navigator.clipboard.writeText(textToCopy);
+                            success = true;
+                        } else {
+                            throw new Error('Clipboard API unavailable');
+                        }
+                    } catch (err) {
+                        const textArea = document.createElement("textarea");
+                        textArea.value = textToCopy;
+                        textArea.style.position = "fixed";
+                        textArea.style.opacity = "0";
+                        document.body.appendChild(textArea);
+                        textArea.select();
+                        try {
+                            success = document.execCommand('copy');
+                        } catch (copyErr) {
+                            console.error('Fallback copy failed:', copyErr);
+                        }
+                        document.body.removeChild(textArea);
                     }
-                    document.body.removeChild(textArea);
-                }
 
-                if (success) {
-                    setIsCopied(true);
-                    setTimeout(() => setIsCopied(false), 2000);
-                }
-            };
+                    if (success) {
+                        setIsCopied(true);
+                        setTimeout(() => setIsCopied(false), 2000);
+                    }
+                };
 
-            performCopy();
+                performCopy();
+            }
         });
 
         return () => {
@@ -669,8 +763,6 @@ export default function DrawPage() {
                 type = "Circle";
                 geometryFunction = createBox();
             }
-
-
 
             const drawStyle = (feature: any) => {
                 const geometry = feature.getGeometry();
@@ -930,7 +1022,7 @@ export default function DrawPage() {
 
             if (hasAnyFeatures) {
                 mapRef.current?.getView().fit(combinedExtent, {
-                    padding: [150, 150, 150, 150],
+                    padding: [50, 50, 50, 50],
                     duration: 1000
                 });
             } else {
@@ -1088,6 +1180,85 @@ export default function DrawPage() {
             }
         }
     };
+
+    const handleCopyCoordinatesFromMenu = useCallback(() => {
+        if (contextMenuCoords) {
+            const text = `${contextMenuCoords.lat.toFixed(6)}, ${contextMenuCoords.lng.toFixed(6)}`;
+            navigator.clipboard.writeText(text);
+            setLastCopiedCoords(contextMenuCoords);
+            setIsCopied(true);
+            setTimeout(() => setIsCopied(false), 2000);
+            toast.success(`Copied: ${text}`);
+        }
+    }, [contextMenuCoords]);
+
+    const handleExportMapImage = useCallback(async (action: 'save' | 'copy') => {
+        if (!mapRef.current) return;
+
+        toast.info("Preparing image export...");
+
+        mapRef.current.once('rendercomplete', async () => {
+            try {
+                const mapCanvas = document.createElement('canvas');
+                const size = mapRef.current!.getSize()!;
+                mapCanvas.width = size[0];
+                mapCanvas.height = size[1];
+                const mapContext = mapCanvas.getContext('2d')!;
+
+                const canvasElements = document.querySelectorAll('.ol-layer canvas');
+
+                canvasElements.forEach((canvasItem: any) => {
+                    if (canvasItem.width > 0) {
+                        const opacity = canvasItem.parentNode.style.opacity;
+                        mapContext.globalAlpha = opacity === "" ? 1 : Number(opacity);
+                        const transform = canvasItem.style.transform;
+                        // Get transformation matrix from the style of the canvas
+                        const matrix = transform
+                            .match(/^matrix\(([^\(]*)\)$/)?.[1]
+                            .split(',')
+                            .map(Number);
+
+                        if (matrix) {
+                            mapContext.setTransform(matrix[0], matrix[1], matrix[2], matrix[3], matrix[4], matrix[5]);
+                        } else {
+                            mapContext.setTransform(1, 0, 0, 1, 0, 0);
+                        }
+                        mapContext.drawImage(canvasItem, 0, 0);
+                    }
+                });
+
+                // Reset transform
+                mapContext.setTransform(1, 0, 0, 1, 0, 0);
+
+                if (action === 'save') {
+                    const link = document.createElement('a');
+                    link.download = `map_export_${new Date().getTime()}.png`;
+                    link.href = mapCanvas.toDataURL();
+                    link.click();
+                    toast.success("Image saved successfully");
+                } else if (action === 'copy') {
+                    mapCanvas.toBlob(async (blob) => {
+                        if (blob) {
+                            try {
+                                await navigator.clipboard.write([
+                                    new ClipboardItem({ 'image/png': blob })
+                                ]);
+                                toast.success("Image copied to clipboard");
+                            } catch (err) {
+                                console.error(err);
+                                toast.error("Failed to copy image. Your browser may not support clipboard image writing.");
+                            }
+                        }
+                    }, 'image/png');
+                }
+            } catch (error) {
+                console.error("Export error:", error);
+                toast.error("Gagal mengekspor gambar. Pastikan semua layer dapat diakses (CORS).");
+            }
+        });
+
+        mapRef.current.renderSync();
+    }, []);
 
     const handleExport = () => {
         if (!sourceRef.current) return;
@@ -1328,11 +1499,12 @@ export default function DrawPage() {
             try {
                 const response = await monitoringService.getMonitoringJalanById(id);
                 if (response) {
+                    const resp = response as any;
                     // Extract road data from GeoJSON for label
                     const jalanData = response.jalan?.features?.[0]?.properties?.dataValues ||
                         response.jalan?.features?.[0]?.properties ||
-                        response.features?.[0]?.properties?.dataValues ||
-                        response.features?.[0]?.properties ||
+                        resp.features?.[0]?.properties?.dataValues ||
+                        resp.features?.[0]?.properties ||
                         {};
 
                     const kodeRuas = jalanData.kode_ruas || id;
@@ -1426,7 +1598,7 @@ export default function DrawPage() {
         if (road) {
             setIsRoadInfoVisible(true);
             setSegmentPanelVisible(true);
-            setIsSegmentPanelOpen(true);
+            setIsSegmentPanelOpen(!isMobile);
         }
         if (isMobile && road) {
             setIsSidebarOpen(false);
@@ -1458,7 +1630,54 @@ export default function DrawPage() {
 
                 <div className="flex-1 flex flex-col relative">
                     <div className="relative flex-1 overflow-hidden">
-                        <div ref={mapElement} className="absolute inset-0" />
+                        <ContextMenu onOpenChange={(open) => {
+                            if (!open && pulseOverlayRef.current) {
+                                pulseOverlayRef.current.setPosition(undefined);
+                            }
+                        }}>
+                            <ContextMenuTrigger
+                                className="absolute inset-0"
+                                onContextMenu={(e) => {
+                                    if (mapRef.current) {
+                                        const pixel = mapRef.current.getEventPixel(e.nativeEvent);
+                                        const coordinate = mapRef.current.getCoordinateFromPixel(pixel);
+                                        const lonLat = toLonLat(coordinate);
+                                        setContextMenuCoords({ lat: lonLat[1], lng: lonLat[0] });
+
+                                        // Set pulse marker position
+                                        if (pulseOverlayRef.current) {
+                                            pulseOverlayRef.current.setPosition(coordinate);
+                                        }
+                                    }
+                                }}
+                            >
+                                <div ref={mapElement} className="w-full h-full" />
+                            </ContextMenuTrigger>
+                            <ContextMenuContent className="w-48 bg-white/95 backdrop-blur-md border border-slate-200 shadow-2xl rounded-xl p-1">
+                                <ContextMenuItem
+                                    onClick={handleCopyCoordinatesFromMenu}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg cursor-pointer transition-colors"
+                                >
+                                    <Copy className="h-4 w-4 text-blue-500" />
+                                    <span className="tracking-tight">Salin Koordinat</span>
+                                    <ContextMenuShortcut className="text-[10px] opacity-50 uppercase font-black ml-auto">⌘C</ContextMenuShortcut>
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onClick={() => handleExportMapImage('save')}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg cursor-pointer transition-colors"
+                                >
+                                    <Download className="h-4 w-4 text-emerald-500" />
+                                    <span className="tracking-tight">Save as Image</span>
+                                </ContextMenuItem>
+                                <ContextMenuItem
+                                    onClick={() => handleExportMapImage('copy')}
+                                    className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg cursor-pointer transition-colors"
+                                >
+                                    <Copy className="h-4 w-4 text-amber-500" />
+                                    <span className="tracking-tight">Copy as Image</span>
+                                </ContextMenuItem>
+                            </ContextMenuContent>
+                        </ContextMenu>
 
                         <GeolocationControl
                             map={mapRef.current}
@@ -1555,7 +1774,7 @@ export default function DrawPage() {
                             </div>
                         )}
 
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none">
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none transition-all duration-500">
                             {selectedRoad && isRoadInfoVisible && (
                                 <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-blue-100 shadow-xl max-w-xs animate-in slide-in-from-bottom-full duration-500 pointer-events-auto relative">
                                     <button
@@ -1565,7 +1784,7 @@ export default function DrawPage() {
                                         <X className="w-3 h-3 text-slate-400" />
                                     </button>
                                     <p className="text-[10px] uppercase font-bold text-blue-500 mb-1">Ruas Terpilih</p>
-                                    <h4 className="text-sm font-bold text-slate-800 mb-2 truncate">{selectedRoad.jalan.nama_ruas}</h4>
+                                    <h4 className="text-sm font-bold text-slate-800 mb-2 truncate">{selectedRoad.jalan.nama_ruas || 'Nama tidak tersedia'}</h4>
                                     <div className="flex gap-4">
                                         <div>
                                             <p className="text-[9px] text-slate-400 font-bold uppercase">Panjang</p>
@@ -1610,10 +1829,6 @@ export default function DrawPage() {
                                 }
                             }}
                         >
-                            {/* LABEL */}
-                            {!isMobile && (
-                                <span className="opacity-70">Lat Long :</span>
-                            )}
 
                             {/* CONTENT */}
                             {isMobile ? (
@@ -1628,12 +1843,11 @@ export default function DrawPage() {
                                 )
                             ) : (
                                 // ===== DESKTOP =====
-                                cursorCoords ? (
-                                    <div className="flex items-center gap-1.5">
-                                        <code className="bg-blue-700/50 px-1.5 py-0.5 rounded font-mono">
-                                            {cursorCoords.lat.toFixed(6)}, {cursorCoords.lng.toFixed(6)}
+                                lastCopiedCoords ? (
+                                    <div className="flex items-center gap-1.5 animate-in fade-in duration-300">
+                                        <code className="bg-blue-700/50 px-1.5 py-0.5 rounded font-mono text-[10px]">
+                                            {lastCopiedCoords.lat.toFixed(6)}, {lastCopiedCoords.lng.toFixed(6)}
                                         </code>
-
                                         {isCopied && (
                                             <div className="flex items-center gap-1 text-emerald-300 animate-in zoom-in-50 duration-200">
                                                 <Check className="w-3.5 h-3.5 stroke-3" />
@@ -1641,9 +1855,7 @@ export default function DrawPage() {
                                             </div>
                                         )}
                                     </div>
-                                ) : (
-                                    <span className="opacity-50">Gerakkan Mouse...</span>
-                                )
+                                ) : null
                             )}
 
                         </div>

@@ -15,6 +15,13 @@ import { AuthProvider } from "./contexts/auth-context";
 import { Toaster } from "./components/ui/sonner";
 import { SessionExpiredAlert } from "./features/auth/components/SessionExpiredAlert";
 
+export const meta: Route.MetaFunction = () => {
+  return [
+    { title: "GIGI'S - Monitoring Jalan Poros" },
+    { name: "description", content: "Sistem Informasi Geografis & Infrastruktur - Monitoring Jalan Poros Desa Bojonegoro" },
+  ];
+};
+
 export function HydrateFallback() {
   return null;
 }

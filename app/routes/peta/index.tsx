@@ -5,8 +5,8 @@ import type { Route } from "./+types/index";
 
 export function meta({ }: Route.MetaArgs) {
     return [
-        { title: "Peta / Map" },
-        { name: "description", content: "Peta Location" },
+        { title: "Visualisasi Peta - GIGI'S Monitoring" },
+        { name: "description", content: "Peta Lokasi Infrastruktur Jalan Poros Desa Bojonegoro" },
     ];
 }
 

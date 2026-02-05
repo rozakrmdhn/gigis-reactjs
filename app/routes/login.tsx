@@ -10,6 +10,14 @@ import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { IconLock, IconMail } from '@tabler/icons-react';
 import { authService } from '../services/auth.service';
+import type { MetaFunction } from 'react-router';
+
+export const meta: MetaFunction = () => {
+    return [
+        { title: 'Login - GIGI\'S Monitoring' },
+        { name: 'description', content: 'Masuk ke sistem GIGI\'S Monitoring Jalan Poros Desa Bojonegoro' },
+    ];
+};
 
 const loginSchema = z.object({
     email: z.string().email('Email tidak valid'),

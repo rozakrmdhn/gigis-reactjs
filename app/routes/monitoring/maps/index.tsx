@@ -1,5 +1,13 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLoaderData, useSearchParams, useNavigation, useRevalidator, type LoaderFunctionArgs } from "react-router";
+import type { MetaFunction } from "react-router";
+
+export const meta: MetaFunction = () => {
+    return [
+        { title: "Peta Monitoring - GIGI'S Monitoring" },
+        { name: "description", content: "Peta Monitoring Infrastruktur Jalan Poros Desa Bojonegoro" },
+    ];
+};
 import { History, Search, X, RotateCw } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';

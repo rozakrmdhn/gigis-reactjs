@@ -23,6 +23,14 @@ import {
     PaginationNext,
     PaginationPrevious,
 } from "~/components/ui/pagination";
+import type { MetaFunction } from "react-router";
+
+export const meta: MetaFunction = () => {
+    return [
+        { title: "Data Monitoring - GIGI'S Monitoring" },
+        { name: "description", content: "Daftar monitoring ruas jalan poros desa Bojonegoro" },
+    ];
+};
 
 export async function loader({ request }: LoaderFunctionArgs) {
     const url = new URL(request.url);
