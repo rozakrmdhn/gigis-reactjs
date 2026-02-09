@@ -511,7 +511,7 @@ export default function DrawPage() {
         map.addOverlay(pulseOverlay);
         pulseOverlayRef.current = pulseOverlay;
 
-        // Pointer move for coordinate display and cursor style (Throttled for performance)
+        // Pointer move for coordinate display (Throttled for performance)
         const throttledPointerMove = throttle((evt: any) => {
             if (evt.dragging) return;
 
@@ -520,82 +520,14 @@ export default function DrawPage() {
                 lng: coordinate[0],
                 lat: coordinate[1]
             });
-
-            // Update cursor style if hovering over clickable road features
-            if (mapRef.current && !mode.startsWith("draw-")) {
-                const pixel = mapRef.current.getEventPixel(evt.originalEvent);
-                const hit = mapRef.current.hasFeatureAtPixel(pixel, {
-                    layerFilter: (layer) =>
-                        layer === ruasUtamaLayerRef.current ||
-                        layer === segmenDesaLayerRef.current ||
-                        layer === existingLayerRef.current
-                });
-
-                mapRef.current.getTargetElement().style.cursor = hit ? 'pointer' : '';
-            }
         }, 50);
 
         map.on('pointermove', throttledPointerMove);
 
-        // Click to copy coordinates OR select road
+
+        // Click to copy coordinates (mobile only)
         map.on('click', async (evt) => {
-            // Priority 1: Check if we clicked on a road feature
-            const pixel = map.getEventPixel(evt.originalEvent);
-            const feature = map.forEachFeatureAtPixel(pixel, (f) => f, {
-                layerFilter: (layer) =>
-                    layer === ruasUtamaLayerRef.current ||
-                    layer === segmenDesaLayerRef.current ||
-                    layer === existingLayerRef.current
-            });
-
-            if (feature && !mode.startsWith("draw-")) {
-                const roadId = feature.get("id") || feature.get("id_jalan") || feature.get("kode_ruas_layer") || feature.get("kode_ruas");
-                if (roadId) {
-                    try {
-                        const data = await monitoringService.getMonitoringJalanById(roadId);
-                        if (data && data.jalan) {
-                            // Normalize data to match MonitoringJalanResult structure
-                            let normalizedRoad = data;
-                            const resp = data as any;
-
-                            // Robust property extraction (matches handleToggleCheckRoad)
-                            const properties = resp.jalan?.features?.[0]?.properties?.dataValues ||
-                                resp.jalan?.features?.[0]?.properties ||
-                                resp.jalan?.properties ||
-                                resp.features?.[0]?.properties?.dataValues ||
-                                resp.features?.[0]?.properties ||
-                                {};
-
-                            normalizedRoad = {
-                                jalan: {
-                                    ...properties,
-                                    id: roadId
-                                },
-                                segmen: data.segmen,
-                                summary: (data as any).summary || {
-                                    total_panjang_jalan: properties?.panjang || 0,
-                                    fisik: { total: 0 },
-                                    panjang_belum_tertangani: properties?.panjang || 0
-                                }
-                            } as any;
-
-                            handleSelectRoadOnMobile(normalizedRoad as any);
-                            return;
-                        } else {
-                            toast.error("Data jalan tidak ditemukan di sistem");
-                        }
-                    } catch (error) {
-                        console.error("Error clicking road feature:", error);
-                    }
-                }
-            } else if (!mode.startsWith("draw-")) {
-                // Clear selection if clicking on empty space
-                setSelectedRoad(null);
-                setIsRoadInfoVisible(false);
-                setSegmentPanelVisible(false);
-            }
-
-            // Priority 2: Default click behavior (copy coordinates) - ONLY ON MOBILE
+            // Copy coordinates on mobile
             if (isMobile) {
                 const coordinate = toLonLat(evt.coordinate);
                 const lng = coordinate[0];
@@ -1010,23 +942,28 @@ export default function DrawPage() {
             }
 
             // 3. ZOOM TO BOUNDING BOX (Combined extent of all sources)
-            const combinedExtent = createEmptyExtent();
-            let hasAnyFeatures = false;
+            // Skip zoom if in draw or edit mode to avoid interrupting user workflow
+            const isDrawOrEditMode = mode.startsWith("draw-") || mode === "edit";
 
-            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
-                if (sourceRef.current && sourceRef.current.getFeatures().length > 0) {
-                    extendExtent(combinedExtent, sourceRef.current.getExtent());
-                    hasAnyFeatures = true;
-                }
-            });
+            if (!isDrawOrEditMode) {
+                const combinedExtent = createEmptyExtent();
+                let hasAnyFeatures = false;
 
-            if (hasAnyFeatures) {
-                mapRef.current?.getView().fit(combinedExtent, {
-                    padding: [50, 50, 50, 50],
-                    duration: 1000
+                [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+                    if (sourceRef.current && sourceRef.current.getFeatures().length > 0) {
+                        extendExtent(combinedExtent, sourceRef.current.getExtent());
+                        hasAnyFeatures = true;
+                    }
                 });
-            } else {
-                toast.info("Belum ada data visual untuk jalan ini");
+
+                if (hasAnyFeatures) {
+                    mapRef.current?.getView().fit(combinedExtent, {
+                        padding: [50, 50, 50, 50],
+                        duration: 1000
+                    });
+                } else {
+                    toast.info("Belum ada data visual untuk jalan ini");
+                }
             }
 
         } catch (error) {
@@ -1067,6 +1004,10 @@ export default function DrawPage() {
         }
 
         if (!selectedRoad) return;
+
+        // Skip segment data refresh during draw or edit mode to prevent unwanted fetching
+        const isDrawOrEditMode = mode.startsWith("draw-") || mode === "edit";
+        if (isDrawOrEditMode) return;
 
         // Add Road Categories to layer toggle if they're not already there
         setVisibleLayers(prev => {
