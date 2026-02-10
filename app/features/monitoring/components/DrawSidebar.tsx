@@ -287,7 +287,7 @@ export function DrawSidebar({
                                 )} />
                                 <Input
                                     placeholder="Cari ruas jalan..."
-                                    className="pl-8 h-9 text-xs bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg pr-8"
+                                    className="pl-8 h-9 text-base md:text-xs bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg pr-8"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
@@ -332,7 +332,7 @@ export function DrawSidebar({
                                         </div>
                                         <Textarea
                                             placeholder="Contoh: -7.22, 111.83 (enter) -7.23, 111.84"
-                                            className="pl-10 h-32 text-xs bg-white border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl shadow-sm resize-none py-3 overflow-y-auto"
+                                            className="pl-10 h-32 text-base md:text-xs bg-white border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl shadow-sm resize-none py-3 overflow-y-auto"
                                             value={coordSearch}
                                             onChange={(e) => setCoordSearch(e.target.value)}
                                         />

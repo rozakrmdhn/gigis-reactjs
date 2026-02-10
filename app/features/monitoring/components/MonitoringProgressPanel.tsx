@@ -165,7 +165,7 @@ export function MonitoringProgressPanel({
                                     <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                                     <Input
                                         type="date"
-                                        className="h-9 text-xs pl-8"
+                                        className="h-9 text-base md:text-xs pl-8"
                                         value={formData.tanggal}
                                         onChange={e => setFormData({ ...formData, tanggal: e.target.value })}
                                         required
@@ -180,7 +180,7 @@ export function MonitoringProgressPanel({
                                         type="number"
                                         min="0"
                                         max="100"
-                                        className="h-9 text-xs pl-8"
+                                        className="h-9 text-base md:text-xs pl-8"
                                         placeholder="0-100"
                                         value={formData.progres}
                                         onChange={e => setFormData({ ...formData, progres: parseInt(e.target.value) || 0 })}
@@ -194,7 +194,7 @@ export function MonitoringProgressPanel({
                             <div className="relative">
                                 <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                                 <Textarea
-                                    className="text-xs pl-8 min-h-[80px] pt-2"
+                                    className="text-base md:text-xs pl-8 min-h-[80px] pt-2"
                                     placeholder="Catatan progres..."
                                     value={formData.catatan}
                                     onChange={e => setFormData({ ...formData, catatan: e.target.value })}

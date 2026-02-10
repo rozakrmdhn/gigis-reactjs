@@ -277,7 +277,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                             <Input
                                 value={formData.nama_jalan}
                                 onChange={e => setFormData({ ...formData, nama_jalan: e.target.value })}
-                                className="h-8 text-xs font-bold"
+                                className="h-8 text-base md:text-xs font-bold"
                             />
                         </div>
                     </div>
