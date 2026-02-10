@@ -137,10 +137,12 @@ export default function DrawPage() {
     const ruasUtamaSourceRef = useRef<VectorSource | null>(null);
     const segmenDesaSourceRef = useRef<VectorSource | null>(null);
     const jalanKabupatenSourceRef = useRef<VectorSource | null>(null);
+    const desaSourceRef = useRef<VectorSource | null>(null);
 
     const ruasUtamaLayerRef = useRef<VectorLayer | null>(null);
     const segmenDesaLayerRef = useRef<VectorLayer | null>(null);
     const jalanKabupatenLayerRef = useRef<VectorLayer | null>(null);
+    const desaLayerRef = useRef<VectorLayer | null>(null);
     const existingLayerRef = useRef<VectorLayer | null>(null); // Deprecated, but keep for now if needed for other refs
     const vectorLayerRef = useRef<VectorLayer | null>(null);
 
@@ -175,6 +177,7 @@ export default function DrawPage() {
         { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
         { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
         { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
+        { id: "boundary-village", label: "Batas Desa", visible: true, color: "#7c3aed", lineDash: [4, 8] },
     ]);
     const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -336,6 +339,24 @@ export default function DrawPage() {
         });
         jalanKabupatenLayerRef.current = jalanKabupatenLayer;
 
+        const desaSource = new VectorSource();
+        desaSourceRef.current = desaSource;
+        const desaLayer = new VectorLayer({
+            source: desaSource,
+            style: new Style({
+                stroke: new Stroke({
+                    color: "rgba(124, 58, 237, 0.8)", // Violet 600
+                    width: 2,
+                    lineDash: [4, 8],
+                }),
+                fill: new Fill({
+                    color: "rgba(124, 58, 237, 0.05)",
+                }),
+            }),
+            zIndex: 5,
+        });
+        desaLayerRef.current = desaLayer;
+
         const existingLayer = new VectorLayer({
             source: existingSourceRef.current ?? undefined,
             style: (feature) => {
@@ -465,6 +486,7 @@ export default function DrawPage() {
             layers: [
                 tileLayer,
                 wmsLayer,
+                desaLayer,
                 existingLayer,
                 ruasUtamaLayer,
                 segmenDesaLayer,
@@ -668,6 +690,59 @@ export default function DrawPage() {
                 source: sourceRef.current ?? undefined,
                 deleteCondition: altKeyOnly
             });
+
+            modify.on('modifystart', (event) => {
+                const feature = event.features.item(0);
+                if (!feature) return;
+
+                const tooltipEl = tooltipElementRef.current;
+                const throttledModifyUpdate = throttle((geom: any) => {
+                    if (!(geom instanceof LineString)) return;
+
+                    let distance = 0;
+                    let isValid = true;
+
+                    try {
+                        distance = getLength(geom);
+                        if (geom.getCoordinates().length > 3) {
+                            const gj = geojsonFormat.writeGeometryObject(geom, {
+                                dataProjection: 'EPSG:4326',
+                                featureProjection: 'EPSG:3857'
+                            }) as any;
+                            const kinks = turf.kinks(turf.lineString(gj.coordinates));
+                            isValid = kinks.features.length === 0;
+                        }
+                    } catch (e) { }
+
+                    const lastCoord = geom.getLastCoordinate();
+                    if (tooltipEl && lastCoord) {
+                        tooltipEl.innerText = !isValid ? "⚠ Jalur Berpotongan" : `${distance.toFixed(1)} m`;
+                        tooltipEl.style.background = isValid ? 'rgba(15, 23, 42, 0.9)' : '#e11d48';
+                        tooltipRef.current?.setPosition(lastCoord);
+                        tooltipEl.style.display = 'block';
+                    }
+                }, 50);
+
+                feature.getGeometry()?.on('change', (evt: any) => {
+                    throttledModifyUpdate(evt.target);
+                });
+            });
+
+            modify.on('modifyend', (event) => {
+                const feature = event.features.item(0);
+                if (feature) {
+                    const geometry = feature.getGeometry();
+                    if (geometry instanceof LineString) {
+                        setDrawnLength(getLength(geometry));
+                        const json = geojsonFormat.writeFeature(feature, {
+                            dataProjection: "EPSG:4326",
+                            featureProjection: "EPSG:3857",
+                        });
+                        setDrawnGeoJSON(json);
+                    }
+                }
+                if (tooltipElementRef.current) tooltipElementRef.current.style.display = 'none';
+            });
             const snap = new Snap({ source: sourceRef.current ?? undefined });
             const snapExisting = new Snap({ source: existingSourceRef.current ?? undefined });
             const snapNonBase = new Snap({ source: nonBaseSourceRef.current ?? undefined });
@@ -704,20 +779,8 @@ export default function DrawPage() {
                 let dash = isLingkungan ? [6, 6] : undefined;
 
                 if (type === 'LineString') {
-                    const coords = geometry.getCoordinates();
-                    if (coords.length > 2) {
-                        try {
-                            const gj = geojsonFormat.writeGeometryObject(geometry, {
-                                dataProjection: 'EPSG:4326',
-                                featureProjection: 'EPSG:3857'
-                            }) as any;
-                            const kinks = turf.kinks(turf.lineString(gj.coordinates));
-                            if (kinks.features.length > 0) {
-                                color = "#FB7185";
-                                dash = [6, 6];
-                            }
-                        } catch (e) { }
-                    }
+                    // Optimized: Removed turf.kinks from style function to prevent lag on every move.
+                    // Visual state (color) is now handled primarily by the base street color.
                 }
 
                 return [
@@ -780,14 +843,18 @@ export default function DrawPage() {
                     let isValid = true;
 
                     try {
-                        const gj = geojsonFormat.writeGeometryObject(geom, {
-                            dataProjection: 'EPSG:4326',
-                            featureProjection: 'EPSG:3857'
-                        }) as any;
-                        distance = turf.length(turf.lineString(gj.coordinates), { units: 'meters' });
-                        setDrawnLength(distance);
-                        const kinks = turf.kinks(turf.lineString(gj.coordinates));
-                        isValid = kinks.features.length === 0;
+                        // FAST: Use native OpenLayers distance calculation
+                        distance = getLength(geom);
+
+                        // Only check self-intersection if there are enough points
+                        if (geom.getCoordinates().length > 3) {
+                            const gj = geojsonFormat.writeGeometryObject(geom, {
+                                dataProjection: 'EPSG:4326',
+                                featureProjection: 'EPSG:3857'
+                            }) as any;
+                            const kinks = turf.kinks(turf.lineString(gj.coordinates));
+                            isValid = kinks.features.length === 0;
+                        }
                     } catch (e) { }
 
                     const lastCoord = geom.getLastCoordinate();
@@ -797,7 +864,7 @@ export default function DrawPage() {
                         tooltipRef.current?.setPosition(lastCoord);
                         tooltipEl.style.display = 'block';
                     }
-                }, 100);
+                }, 50); // Improved responsiveness with faster logic
 
                 sketch.getGeometry()?.on('change', (evt: any) => {
                     throttledDrawUpdate(evt.target);
@@ -810,14 +877,16 @@ export default function DrawPage() {
                 // Final length calculation on draw end
                 const geometry = feature.getGeometry();
                 if (geometry instanceof LineString) {
-                    const format = new GeoJSON();
                     try {
-                        const gj = format.writeGeometryObject(geometry, {
-                            dataProjection: 'EPSG:4326',
-                            featureProjection: 'EPSG:3857'
-                        }) as any;
-                        const finalDistance = turf.length(turf.lineString(gj.coordinates), { units: 'meters' });
+                        const finalDistance = getLength(geometry);
                         setDrawnLength(finalDistance);
+
+                        // ZOOM TO EXTENT of the newly drawn segment
+                        const extent = geometry.getExtent();
+                        mapRef.current?.getView().fit(extent, {
+                            padding: [100, 100, 100, 100],
+                            duration: 1000
+                        });
                     } catch (e) { }
                 }
 
@@ -838,21 +907,30 @@ export default function DrawPage() {
     const refreshSegmentData = async (roadId: string) => {
         setIsFetchingDetail(true);
         try {
-            const [segmentsResponse, backgroundResponse, nonBaseResponse] = await Promise.all([
-                monitoringService.getSegmenByKodeRuas(roadId),
+            const [segmentsResponse, backgroundResponse, nonBaseResponse, desaResponse] = await Promise.all([
+                monitoringService.getSegmenByJalanId(roadId),
                 monitoringService.getMonitoringJalanById(roadId),
-                monitoringService.getNonBaseSegments(selectedRoad?.jalan.id_desa || "")
+                monitoringService.getNonBaseSegments(selectedRoad?.jalan.id_desa || ""),
+                monitoringService.getDesaById(selectedRoad?.jalan.id_desa || "")
             ]);
 
             if (!existingSourceRef.current) return;
 
-            // Selective clear: remove features that are NOT checked and NOT the current roadId
-            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+            // Selective clear: remove features that are NOT checked, OR are the current roadId (to refresh them)
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, nonBaseSourceRef, desaSourceRef].forEach(sourceRef => {
                 const source = sourceRef.current;
                 if (source) {
                     const featuresToRemove = source.getFeatures().filter(f => {
                         const kId = f.get("kode_ruas_layer");
-                        return !kId || (!checkedRoadIds.includes(kId) && kId !== roadId);
+                        const isVillageLayer = sourceRef === desaSourceRef;
+                        // For village layer: Always clear the current one to refresh
+                        if (isVillageLayer) return true;
+
+                        // Remove if: 
+                        // 1. No road ID attached (temporary/stale)
+                        // 2. It IS the current road (we will re-add fresh data)
+                        // 3. It's NOT in the checked list
+                        return !kId || kId === roadId || !checkedRoadIds.includes(kId);
                     });
                     featuresToRemove.forEach(f => source.removeFeature(f));
                 }
@@ -928,8 +1006,21 @@ export default function DrawPage() {
                     if (id) f.setId(id);
                     f.set("is_lingkungan_segment", true);
                 });
-                // panelFeatures.push(...filteredNonBase); // REMOVED: Don't show in panel
+                panelFeatures.push(...filteredNonBase);
                 nonBaseSourceRef.current?.addFeatures(filteredNonBase);
+            }
+
+            // 3. Prepare VILLAGE BOUNDARY (from getDesaById)
+            if (desaResponse.status === "success" && desaResponse.result) {
+                const villageFeatures = format.readFeatures(desaResponse.result, {
+                    dataProjection: "EPSG:4326",
+                    featureProjection: "EPSG:3857",
+                });
+                villageFeatures.forEach(f => {
+                    f.set("is_village_boundary", true);
+                    f.set("hidden_from_panel", true);
+                });
+                desaSourceRef.current?.addFeatures(villageFeatures);
             }
 
             // Set features for panel display
@@ -941,15 +1032,16 @@ export default function DrawPage() {
                 setIsSegmentPanelOpen(true);
             }
 
-            // 3. ZOOM TO BOUNDING BOX (Combined extent of all sources)
+            // 4. ZOOM TO BOUNDING BOX (Combined extent of all sources)
             // Skip zoom if in draw or edit mode to avoid interrupting user workflow
+            // OR if isPanelVisible is true (to avoid overriding the zoom from drawend)
             const isDrawOrEditMode = mode.startsWith("draw-") || mode === "edit";
 
-            if (!isDrawOrEditMode) {
+            if (!isDrawOrEditMode && !isPanelVisible) {
                 const combinedExtent = createEmptyExtent();
                 let hasAnyFeatures = false;
 
-                [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+                [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, desaSourceRef].forEach(sourceRef => {
                     if (sourceRef.current && sourceRef.current.getFeatures().length > 0) {
                         extendExtent(combinedExtent, sourceRef.current.getExtent());
                         hasAnyFeatures = true;
@@ -1059,7 +1151,8 @@ export default function DrawPage() {
             "wms-bojonegoro": wmsLayerRef,
             "ruas-utama": ruasUtamaLayerRef,
             "segmen-desa": segmenDesaLayerRef,
-            "jalan-kabupaten": jalanKabupatenLayerRef
+            "jalan-kabupaten": jalanKabupatenLayerRef,
+            "boundary-village": desaLayerRef
         };
 
         visibleLayers.forEach((layerItem) => {
@@ -1077,7 +1170,7 @@ export default function DrawPage() {
     const handleResetLayerOrder = useCallback(() => {
         setVisibleLayers(prev => {
             // Define standard order
-            const order = ["segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "wms-bojonegoro"];
+            const order = ["segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-bojonegoro"];
 
             // Sort existing layers based on standard order
             const sorted = [...prev].sort((a, b) => {
@@ -1259,7 +1352,23 @@ export default function DrawPage() {
         if (!id) return;
         try {
             await monitoringService.deleteSegment(id);
-            existingSourceRef.current?.removeFeature(feature);
+
+            // Remove from all potential sources to ensure it disappears immediately
+            [
+                existingSourceRef,
+                segmenDesaSourceRef,
+                nonBaseSourceRef,
+                ruasUtamaSourceRef,
+                sourceRef,
+                jalanKabupatenSourceRef
+            ].forEach(sourceRef => {
+                const source = sourceRef.current;
+                if (source) {
+                    const f = source.getFeatureById(id) ||
+                        source.getFeatures().find(feat => feat.get('id') === id);
+                    if (f) source.removeFeature(f);
+                }
+            });
             if (editingFeatureId === id) {
                 setEditingFeatureId(null);
                 setMode("view");

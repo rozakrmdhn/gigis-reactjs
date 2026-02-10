@@ -66,11 +66,15 @@ export function RoadSegmentsPanel({
     // Split segments into categories
     const ruasSegments = segments.filter(s => {
         const props = s.getProperties ? s.getProperties() : s;
+        if (props.check_melarosa === "Ya") return true;
+        if (props.check_melarosa === "Tidak") return false;
         return !props.is_lingkungan_segment;
     });
 
     const lingkunganSegments = segments.filter(s => {
         const props = s.getProperties ? s.getProperties() : s;
+        if (props.check_melarosa === "Tidak") return true;
+        if (props.check_melarosa === "Ya") return false;
         return props.is_lingkungan_segment === true;
     });
 

@@ -166,6 +166,14 @@ export const monitoringService = {
         return await apiClient.get(url.toString(), { showErrorToast: false });
     },
 
+    getSegmenByJalanId: async (id: string): Promise<any> => {
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/${id}/segmen?format=geojson`, { showErrorToast: false });
+    },
+
+    getDesaById: async (id: string | number): Promise<any> => {
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/desa/${id}?format=geojson`, { showErrorToast: false });
+    },
+
     getAllSegmentsGeoJSON: async (): Promise<any> => {
         return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`);
     },
