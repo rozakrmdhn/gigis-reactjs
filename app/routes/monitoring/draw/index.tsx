@@ -19,7 +19,7 @@ import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
 import { altKeyOnly } from "ol/events/condition";
 import Overlay from "ol/Overlay";
 import * as turf from "@turf/turf";
-import { LineString, Polygon, MultiPoint, Point } from "ol/geom";
+import { LineString, Polygon, MultiPoint, Point, MultiLineString } from "ol/geom";
 import "ol/ol.css";
 import "./map.css";
 
@@ -138,11 +138,13 @@ export default function DrawPage() {
     const segmenDesaSourceRef = useRef<VectorSource | null>(null);
     const jalanKabupatenSourceRef = useRef<VectorSource | null>(null);
     const desaSourceRef = useRef<VectorSource | null>(null);
+    const staSourceRef = useRef<VectorSource | null>(null);
 
     const ruasUtamaLayerRef = useRef<VectorLayer | null>(null);
     const segmenDesaLayerRef = useRef<VectorLayer | null>(null);
     const jalanKabupatenLayerRef = useRef<VectorLayer | null>(null);
     const desaLayerRef = useRef<VectorLayer | null>(null);
+    const staLayerRef = useRef<VectorLayer | null>(null);
     const existingLayerRef = useRef<VectorLayer | null>(null); // Deprecated, but keep for now if needed for other refs
     const vectorLayerRef = useRef<VectorLayer | null>(null);
 
@@ -178,6 +180,7 @@ export default function DrawPage() {
         { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
         { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
         { id: "boundary-village", label: "Batas Desa", visible: true, color: "#7c3aed", lineDash: [4, 8] },
+        { id: "sta-markers", label: "Marker STA", visible: true, color: "#ef4444" },
     ]);
     const [cursorCoords, setCursorCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lng: number } | null>(null);
@@ -190,6 +193,7 @@ export default function DrawPage() {
     const tooltipRef = useRef<Overlay | null>(null);
     const tooltipElementRef = useRef<HTMLDivElement | null>(null);
     const originalEditFeatureRef = useRef<any>(null);
+    const lastLoadedDesaId = useRef<string | null>(null);
     const isMobile = useIsMobile();
 
     // Sidebar state initialization for mobile
@@ -209,6 +213,8 @@ export default function DrawPage() {
         if (!jalanKabupatenSourceRef.current) jalanKabupatenSourceRef.current = new VectorSource();
         if (!nonBaseSourceRef.current) nonBaseSourceRef.current = new VectorSource();
         if (!searchSourceRef.current) searchSourceRef.current = new VectorSource();
+        if (!staSourceRef.current) staSourceRef.current = new VectorSource();
+        if (!desaSourceRef.current) desaSourceRef.current = new VectorSource();
     }, []);
 
     // Auto-collapse sidebar on mobile
@@ -245,8 +251,8 @@ export default function DrawPage() {
         const ruasUtamaLayer = new VectorLayer({
             source: ruasUtamaSourceRef.current ?? undefined,
             style: (feature) => {
-                const geometry = feature.getGeometry() as any;
-                const styles = [
+                const geometry = feature.getGeometry();
+                return [
                     new Style({
                         stroke: new Stroke({
                             color: "rgba(255, 176, 72, 0.5)", // orange 400 light
@@ -255,48 +261,6 @@ export default function DrawPage() {
                         })
                     })
                 ];
-
-                if (geometry) {
-                    const type = geometry.getType();
-                    if (type === 'LineString' || type === 'MultiLineString') {
-                        const LABEL_ZINDEX = 999; // semakin besar, semakin di atas
-                        // STA Start (0+000)
-                        const startCoord = geometry.getFirstCoordinate();
-                        styles.push(new Style({
-                            zIndex: LABEL_ZINDEX,
-                            geometry: new Point(startCoord),
-                            text: new Text({
-                                text: "STA 0+000",
-                                font: "bold 12px sans-serif",
-                                fill: new Fill({ color: "#000" }),
-                                stroke: new Stroke({ color: "#fff", width: 3 }),
-                                offsetY: -10,
-                                offsetX: 0
-                            })
-                        }));
-
-                        // STA End
-                        const length = getLength(geometry);
-                        const km = Math.floor(length / 1000);
-                        const m = Math.floor(length % 1000);
-                        const endLabel = `STA ${km}+${m.toString().padStart(3, '0')}`;
-
-                        const endCoord = geometry.getLastCoordinate();
-                        styles.push(new Style({
-
-                            geometry: new Point(endCoord),
-                            text: new Text({
-                                text: endLabel,
-                                font: "bold 12px sans-serif",
-                                fill: new Fill({ color: "#000" }),
-                                stroke: new Stroke({ color: "#fff", width: 3 }),
-                                offsetY: -10,
-                                offsetX: 0
-                            })
-                        }));
-                    }
-                }
-                return styles;
             }
         });
         ruasUtamaLayerRef.current = ruasUtamaLayer;
@@ -438,6 +402,42 @@ export default function DrawPage() {
         });
         nonBaseLayerRef.current = nonBaseLayer;
 
+        const staLayer = new VectorLayer({
+            source: staSourceRef.current ?? undefined,
+            zIndex: 100, // Higher zIndex to ensure it's on top
+            visible: visibleLayers.find(l => l.id === "sta-markers")?.visible ?? true,
+            style: (feature) => {
+                const label = feature.get("sta_label");
+                return [
+                    // Marker Background/Shadow
+                    new Style({
+                        image: new CircleStyle({
+                            radius: 7,
+                            fill: new Fill({ color: "rgba(0, 0, 0, 0.3)" }),
+                        })
+                    }),
+                    // Main Marker
+                    new Style({
+                        image: new CircleStyle({
+                            radius: 5,
+                            fill: new Fill({ color: "#ef4444" }),
+                            stroke: new Stroke({ color: "#fff", width: 2 })
+                        }),
+                        text: new Text({
+                            text: label || "",
+                            font: "bold 11px sans-serif",
+                            fill: new Fill({ color: "#ef4444" }),
+                            stroke: new Stroke({ color: "#fff", width: 3 }),
+                            offsetY: -16,
+                            textAlign: 'center',
+                            padding: [2, 4, 2, 4]
+                        })
+                    })
+                ];
+            }
+        });
+        staLayerRef.current = staLayer;
+
         const searchLayer = new VectorLayer({
             source: searchSourceRef.current ?? undefined,
             style: (feature) => {
@@ -492,6 +492,7 @@ export default function DrawPage() {
                 segmenDesaLayer,
                 jalanKabupatenLayer,
                 nonBaseLayer,
+                staLayer,
                 searchLayer,
                 vectorLayer,
             ],
@@ -917,15 +918,15 @@ export default function DrawPage() {
             if (!existingSourceRef.current) return;
 
             // Selective clear: remove features that are NOT checked, OR are the current roadId (to refresh them)
-            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, nonBaseSourceRef, desaSourceRef].forEach(sourceRef => {
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, nonBaseSourceRef, desaSourceRef, staSourceRef].forEach(sourceRef => {
                 const source = sourceRef.current;
                 if (source) {
                     const featuresToRemove = source.getFeatures().filter(f => {
-                        const kId = f.get("kode_ruas_layer");
                         const isVillageLayer = sourceRef === desaSourceRef;
                         // For village layer: Always clear the current one to refresh
                         if (isVillageLayer) return true;
 
+                        const kId = f.get("kode_ruas_layer");
                         // Remove if: 
                         // 1. No road ID attached (temporary/stale)
                         // 2. It IS the current road (we will re-add fresh data)
@@ -977,6 +978,7 @@ export default function DrawPage() {
                     segmenKabFeatures.forEach(f => {
                         f.set("is_kabupaten_jalan", true);
                         f.set("hidden_from_panel", true);
+                        f.set("kode_ruas_layer", roadId);
                     });
                     jalanKabupatenSourceRef.current?.addFeatures(segmenKabFeatures);
                 }
@@ -1008,6 +1010,11 @@ export default function DrawPage() {
                 });
                 panelFeatures.push(...filteredNonBase);
                 nonBaseSourceRef.current?.addFeatures(filteredNonBase);
+            }
+
+            // Update STA markers
+            if (backgroundResponse && backgroundResponse.jalan) {
+                updateSTAMarkers(roadId, backgroundResponse.jalan);
             }
 
             // 3. Prepare VILLAGE BOUNDARY (from getDesaById)
@@ -1074,7 +1081,7 @@ export default function DrawPage() {
             existingSourceRef.current?.clear();
 
             // Only clear non-checked features
-            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, staSourceRef].forEach(sourceRef => {
                 const source = sourceRef.current;
                 if (source) {
                     const featuresToRemove = source.getFeatures().filter(f => {
@@ -1089,7 +1096,7 @@ export default function DrawPage() {
             const hasCheckedRoads = checkedRoadIds.length > 0;
             if (!hasCheckedRoads) {
                 setVisibleLayers(prev => prev.filter(l =>
-                    !["ruas-utama", "segmen-desa", "jalan-kabupaten"].includes(l.id)
+                    !["ruas-utama", "segmen-desa", "jalan-kabupaten", "sta-markers"].includes(l.id)
                 ));
             }
             return;
@@ -1121,6 +1128,12 @@ export default function DrawPage() {
         const fetchNonBase = async () => {
             // Filter by selectedRoad.jalan.id_desa if a road is selected
             const villageId = selectedRoad?.jalan.id_desa || "";
+
+            // Optimization: Only fetch if villageId has changed
+            if (villageId === lastLoadedDesaId.current) {
+                return;
+            }
+
             const response = await monitoringService.getNonBaseSegments(villageId);
 
             if (response.status === "success") {
@@ -1134,6 +1147,9 @@ export default function DrawPage() {
                 });
                 nonBaseSourceRef.current?.clear();
                 nonBaseSourceRef.current?.addFeatures(features);
+
+                // Update the ref after successful fetch
+                lastLoadedDesaId.current = villageId;
             }
         };
 
@@ -1152,7 +1168,8 @@ export default function DrawPage() {
             "ruas-utama": ruasUtamaLayerRef,
             "segmen-desa": segmenDesaLayerRef,
             "jalan-kabupaten": jalanKabupatenLayerRef,
-            "boundary-village": desaLayerRef
+            "boundary-village": desaLayerRef,
+            "sta-markers": staLayerRef
         };
 
         visibleLayers.forEach((layerItem) => {
@@ -1170,7 +1187,7 @@ export default function DrawPage() {
     const handleResetLayerOrder = useCallback(() => {
         setVisibleLayers(prev => {
             // Define standard order
-            const order = ["segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-bojonegoro"];
+            const order = ["sta-markers", "segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-bojonegoro"];
 
             // Sort existing layers based on standard order
             const sorted = [...prev].sort((a, b) => {
@@ -1600,6 +1617,25 @@ export default function DrawPage() {
                         });
                         segmenDesaSourceRef.current?.addFeatures(features);
                     }
+
+                    // Add Kabupaten segments
+                    if (response.segmenkab) {
+                        const features = format.readFeatures(response.segmenkab, {
+                            dataProjection: "EPSG:4326",
+                            featureProjection: "EPSG:3857",
+                        });
+                        features.forEach(f => {
+                            f.set("is_kabupaten_jalan", true);
+                            f.set("hidden_from_panel", true);
+                            f.set("kode_ruas_layer", id);
+                        });
+                        jalanKabupatenSourceRef.current?.addFeatures(features);
+                    }
+
+                    // Add STA markers
+                    if (response.jalan) {
+                        updateSTAMarkers(id, response.jalan);
+                    }
                 }
             } catch (error) {
                 console.error("Error checking road:", error);
@@ -1621,6 +1657,66 @@ export default function DrawPage() {
         }
     };
 
+    const updateSTAMarkers = (roadId: string, roadFeatureData: any) => {
+        if (!staSourceRef.current || !roadFeatureData) return;
+
+        // Clear existing markers for this road
+        const existingFeatures = staSourceRef.current.getFeatures();
+        existingFeatures.forEach(f => {
+            if (f.get("kode_ruas_layer") === roadId) {
+                staSourceRef.current?.removeFeature(f);
+            }
+        });
+
+        const format = new GeoJSON();
+        const features = format.readFeatures(roadFeatureData, {
+            dataProjection: "EPSG:4326",
+            featureProjection: "EPSG:3857",
+        });
+
+        features.forEach(f => {
+            const geom = f.getGeometry();
+            let startCoord = null;
+            let endCoord = null;
+            let roadLength = 0;
+
+            if (geom instanceof LineString) {
+                startCoord = geom.getFirstCoordinate();
+                endCoord = geom.getLastCoordinate();
+                roadLength = getLength(geom);
+            } else if (geom instanceof MultiLineString) {
+                const lineStrings = geom.getLineStrings();
+                if (lineStrings.length > 0) {
+                    startCoord = lineStrings[0].getFirstCoordinate();
+                    endCoord = lineStrings[lineStrings.length - 1].getLastCoordinate();
+                    roadLength = getLength(geom);
+                }
+            }
+
+            if (startCoord && endCoord) {
+                // Marker Start (STA 0+000)
+                const startMarker = new Feature({
+                    geometry: new Point(startCoord),
+                    sta_label: "STA 0+000",
+                    kode_ruas_layer: roadId
+                });
+                staSourceRef.current?.addFeature(startMarker);
+
+                // Marker End (STA total length)
+                const km = Math.floor(roadLength / 1000);
+                const m = Math.round(roadLength % 1000);
+                const endLabel = `STA ${km}+${m.toString().padStart(3, '0')}`;
+
+                const endMarker = new Feature({
+                    geometry: new Point(endCoord),
+                    sta_label: endLabel,
+                    kode_ruas_layer: roadId
+                });
+                staSourceRef.current?.addFeature(endMarker);
+            }
+        });
+    };
+
     const handleClearCheckedRoads = () => {
         // Clear state
         setCheckedRoadIds([]);
@@ -1629,7 +1725,7 @@ export default function DrawPage() {
         setVisibleLayers(prev => prev.filter(l => !l.id.startsWith("road-")));
 
         // Clear features from map
-        [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
+        [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, staSourceRef].forEach(sourceRef => {
             const source = sourceRef.current;
             if (source) {
                 const featuresToRemove = source.getFeatures().filter(f => {
@@ -1761,14 +1857,28 @@ export default function DrawPage() {
                             )}
                         />
 
-                        <LayerToggle
-                            onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
-                            isActive={isLayerPanelOpen}
-                            className={cn(
-                                "absolute top-2 right-2 transition-transform duration-500 z-40 will-change-transform",
-                                segmentPanelVisible && isSegmentPanelOpen && "-translate-x-80"
+                        <div className={cn(
+                            "absolute top-2 right-2 transition-transform duration-500 z-40 will-change-transform flex gap-2",
+                            segmentPanelVisible && isSegmentPanelOpen && "-translate-x-80"
+                        )}>
+                            {/* Clear Selected Layers Button */}
+                            {checkedRoadIds.length > 0 && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={handleClearCheckedRoads}
+                                    className="bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all rounded-xl h-10 px-3 text-[10px] font-bold uppercase tracking-wider"
+                                    title="Clear Selected Layers"
+                                >
+                                    Clear
+                                </Button>
                             )}
-                        />
+
+                            <LayerToggle
+                                onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
+                                isActive={isLayerPanelOpen}
+                            />
+                        </div>
 
                         <LayerTogglePanel
                             isVisible={isLayerPanelOpen}
