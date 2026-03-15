@@ -164,8 +164,8 @@ export default function DrawPage() {
 
     const nonBaseSourceRef = useRef<VectorSource | null>(null);
     const nonBaseLayerRef = useRef<VectorLayer | null>(null);
-    const wmsLayerRef = useRef<TileLayer<any> | null>(null);
-    const jalanKabupatenVectorLayerRef = useRef<VectorLayer<any> | null>(null);
+    const roadDesaWmsLayerRef = useRef<TileLayer<TileWMS> | null>(null);
+    const jalanKabupatenWmsLayerRef = useRef<TileLayer<TileWMS> | null>(null);
     const searchSourceRef = useRef<VectorSource | null>(null);
     const pulseOverlayRef = useRef<Overlay | null>(null);
     const pulseElementRef = useRef<HTMLDivElement | null>(null);
@@ -193,7 +193,7 @@ export default function DrawPage() {
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
         { id: "wms-jalan-kabupaten", label: "WMS Jalan Kabupaten 2022", visible: true, color: "oklch(0.546 0.245 262.881)" },
-        { id: "wms-bojonegoro", label: "WMS Jalan Desa", visible: false, color: "#94a3b8" },
+        { id: "road-desa-wms", label: "WMS Jalan Desa", visible: false, color: "#94a3b8" },
         { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
         { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
         { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "oklch(0.546 0.245 262.881)" },
@@ -493,7 +493,7 @@ export default function DrawPage() {
         });
         tileLayerRef.current = tileLayer;
 
-        const wmsLayer = new TileLayer({
+        const roadDesaWmsLayer = new TileLayer({
             source: new TileWMS({
                 url: 'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms',
                 params: {
@@ -502,49 +502,38 @@ export default function DrawPage() {
                     'TRANSPARENT': true,
                     'VERSION': '1.1.1'
                 },
-                serverType: 'geoserver'
+                serverType: 'geoserver',
+                crossOrigin: 'anonymous'
             }),
-            visible: visibleLayers.find(l => l.id === "wms-bojonegoro")?.visible,
-            opacity: 0.7
+            visible: visibleLayers.find(l => l.id === "road-desa-wms")?.visible,
+            opacity: 0.8
         });
+        roadDesaWmsLayerRef.current = roadDesaWmsLayer;
 
-        const jalanKabupatenVectorLayer = new VectorLayer({
-            source: new VectorSource({
-                format: new GeoJSON(),
-                url: function (extent) {
-                    return (
-                        'https://geoportal.bojonegorokab.go.id/geoserver/palapa/ows?service=WFS&' +
-                        'version=1.0.0&request=GetFeature&typeName=palapa:JALAN_KABUPATEN_2022&' +
-                        'outputFormat=application/json&srsname=EPSG:3857&' +
-                        'bbox=' + extent.join(',') + ',EPSG:3857'
-                    );
+        const jalanKabupatenWmsLayer = new TileLayer({
+            source: new TileWMS({
+                url: 'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms',
+                params: {
+                    'LAYERS': 'palapa:JALAN_KABUPATEN_2022',
+                    'TILED': true,
+                    'TRANSPARENT': true,
+                    'VERSION': '1.1.1'
                 },
-                strategy: function (extent, resolution) {
-                    return [extent];
-                }
+                serverType: 'geoserver',
+                crossOrigin: 'anonymous'
             }),
-            style: function (feature) {
-                const isSelected = feature.getId() === selectedVectorIdRef.current;
-                return new Style({
-                    stroke: new Stroke({
-                        color: isSelected ? '#facc15' : 'oklch(0.546 0.245 262.881)',
-                        width: isSelected ? 8 : 4,
-                    }),
-                    zIndex: isSelected ? 100 : 10,
-                });
-            },
             visible: visibleLayers.find(l => l.id === "wms-jalan-kabupaten")?.visible,
             opacity: 0.8,
             zIndex: 10
         });
-        jalanKabupatenVectorLayerRef.current = jalanKabupatenVectorLayer;
+        jalanKabupatenWmsLayerRef.current = jalanKabupatenWmsLayer;
 
         const map = new OLMap({
             target: mapElement.current,
             layers: [
                 tileLayer,
-                wmsLayer,
-                jalanKabupatenVectorLayer,
+                roadDesaWmsLayer,
+                jalanKabupatenWmsLayer,
                 desaLayer,
                 existingLayer,
                 ruasUtamaLayer,
@@ -619,7 +608,7 @@ export default function DrawPage() {
             // Change cursor to pointer when over vector features
             const pixel = map.getEventPixel(evt.originalEvent);
             const hit = map.hasFeatureAtPixel(pixel, {
-                layerFilter: (l) => l === jalanKabupatenVectorLayerRef.current
+                layerFilter: (l) => l === vectorLayerRef.current || l === existingLayerRef.current
             });
             map.getTargetElement().style.cursor = hit ? 'pointer' : '';
         }, 50);
@@ -628,10 +617,11 @@ export default function DrawPage() {
 
         // Map Click Handler (Coordinate Copy + Vector Feature Popup)
         map.on('click', async (evt) => {
-            // 1. Check for Vector Feature Click (Jalan Kabupaten)
+            // 1. Check for Vector Feature Click (Drawing/Existing Segments)
             const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, {
-                layerFilter: (l) => l === jalanKabupatenVectorLayerRef.current
+                layerFilter: (l) => l === vectorLayerRef.current || l === existingLayerRef.current
             });
+
             if (feature) {
                 const properties = feature.getProperties();
                 const featureId = feature.getId();
@@ -642,16 +632,58 @@ export default function DrawPage() {
                     id: featureId
                 });
                 vectorPopupRef.current?.setPosition(evt.coordinate);
-                
-                // Force refresh style
-                jalanKabupatenVectorLayerRef.current?.changed();
                 return;
-            } else {
-                setSelectedVectorId(null);
-                setSelectedVectorInfo(null);
-                vectorPopupRef.current?.setPosition(undefined);
-                jalanKabupatenVectorLayerRef.current?.changed();
             }
+
+            // 2. Fallback: Get Feature Info from WMS Layers
+            const view = map.getView();
+            const viewResolution = view.getResolution();
+            const projection = view.getProjection();
+
+            // Layers to check in order
+            const wmsLayers = [
+                { ref: jalanKabupatenWmsLayerRef, id: "wms-jalan-kabupaten" },
+                { ref: roadDesaWmsLayerRef, id: "road-desa-wms" }
+            ];
+
+            for (const { ref, id } of wmsLayers) {
+                const layer = ref.current;
+                if (!layer || !layer.getVisible()) continue;
+
+                const source = layer.getSource() as TileWMS;
+                const url = source.getFeatureInfoUrl(
+                    evt.coordinate,
+                    viewResolution || 0,
+                    projection,
+                    { 'INFO_FORMAT': 'application/json', 'FEATURE_COUNT': 1 }
+                );
+
+                if (url) {
+                    try {
+                        const response = await fetch(url);
+                        const data = await response.json();
+
+                        if (data.features && data.features.length > 0) {
+                            const feat = data.features[0];
+                            setSelectedVectorId(feat.id ?? id);
+                            setSelectedVectorInfo({
+                                properties: feat.properties,
+                                coordinate: evt.coordinate,
+                                id: feat.id
+                            });
+                            vectorPopupRef.current?.setPosition(evt.coordinate);
+                            return;
+                        }
+                    } catch (err) {
+                        console.error(`Error fetching GetFeatureInfo for ${id}:`, err);
+                    }
+                }
+            }
+
+            // No feature found
+            setSelectedVectorId(null);
+            setSelectedVectorInfo(null);
+            vectorPopupRef.current?.setPosition(undefined);
 
             // 2. Original Coordinate Copy Logic (Mobile only)
             if (isMobile) {
@@ -1267,8 +1299,8 @@ export default function DrawPage() {
         // Map layer IDs to their respective OpenLayers layer refs
         const layerMap: Record<string, MutableRefObject<any>> = {
             "non-base": nonBaseLayerRef,
-            "wms-jalan-kabupaten": jalanKabupatenVectorLayerRef,
-            "wms-bojonegoro": wmsLayerRef,
+            "wms-jalan-kabupaten": jalanKabupatenWmsLayerRef,
+            "road-desa-wms": roadDesaWmsLayerRef,
             "ruas-utama": ruasUtamaLayerRef,
             "segmen-desa": segmenDesaLayerRef,
             "jalan-kabupaten": jalanKabupatenLayerRef,
@@ -1291,7 +1323,7 @@ export default function DrawPage() {
     const handleResetLayerOrder = useCallback(() => {
         setVisibleLayers(prev => {
             // Define standard order
-            const order = ["sta-markers", "segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-jalan-kabupaten", "wms-bojonegoro"];
+            const order = ["sta-markers", "segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-jalan-kabupaten", "road-desa-wms"];
 
             // Sort existing layers based on standard order
             const sorted = [...prev].sort((a, b) => {
@@ -2143,7 +2175,7 @@ export default function DrawPage() {
                                             setSelectedVectorId(null);
                                             setSelectedVectorInfo(null);
                                             vectorPopupRef.current?.setPosition(undefined);
-                                            jalanKabupatenVectorLayerRef.current?.changed();
+                                            jalanKabupatenWmsLayerRef.current?.changed();
                                             setIsPopupMinimized(false); // Reset for next use
                                         }}
                                         className="h-6 w-6 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center transition-all active:scale-95 text-slate-500 dark:text-slate-400"
