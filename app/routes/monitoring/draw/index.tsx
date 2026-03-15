@@ -151,6 +151,7 @@ export default function DrawPage() {
     const nonBaseSourceRef = useRef<VectorSource | null>(null);
     const nonBaseLayerRef = useRef<VectorLayer | null>(null);
     const wmsLayerRef = useRef<TileLayer<any> | null>(null);
+    const jalanKabupatenWmsLayerRef = useRef<TileLayer<any> | null>(null);
     const searchSourceRef = useRef<VectorSource | null>(null);
     const pulseOverlayRef = useRef<Overlay | null>(null);
     const pulseElementRef = useRef<HTMLDivElement | null>(null);
@@ -175,6 +176,7 @@ export default function DrawPage() {
     const [checkedRoadIds, setCheckedRoadIds] = useState<string[]>([]);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
+        { id: "wms-jalan-kabupaten", label: "WMS Jalan Kabupaten 2022", visible: true, color: "#3b82f6" },
         { id: "wms-bojonegoro", label: "WMS Bojonegoro", visible: false, color: "#94a3b8" },
         { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
         { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
@@ -481,11 +483,28 @@ export default function DrawPage() {
         });
         wmsLayerRef.current = wmsLayer;
 
+        const jalanKabupatenWmsLayer = new TileLayer({
+            source: new TileWMS({
+                url: 'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms',
+                params: {
+                    'LAYERS': 'palapa:JALAN_KABUPATEN_2022',
+                    'TILED': true,
+                    'TRANSPARENT': true,
+                    'VERSION': '1.1.1'
+                },
+                serverType: 'geoserver'
+            }),
+            visible: visibleLayers.find(l => l.id === "wms-jalan-kabupaten")?.visible,
+            opacity: 0.7
+        });
+        jalanKabupatenWmsLayerRef.current = jalanKabupatenWmsLayer;
+
         const map = new OLMap({
             target: mapElement.current,
             layers: [
                 tileLayer,
                 wmsLayer,
+                jalanKabupatenWmsLayer,
                 desaLayer,
                 existingLayer,
                 ruasUtamaLayer,
@@ -1164,6 +1183,7 @@ export default function DrawPage() {
         // Map layer IDs to their respective OpenLayers layer refs
         const layerMap: Record<string, MutableRefObject<any>> = {
             "non-base": nonBaseLayerRef,
+            "wms-jalan-kabupaten": jalanKabupatenWmsLayerRef,
             "wms-bojonegoro": wmsLayerRef,
             "ruas-utama": ruasUtamaLayerRef,
             "segmen-desa": segmenDesaLayerRef,
@@ -1187,7 +1207,7 @@ export default function DrawPage() {
     const handleResetLayerOrder = useCallback(() => {
         setVisibleLayers(prev => {
             // Define standard order
-            const order = ["sta-markers", "segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-bojonegoro"];
+            const order = ["sta-markers", "segmen-desa", "jalan-kabupaten", "ruas-utama", "non-base", "boundary-village", "wms-jalan-kabupaten", "wms-bojonegoro"];
 
             // Sort existing layers based on standard order
             const sorted = [...prev].sort((a, b) => {
