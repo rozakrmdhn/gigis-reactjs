@@ -65,7 +65,7 @@ const SearchInput = React.memo(({ value, onChange, isLoading }: SearchInputProps
             )} />
             <Input
                 placeholder="Cari nama ruas..."
-                className="pl-9 h-9 bg-white/50 border-slate-200 focus-visible:ring-emerald-500/20"
+                className="pl-9 h-9 bg-white/50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 focus-visible:ring-emerald-500/20 dark:text-slate-100"
                 value={value}
                 onChange={(e) => onChange(e.target.value)}
             />
@@ -224,8 +224,8 @@ export default function MonitoringPage() {
                 onToggle={setIsSidebarOpen}
                 className="z-30"
             >
-                <div className="flex flex-col min-h-full">
-                    <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm p-2 border-b shadow-sm">
+                <div className="flex flex-col min-h-full bg-slate-50/50 dark:bg-slate-950/20">
+                    <div className="sticky top-0 z-10 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm p-2 border-b dark:border-slate-800 shadow-sm">
                         <div className="flex items-center gap-3">
                             <div className="flex flex-col gap-0.5 min-w-[70px]">
                                 <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Data</span>
@@ -287,7 +287,7 @@ export default function MonitoringPage() {
                         />
                     </div>
 
-                    <div className="flex-1 overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
+                    <div className="flex-1 overflow-y-auto px-2 pb-2 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-track]:bg-transparent">
                         {isInitialLoading ? (
                             <MonitoringSidebarSkeleton />
                         ) : (
@@ -295,7 +295,7 @@ export default function MonitoringPage() {
                         )}
                     </div>
 
-                    <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1">
+                    <div className="sticky bottom-0 left-0 right-0 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm border-t dark:border-slate-800 p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1">
                         <Button
                             variant="ghost"
                             size="icon"
@@ -368,7 +368,7 @@ export default function MonitoringPage() {
                         <Input
                             type="text"
                             placeholder="Cari Nama Ruas / Desa ..."
-                            className="w-full pl-10 pr-10 bg-white/90 backdrop-blur-md border-emerald-500/20 shadow-xl focus-visible:ring-emerald-500/50 h-11 rounded-2xl"
+                            className="w-full pl-10 pr-10 bg-white/90 dark:bg-slate-900/95 backdrop-blur-md border-emerald-500/20 dark:border-emerald-500/10 shadow-xl focus-visible:ring-emerald-500/50 h-11 rounded-2xl dark:text-slate-100 placeholder:dark:text-slate-500"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />

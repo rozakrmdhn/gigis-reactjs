@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, type MutableRefObject } from "react";
+import { createPortal } from "react-dom";
 import OLMap from "ol/Map";
 import Feature from "ol/Feature";
 import View from "ol/View";
@@ -35,13 +36,18 @@ import {
     Save,
     Eraser,
     Map as MapIcon,
-    Loader2,
-    Check,
     X,
+    Maximize2,
+    Check,
+    List,
     Layers,
-    Copy
+    ChevronUp,
+    ChevronDown,
+    Copy,
+    Loader2,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { ScrollArea } from "~/components/ui/scroll-area";
 import {
     ContextMenu,
     ContextMenuContent,
@@ -105,6 +111,14 @@ const BASEMAPS = {
             attributions: '© Google',
             crossOrigin: 'anonymous'
         })
+    },
+    dark: {
+        name: "Smooth Dark",
+        source: new XYZ({
+            url: 'https://{a-c}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+            attributions: '© OpenStreetMap contributors, © CARTO',
+            crossOrigin: 'anonymous'
+        })
     }
 };
 
@@ -151,10 +165,12 @@ export default function DrawPage() {
     const nonBaseSourceRef = useRef<VectorSource | null>(null);
     const nonBaseLayerRef = useRef<VectorLayer | null>(null);
     const wmsLayerRef = useRef<TileLayer<any> | null>(null);
-    const jalanKabupatenWmsLayerRef = useRef<TileLayer<any> | null>(null);
+    const jalanKabupatenVectorLayerRef = useRef<VectorLayer<any> | null>(null);
     const searchSourceRef = useRef<VectorSource | null>(null);
     const pulseOverlayRef = useRef<Overlay | null>(null);
     const pulseElementRef = useRef<HTMLDivElement | null>(null);
+    const vectorPopupRef = useRef<Overlay | null>(null);
+    const vectorPopupElementRef = useRef<HTMLDivElement | null>(null);
     const [isMounted, setIsMounted] = useState(false);
     const [mode, setMode] = useState<DrawMode>("view");
     const [selectedRoad, setSelectedRoad] = useState<MonitoringJalanResult | null>(null);
@@ -176,11 +192,11 @@ export default function DrawPage() {
     const [checkedRoadIds, setCheckedRoadIds] = useState<string[]>([]);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
-        { id: "wms-jalan-kabupaten", label: "WMS Jalan Kabupaten 2022", visible: true, color: "#3b82f6" },
-        { id: "wms-bojonegoro", label: "WMS Bojonegoro", visible: false, color: "#94a3b8" },
+        { id: "wms-jalan-kabupaten", label: "WMS Jalan Kabupaten 2022", visible: true, color: "oklch(0.546 0.245 262.881)" },
+        { id: "wms-bojonegoro", label: "WMS Jalan Desa", visible: false, color: "#94a3b8" },
         { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
         { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
-        { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
+        { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "oklch(0.546 0.245 262.881)" },
         { id: "boundary-village", label: "Batas Desa", visible: true, color: "#7c3aed", lineDash: [4, 8] },
         { id: "sta-markers", label: "Marker STA", visible: true, color: "#ef4444" },
     ]);
@@ -188,7 +204,17 @@ export default function DrawPage() {
     const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [lastCopiedCoords, setLastCopiedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isCopied, setIsCopied] = useState(false);
-    const [isRoadInfoVisible, setIsRoadInfoVisible] = useState(false);
+    const [selectedVectorInfo, setSelectedVectorInfo] = useState<{ 
+        properties: any; 
+        coordinate: number[] | null; 
+        id?: string | number | null;
+    } | null>(null);
+    const [selectedVectorId, setSelectedVectorId] = useState<string | number | null>(null);
+    const selectedVectorIdRef = useRef<string | number | null>(null);
+    useEffect(() => {
+        selectedVectorIdRef.current = selectedVectorId;
+    }, [selectedVectorId]);
+    const [isPopupMinimized, setIsPopupMinimized] = useState(false);
     const [activeBasemap, setActiveBasemap] = useState<BasemapId>("hybrid");
 
     const tileLayerRef = useRef<TileLayer<any> | null>(null);
@@ -293,12 +319,12 @@ export default function DrawPage() {
         const jalanKabupatenLayer = new VectorLayer({
             source: jalanKabupatenSourceRef.current ?? undefined,
             style: new Style({
-                stroke: new Stroke({ color: "#3b82f6", width: 6, lineJoin: 'round', lineCap: 'round' }),
+                stroke: new Stroke({ color: "oklch(0.546 0.245 262.881)", width: 6, lineJoin: 'round', lineCap: 'round' }),
                 text: new Text({
                     text: "Jalan Kabupaten",
                     font: "bold 10px sans-serif",
                     fill: new Fill({ color: "#fff" }),
-                    stroke: new Stroke({ color: "#3b82f6", width: 2 }),
+                    stroke: new Stroke({ color: "oklch(0.546 0.245 262.881)", width: 2 }),
                     offsetY: -10
                 })
             })
@@ -359,7 +385,7 @@ export default function DrawPage() {
                 const kondisi = feature.get("kondisi") || "baik";
 
                 let color = "#22c55e"; // emerald 500
-                if (isKabupaten) color = "#3b82f6"; // blue 500
+                if (isKabupaten) color = "oklch(0.546 0.245 262.881)"; 
                 else if (kondisi.toLowerCase().includes("rusak berat")) color = "#f43f5e"; // rose 500
                 else if (kondisi.toLowerCase().includes("rusak ringan")) color = "#f59e0b"; // amber 500
                 else if (kondisi.toLowerCase().includes("sedang")) color = "#3b82f6"; // blue 500
@@ -481,30 +507,44 @@ export default function DrawPage() {
             visible: visibleLayers.find(l => l.id === "wms-bojonegoro")?.visible,
             opacity: 0.7
         });
-        wmsLayerRef.current = wmsLayer;
 
-        const jalanKabupatenWmsLayer = new TileLayer({
-            source: new TileWMS({
-                url: 'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms',
-                params: {
-                    'LAYERS': 'palapa:JALAN_KABUPATEN_2022',
-                    'TILED': true,
-                    'TRANSPARENT': true,
-                    'VERSION': '1.1.1'
+        const jalanKabupatenVectorLayer = new VectorLayer({
+            source: new VectorSource({
+                format: new GeoJSON(),
+                url: function (extent) {
+                    return (
+                        'https://geoportal.bojonegorokab.go.id/geoserver/palapa/ows?service=WFS&' +
+                        'version=1.0.0&request=GetFeature&typeName=palapa:JALAN_KABUPATEN_2022&' +
+                        'outputFormat=application/json&srsname=EPSG:3857&' +
+                        'bbox=' + extent.join(',') + ',EPSG:3857'
+                    );
                 },
-                serverType: 'geoserver'
+                strategy: function (extent, resolution) {
+                    return [extent];
+                }
             }),
+            style: function (feature) {
+                const isSelected = feature.getId() === selectedVectorIdRef.current;
+                return new Style({
+                    stroke: new Stroke({
+                        color: isSelected ? '#facc15' : 'oklch(0.546 0.245 262.881)',
+                        width: isSelected ? 8 : 4,
+                    }),
+                    zIndex: isSelected ? 100 : 10,
+                });
+            },
             visible: visibleLayers.find(l => l.id === "wms-jalan-kabupaten")?.visible,
-            opacity: 0.7
+            opacity: 0.8,
+            zIndex: 10
         });
-        jalanKabupatenWmsLayerRef.current = jalanKabupatenWmsLayer;
+        jalanKabupatenVectorLayerRef.current = jalanKabupatenVectorLayer;
 
         const map = new OLMap({
             target: mapElement.current,
             layers: [
                 tileLayer,
                 wmsLayer,
-                jalanKabupatenWmsLayer,
+                jalanKabupatenVectorLayer,
                 desaLayer,
                 existingLayer,
                 ruasUtamaLayer,
@@ -553,7 +593,20 @@ export default function DrawPage() {
         map.addOverlay(pulseOverlay);
         pulseOverlayRef.current = pulseOverlay;
 
-        // Pointer move for coordinate display (Throttled for performance)
+        // Vector Popup Overlay
+        const popupEl = document.createElement('div');
+        popupEl.className = 'vector-popup-container';
+        vectorPopupElementRef.current = popupEl;
+        const vectorPopup = new Overlay({
+            element: popupEl,
+            positioning: 'bottom-center',
+            offset: [0, -5],
+            stopEvent: true, // Allow interaction with popup (X button, etc)
+        });
+        map.addOverlay(vectorPopup);
+        vectorPopupRef.current = vectorPopup;
+
+        // Pointer move for coordinate display and cursor changes
         const throttledPointerMove = throttle((evt: any) => {
             if (evt.dragging) return;
 
@@ -562,14 +615,45 @@ export default function DrawPage() {
                 lng: coordinate[0],
                 lat: coordinate[1]
             });
+
+            // Change cursor to pointer when over vector features
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hit = map.hasFeatureAtPixel(pixel, {
+                layerFilter: (l) => l === jalanKabupatenVectorLayerRef.current
+            });
+            map.getTargetElement().style.cursor = hit ? 'pointer' : '';
         }, 50);
 
         map.on('pointermove', throttledPointerMove);
 
-
-        // Click to copy coordinates (mobile only)
+        // Map Click Handler (Coordinate Copy + Vector Feature Popup)
         map.on('click', async (evt) => {
-            // Copy coordinates on mobile
+            // 1. Check for Vector Feature Click (Jalan Kabupaten)
+            const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, {
+                layerFilter: (l) => l === jalanKabupatenVectorLayerRef.current
+            });
+            if (feature) {
+                const properties = feature.getProperties();
+                const featureId = feature.getId();
+                setSelectedVectorId(featureId ?? null);
+                setSelectedVectorInfo({
+                    properties,
+                    coordinate: evt.coordinate,
+                    id: featureId
+                });
+                vectorPopupRef.current?.setPosition(evt.coordinate);
+                
+                // Force refresh style
+                jalanKabupatenVectorLayerRef.current?.changed();
+                return;
+            } else {
+                setSelectedVectorId(null);
+                setSelectedVectorInfo(null);
+                vectorPopupRef.current?.setPosition(undefined);
+                jalanKabupatenVectorLayerRef.current?.changed();
+            }
+
+            // 2. Original Coordinate Copy Logic (Mobile only)
             if (isMobile) {
                 const coordinate = toLonLat(evt.coordinate);
                 const lng = coordinate[0];
@@ -1132,7 +1216,7 @@ export default function DrawPage() {
             if (prev.find(l => l.id === "ruas-utama")) return prev;
             return [
                 { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
-                { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "#3b82f6" },
+                { id: "jalan-kabupaten", label: "Jalan Kabupaten", visible: true, color: "oklch(0.546 0.245 262.881)" },
                 { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
                 ...prev
             ];
@@ -1183,7 +1267,7 @@ export default function DrawPage() {
         // Map layer IDs to their respective OpenLayers layer refs
         const layerMap: Record<string, MutableRefObject<any>> = {
             "non-base": nonBaseLayerRef,
-            "wms-jalan-kabupaten": jalanKabupatenWmsLayerRef,
+            "wms-jalan-kabupaten": jalanKabupatenVectorLayerRef,
             "wms-bojonegoro": wmsLayerRef,
             "ruas-utama": ruasUtamaLayerRef,
             "segmen-desa": segmenDesaLayerRef,
@@ -1508,7 +1592,6 @@ export default function DrawPage() {
         setDrawnGeoJSON(null);
         setHasTemporaryFeature(false);
         setDrawnLength(0);
-        setIsRoadInfoVisible(false);
         toast.info("Map cleared");
     };
 
@@ -1762,7 +1845,6 @@ export default function DrawPage() {
     const handleSelectRoadOnMobile = (road: MonitoringJalanResult | null) => {
         setSelectedRoad(road);
         if (road) {
-            setIsRoadInfoVisible(true);
             setSegmentPanelVisible(true);
             setIsSegmentPanelOpen(!isMobile);
         }
@@ -1878,22 +1960,23 @@ export default function DrawPage() {
                         />
 
                         <div className={cn(
-                            "absolute top-2 right-2 transition-transform duration-500 z-40 will-change-transform flex gap-2",
+                            "absolute top-2 right-2 transition-transform duration-500 z-40 will-change-transform flex gap-2 items-center",
                             segmentPanelVisible && isSegmentPanelOpen && "-translate-x-80"
                         )}>
+                            
                             {/* Clear Selected Layers Button */}
                             {checkedRoadIds.length > 0 && (
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={handleClearCheckedRoads}
-                                    className="bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 transition-all rounded-xl h-10 px-3 text-[10px] font-bold uppercase tracking-wider"
+                                    className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-rose-50 dark:hover:bg-rose-900/20 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-800 transition-all rounded-xl h-10 px-3 text-[10px] font-bold uppercase tracking-wider"
                                     title="Clear Selected Layers"
                                 >
                                     Clear
                                 </Button>
                             )}
-
+                            
                             <LayerToggle
                                 onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
                                 isActive={isLayerPanelOpen}
@@ -1923,13 +2006,13 @@ export default function DrawPage() {
                             "absolute top-2 left-14 z-20 pointer-events-none transition-transform duration-500 will-change-transform",
                             isSidebarOpen && "translate-x-80"
                         )}>
-                            <div className="flex items-center gap-2 bg-white/90 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200 shadow-2xl">
-                                <div className="p-1.5 bg-blue-100 rounded-lg text-blue-600">
+                            <div className="flex items-center gap-2 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl">
+                                <div className="p-1.5 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
                                     <MapIcon className="w-4 h-4" />
                                 </div>
                                 <div>
-                                    <h1 className="text-xs font-bold text-slate-800 tracking-tight uppercase leading-none">Map Editor</h1>
-                                    <p className="text-[9px] font-bold text-slate-400 tracking-widest uppercase mt-0.5">Vector Studio</p>
+                                    <h1 className="text-xs font-bold text-slate-800 dark:text-slate-100 tracking-tight uppercase leading-none">Map Editor</h1>
+                                    <p className="text-[9px] font-bold text-slate-400 dark:text-slate-500 tracking-widest uppercase mt-0.5">Vector Studio</p>
                                 </div>
                             </div>
                         </div>
@@ -1955,28 +2038,6 @@ export default function DrawPage() {
                         )}
 
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none transition-all duration-500">
-                            {selectedRoad && isRoadInfoVisible && (
-                                <div className="bg-white/95 backdrop-blur-md p-4 rounded-2xl border border-blue-100 shadow-xl max-w-xs animate-in slide-in-from-bottom-full duration-500 pointer-events-auto relative">
-                                    <button
-                                        onClick={() => setIsRoadInfoVisible(false)}
-                                        className="absolute -top-2 -right-2 h-6 w-6 bg-white border border-slate-200 rounded-full flex items-center justify-center shadow-md hover:bg-slate-50 transition-colors z-10"
-                                    >
-                                        <X className="w-3 h-3 text-slate-400" />
-                                    </button>
-                                    <p className="text-[10px] uppercase font-bold text-blue-500 mb-1">Ruas Terpilih</p>
-                                    <h4 className="text-sm font-bold text-slate-800 mb-2 truncate">{selectedRoad.jalan.nama_ruas || 'Nama tidak tersedia'}</h4>
-                                    <div className="flex gap-4">
-                                        <div>
-                                            <p className="text-[9px] text-slate-400 font-bold uppercase">Panjang</p>
-                                            <p className="text-xs font-bold text-slate-600">{formatNumber(selectedRoad.jalan.panjang)}m</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] text-slate-400 font-bold uppercase">Lebar</p>
-                                            <p className="text-xs font-bold text-slate-600">{formatNumber(selectedRoad.jalan.lebar)}m</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
@@ -2039,6 +2100,106 @@ export default function DrawPage() {
                             )}
 
                         </div>
+
+                        {/* Vector Feature Popup (Portal/Overlay) */}
+                        {selectedVectorInfo && vectorPopupElementRef.current && createPortal(
+                            <div 
+                                className={cn(
+                                    "bg-white/95 dark:bg-slate-950/95 backdrop-blur-md rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-2xl w-64 flex flex-col animate-in zoom-in-95 duration-300 pointer-events-auto relative overflow-visible group mb-4 transition-all ease-in-out",
+                                    isPopupMinimized ? "p-2.5 h-auto overflow-hidden" : "p-3.5 max-h-[350px]"
+                                )}
+                            >
+                                {/* Pointer Arrow */}
+                                <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white dark:bg-slate-950 rotate-45 border-r border-b border-blue-100/50 dark:border-blue-900/50" />
+                                
+                                <style>{`
+                                    .custom-scrollbar::-webkit-scrollbar {
+                                        width: 3px;
+                                    }
+                                    .custom-scrollbar::-webkit-scrollbar-track {
+                                        background: transparent;
+                                    }
+                                    .custom-scrollbar::-webkit-scrollbar-thumb {
+                                        background: var(--border);
+                                        border-radius: 20px;
+                                    }
+                                `}</style>
+
+                                {/* Action Buttons Container */}
+                                <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10 transition-opacity">
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsPopupMinimized(!isPopupMinimized);
+                                        }}
+                                        className="h-6 w-6 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center transition-all active:scale-95 text-slate-500 dark:text-slate-400"
+                                        title={isPopupMinimized ? "Expand" : "Minimize"}
+                                    >
+                                        {isPopupMinimized ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                    </button>
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedVectorId(null);
+                                            setSelectedVectorInfo(null);
+                                            vectorPopupRef.current?.setPosition(undefined);
+                                            jalanKabupatenVectorLayerRef.current?.changed();
+                                            setIsPopupMinimized(false); // Reset for next use
+                                        }}
+                                        className="h-6 w-6 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center transition-all active:scale-95 text-slate-500 dark:text-slate-400"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+
+                                <div className="flex items-center gap-2 mb-2.5 shrink-0">
+                                    <div className="p-1.5 bg-blue-500 rounded-lg shadow-blue-200/50 shadow-lg shrink-0">
+                                        <Layers className="w-3 h-3 text-white" />
+                                    </div>
+                                    <div className="flex flex-col min-w-0 pr-14">
+                                        <span className="text-[9px] uppercase font-black text-blue-600 tracking-widest leading-none mb-1">Feature Info</span>
+                                        <h4 className={cn(
+                                            "font-black text-slate-800 dark:text-slate-100 leading-tight transition-all truncate",
+                                            isPopupMinimized ? "text-[10px]" : "text-[11px]"
+                                        )}>
+                                            {(selectedVectorInfo.properties.NM_RUAS || selectedVectorInfo.properties.NAME || selectedVectorInfo.properties.name || 'DATA DETAIL').toUpperCase()}
+                                        </h4>
+                                    </div>
+                                </div>
+
+                                {/* Content Area - Animate height/visibility */}
+                                <div className={cn(
+                                    "flex flex-col flex-1 min-h-0 transition-all duration-300 ease-in-out",
+                                    isPopupMinimized ? "max-h-0 opacity-0 pointer-events-none" : "max-h-[300px] opacity-100 border-t border-slate-100 dark:border-slate-800 mt-2.5 pt-2.5"
+                                )}>
+                                    <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar min-h-0">
+                                        <div className="flex flex-col gap-3 pb-2">
+                                            {Object.entries(selectedVectorInfo.properties)
+                                                .filter(([key]) => !['geometry', 'bbox', 'fid', 'id', 'type'].includes(key.toLowerCase()))
+                                                .map(([key, value]) => (
+                                                    <div key={key} className="flex flex-col gap-1 group/item">
+                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider group-hover/item:text-blue-400 transition-colors">
+                                                            {key.replace(/_/g, ' ')}
+                                                        </span>
+                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 wrap-break-word font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded-lg border border-transparent group-hover/item:border-slate-100 dark:group-hover/item:border-slate-700 transition-all">
+                                                            {typeof value === 'number' ? formatNumber(value) : String(value || '-')}
+                                                            {key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar') ? ' m' : ''}
+                                                        </span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Koordinat</span>
+                                        <code className="text-[9px] font-bold font-mono text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20 border border-blue-100/50 dark:border-blue-800/50 px-2 py-1 rounded-lg">
+                                            {toLonLat(selectedVectorInfo.coordinate!)[1].toFixed(6)}, {toLonLat(selectedVectorInfo.coordinate!)[0].toFixed(6)}
+                                        </code>
+                                    </div>
+                                </div>
+                            </div>,
+                            vectorPopupElementRef.current
+                        )}
                     </div>
                 </div>
 
@@ -2092,6 +2253,7 @@ export default function DrawPage() {
                         setSegmentPanelVisible(false);
                         setMode("draw-line");
                     }}
+                    selectedRoad={selectedRoad}
                     className="z-40"
                 />
 

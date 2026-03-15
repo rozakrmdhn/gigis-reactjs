@@ -44,11 +44,12 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
             className={cn(
                 "group relative flex flex-col gap-0 rounded-xl border cursor-pointer text-[13px] sm:text-sm text-left w-full overflow-hidden",
                 "transition-all active:scale-[0.98]",
-                "bg-gradient-to-br from-white via-white/80 to-slate-50",
-                "hover:shadow-lg hover:border-blue-200 transition-all duration-300",
+                "bg-white dark:bg-slate-950",
+                "bg-gradient-to-br from-white via-white/80 to-slate-50 dark:from-slate-900/50 dark:via-slate-950 dark:to-slate-950",
+                "hover:shadow-lg hover:border-blue-200 dark:hover:border-blue-500/50 transition-all duration-300",
                 isSelected
-                    ? "border-blue-500 bg-blue-50/50 ring-1 sm:ring-2 ring-blue-500/20 shadow-xl z-10 sm:scale-[1.02] sm:-translate-y-0.5"
-                    : "border-slate-100"
+                    ? "border-blue-500 dark:border-blue-500 bg-blue-50/80 dark:bg-blue-600/10 ring-1 sm:ring-2 ring-blue-500/20 shadow-xl z-10 sm:scale-[1.02] sm:-translate-y-0.5"
+                    : "border-slate-100 dark:border-slate-800/50"
             )}
             onClick={() => onSelect(item.jalan.id)}
             role="button"
@@ -67,12 +68,12 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
                             <Checkbox
                                 checked={isChecked}
                                 onCheckedChange={handleCheckboxChange}
-                                className="h-4 w-4 rounded border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
+                                className="h-4 w-4 rounded border-slate-300 dark:border-slate-700 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600"
                             />
                         </div>
                         <span className={cn(
                             "line-clamp-1 transition-colors text-md",
-                            isSelected ? "font-bold" : "text-slate-900 font-semibold"
+                            isSelected ? "font-bold text-blue-600 dark:text-blue-400" : "text-slate-900 dark:text-slate-100 font-semibold"
                         )}>
                             {item.jalan.nama_ruas}
                         </span>
@@ -80,23 +81,23 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
                     <Badge
                         variant="secondary"
                         className={cn(
-                            "shrink-0 text-[10px] sm:text-[11px] px-1.5 h-5 font-normal capitalize bg-slate-100 text-slate-600 border border-slate-200",
-                            (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'baik' && "bg-emerald-50 text-emerald-700 border-emerald-200",
-                            (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase().includes('rusak') && "bg-rose-50 text-rose-700 border-rose-200",
-                            (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'sedang' && "bg-yellow-50 text-yellow-700 border-yellow-200"
+                            "shrink-0 text-[10px] sm:text-[11px] px-1.5 h-5 font-normal capitalize bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
+                            (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'baik' && "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50",
+                            (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase().includes('rusak') && "bg-rose-50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-400 border-rose-200 dark:border-rose-900/50",
+                            (item.summary?.kondisi_jalan?.nama || item.jalan.kondisi).toLowerCase() === 'sedang' && "bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400 border-yellow-200 dark:border-yellow-900/50"
                         )}
                     >
                         {item.summary?.kondisi_jalan?.nama || item.jalan.kondisi}
                     </Badge>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/80 font-medium">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted-foreground/80 dark:text-slate-400 font-medium">
                     <span className="flex items-center gap-2">
                         {item.jalan.desa}
                     </span>
-                    <span className="h-0.5 w-0.5 rounded-full bg-slate-300 hidden sm:block" />
+                    <span className="h-0.5 w-0.5 rounded-full bg-slate-300 dark:bg-slate-700 hidden sm:block" />
                     <span>{item.jalan.kecamatan}</span>
-                    <span className="ml-auto font-bold text-blue-600/60">No. {item.jalan.kode_ruas}</span>
+                    <span className="ml-auto font-bold text-blue-600/60 dark:text-blue-400/60">No. {item.jalan.kode_ruas}</span>
                 </div>
             </div>
 
@@ -104,16 +105,16 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
                 <div className={cn(
                     "grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] uppercase font-bold p-2.5 rounded-md border transition-all",
                     isSelected
-                        ? "bg-white/80 border-blue-200 text-blue-700 shadow-sm"
-                        : "bg-slate-50 border-slate-100 text-slate-500 group-hover:bg-white group-hover:border-slate-200"
+                        ? "bg-white/90 dark:bg-blue-950/50 border-blue-200 dark:border-blue-500/30 text-blue-700 dark:text-blue-200 shadow-sm"
+                        : "bg-slate-50 dark:bg-slate-900/50 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-white dark:group-hover:bg-slate-800 group-hover:border-slate-200 dark:group-hover:border-slate-700"
                 )}>
                     <div className="flex justify-between items-center min-w-0">
                         <span className="opacity-70 shrink-0">Panjang</span>
-                        <span className="text-slate-600 truncate ml-1">{formatNumber(item.jalan.panjang)} m</span>
+                        <span className="text-slate-600 dark:text-slate-300 truncate ml-1">{formatNumber(item.jalan.panjang)} m</span>
                     </div>
-                    <div className="flex justify-between items-center border-l pl-3 border-slate-200/50 min-w-0">
+                    <div className="flex justify-between items-center border-l pl-3 border-slate-200/50 dark:border-slate-700/50 min-w-0">
                         <span className="opacity-70 shrink-0">Lebar</span>
-                        <span className="text-slate-600 truncate ml-1">{item.jalan.lebar} m</span>
+                        <span className="text-slate-600 dark:text-slate-300 truncate ml-1">{item.jalan.lebar} m</span>
                     </div>
                 </div>
             </div>
@@ -121,20 +122,20 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
             {item.summary && (
                 <div className={cn(
                     "border-t p-3 space-y-2.5 w-full transition-colors",
-                    isSelected ? "border-blue-200/50 bg-blue-50/20" : "border-slate-100 bg-slate-50/30"
+                    isSelected ? "border-blue-200/50 dark:border-blue-500/20 bg-blue-50/30 dark:bg-blue-600/5" : "border-slate-100 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-900/20"
                 )}>
                     <div className="flex flex-row items-center justify-between text-[10px] gap-2 w-full">
-                        <div className="text-muted-foreground font-medium flex items-center gap-1.5 min-w-0 flex-1">
+                        <div className="text-muted-foreground dark:text-slate-400 font-medium flex items-center gap-1.5 min-w-0 flex-1">
                             <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-emerald-500" />
                             <span className="truncate">Dibangun: {formatNumber(item.summary.fisik.total)} m</span>
                         </div>
-                        <div className="text-muted-foreground font-medium flex items-center gap-1.5 min-w-0 flex-1 justify-end">
-                            <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-slate-300" />
+                        <div className="text-muted-foreground dark:text-slate-400 font-medium flex items-center gap-1.5 min-w-0 flex-1 justify-end">
+                            <div className="w-1.5 h-1.5 shrink-0 rounded-full bg-slate-300 dark:bg-slate-700" />
                             <span className="truncate">Sisa: {formatNumber(item.summary.panjang_belum_tertangani)} m</span>
                         </div>
                     </div>
 
-                    <div className="h-1.5 w-full bg-slate-200/50 rounded-full overflow-hidden flex shadow-inner border border-slate-200/30">
+                    <div className="h-1.5 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-full overflow-hidden flex shadow-inner border border-slate-200/30 dark:border-slate-700/30">
                         <div
                             className="h-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] transition-all duration-700 ease-out"
                             style={{
@@ -143,7 +144,7 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
                         />
                     </div>
 
-                    <div className="flex justify-between text-[10px] text-slate-500 font-medium uppercase tracking-tight italic">
+                    <div className="flex justify-between text-[10px] text-slate-500 dark:text-slate-400 font-medium uppercase tracking-tight italic">
                         <span className="flex items-center gap-1">
                             {(item.segmen.desa?.length || 0) + (item.segmen.kabupaten?.length || 0)} <span className="text-[8px] opacity-70">Segmen</span>
                         </span>
@@ -151,22 +152,22 @@ const MonitoringListItem = React.memo(({ item, isSelected, isChecked, onSelect, 
                     </div>
 
                     {item.summary.kondisi_jalan && (
-                        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-dashed border-slate-200">
+                        <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-dashed border-slate-200 dark:border-slate-800">
                             <div className={cn(
                                 "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight",
-                                item.summary.kondisi_jalan.nama === 'BAIK' ? "bg-emerald-50 text-emerald-700" :
-                                    item.summary.kondisi_jalan.nama === 'SEDANG' ? "bg-yellow-50 text-yellow-700" :
-                                        "bg-red-50 text-red-700"
+                                item.summary.kondisi_jalan.nama === 'BAIK' ? "bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-400" :
+                                    item.summary.kondisi_jalan.nama === 'SEDANG' ? "bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400" :
+                                        "bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400"
                             )}>
                                 {item.summary.kondisi_jalan.nama}
                             </div>
                             <div className={cn(
                                 "px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-tight",
-                                item.summary.kondisi_jalan.mantap === 'Mantap' ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
+                                item.summary.kondisi_jalan.mantap === 'Mantap' ? "bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
                             )}>
                                 {item.summary.kondisi_jalan.mantap}
                             </div>
-                            <div className="px-1.5 py-0.5 rounded bg-slate-50 text-slate-500 text-[10px] font-medium border border-slate-100">
+                            <div className="px-1.5 py-0.5 rounded bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-[10px] font-medium border border-slate-100 dark:border-slate-800">
                                 {item.summary.kondisi_jalan.persentase_mantap}%
                             </div>
                         </div>
@@ -182,18 +183,18 @@ export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isL
         return (
             <div className="space-y-3">
                 {[...Array(5)].map((_, i) => (
-                    <div key={i} className="flex flex-col gap-3 p-4 rounded-xl border border-slate-100 bg-white/50 animate-pulse">
+                    <div key={i} className="flex flex-col gap-3 p-4 rounded-xl border border-slate-100 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 animate-pulse">
                         <div className="flex justify-between items-start">
-                            <Skeleton className="h-5 w-2/3 rounded-lg" />
-                            <Skeleton className="h-5 w-16 rounded-full" />
+                            <Skeleton className="h-5 w-2/3 rounded-lg dark:bg-slate-800" />
+                            <Skeleton className="h-5 w-16 rounded-full dark:bg-slate-800" />
                         </div>
                         <div className="flex gap-2">
-                            <Skeleton className="h-4 w-20 rounded-md" />
-                            <Skeleton className="h-4 w-24 rounded-md" />
+                            <Skeleton className="h-4 w-20 rounded-md dark:bg-slate-800" />
+                            <Skeleton className="h-4 w-24 rounded-md dark:bg-slate-800" />
                         </div>
                         <div className="grid grid-cols-2 gap-3 mt-1">
-                            <Skeleton className="h-10 rounded-xl" />
-                            <Skeleton className="h-10 rounded-xl" />
+                            <Skeleton className="h-10 rounded-xl dark:bg-slate-800" />
+                            <Skeleton className="h-10 rounded-xl dark:bg-slate-800" />
                         </div>
                     </div>
                 ))}
@@ -203,8 +204,8 @@ export const MonitoringList = React.memo(({ data, onSelectJalan, selectedId, isL
 
     if (!data || data.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center p-8 text-center border rounded-lg border-dashed bg-slate-50/50">
-                <p className="text-sm text-muted-foreground">Tidak ada data jalan ditemukan.</p>
+            <div className="flex flex-col items-center justify-center p-8 text-center border rounded-lg border-dashed bg-slate-50/50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800">
+                <p className="text-sm text-muted-foreground dark:text-slate-400">Tidak ada data jalan ditemukan.</p>
             </div>
         );
     }

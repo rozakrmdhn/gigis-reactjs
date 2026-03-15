@@ -42,7 +42,7 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
     return (
         <div
             className={cn(
-                "absolute inset-y-0 right-0 z-50 w-full sm:w-[350px] bg-background/80 backdrop-blur-xl border-l shadow-xl transition-transform duration-500 ease-in-out transform overflow-hidden",
+                "absolute inset-y-0 right-0 z-50 w-full sm:w-[350px] bg-background/80 dark:bg-slate-950/90 backdrop-blur-xl border-l dark:border-slate-800 shadow-xl transition-transform duration-500 ease-in-out transform overflow-hidden",
                 isVisible ? "translate-x-0" : "translate-x-full"
             )}
         >
@@ -52,10 +52,10 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                     <div className="flex items-start justify-between mb-3">
                         <div className="flex items-start gap-1">
                             <span className="text-sm w-12 font-bold text-monospace text-muted-foreground">No. {jalan.kode_ruas}</span>
-                            <h2 className="text-md font-bold text-slate-900 tracking-tight">
+                            <h2 className="text-md font-bold text-slate-900 dark:text-slate-100 tracking-tight">
                                 {jalan.nama_ruas}</h2>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-white/50">
+                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-white/50 dark:hover:bg-slate-800/50">
                             <X className="w-5 h-5" />
                         </Button>
                     </div>
@@ -67,35 +67,35 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="bg-white/50 backdrop-blur-sm p-3 rounded-xl border border-white/20 shadow-sm">
+                        <div className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm p-3 rounded-xl border border-white/20 dark:border-slate-800/50 shadow-sm">
                             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5 mb-1.5">
                                 <Ruler className="w-3 h-3" /> Panjang Total
                             </span>
-                            <span className="text-base font-bold text-slate-700">{formatNumber(jalan.panjang)} m</span>
+                            <span className="text-base font-bold text-slate-700 dark:text-slate-300">{formatNumber(jalan.panjang)} m</span>
                         </div>
-                        <div className="bg-white/50 backdrop-blur-sm p-3 rounded-xl border border-white/20 shadow-sm">
+                        <div className="bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm p-3 rounded-xl border border-white/20 dark:border-slate-800/50 shadow-sm">
                             <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider flex items-center gap-1.5 mb-1.5">
                                 <HardHat className="w-3 h-3" /> Lebar Ruas
                             </span>
-                            <span className="text-base font-bold text-slate-700">{jalan.lebar} m</span>
+                            <span className="text-base font-bold text-slate-700 dark:text-slate-300">{jalan.lebar} m</span>
                         </div>
                     </div>
 
                     {summary && (
-                        <div className="mt-4 p-3 rounded-xl bg-emerald-500/5 border border-emerald-500/10">
+                        <div className="mt-4 p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/10 dark:border-emerald-500/20">
                             <div className="flex justify-between items-center mb-2">
-                                <span className="text-xs font-semibold text-emerald-700">Progres Pembangunan</span>
-                                <span className="text-xs font-bold text-emerald-700">
+                                <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Progres Pembangunan</span>
+                                <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">
                                     {Math.round((summary.fisik.total / summary.total_panjang_jalan) * 100)}%
                                 </span>
                             </div>
-                            <div className="h-2 w-full bg-slate-200/50 rounded-full overflow-hidden flex">
+                            <div className="h-2 w-full bg-slate-200/50 dark:bg-slate-800/50 rounded-full overflow-hidden flex">
                                 <div
                                     className="h-full bg-emerald-500 transition-all duration-700 ease-out"
                                     style={{ width: `${Math.min(100, (summary.fisik.total / summary.total_panjang_jalan) * 100)}%` }}
                                 />
                             </div>
-                            <div className="flex justify-between mt-2 text-[10px] text-emerald-600/80 font-medium">
+                            <div className="flex justify-between mt-2 text-[10px] text-emerald-600/80 dark:text-emerald-400/80 font-medium">
                                 <span>{formatNumber(summary.fisik.total)}m Terbangun</span>
                                 <span>{allSegments.length} Segmen</span>
                             </div>
@@ -104,13 +104,13 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                 </div>
 
                 {/* Content */}
-                <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
+                <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-slate-800 [&::-webkit-scrollbar-track]:bg-transparent focus:outline-hidden">
                     <div className="p-4">
                         <div className="flex items-center gap-2 mb-4">
-                            <div className="p-2 rounded-lg bg-emerald-100 text-emerald-600">
+                            <div className="p-2 rounded-lg bg-emerald-100 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
                                 <Calendar className="w-4 h-4" />
                             </div>
-                            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500">Riwayat Pembangunan</h3>
+                            <h3 className="text-sm font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400">Riwayat Pembangunan</h3>
                         </div>
 
                         {sortedYears.length > 0 ? (
@@ -132,10 +132,10 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                                                     <div
                                                         key={idx}
                                                         className={cn(
-                                                            "group bg-slate-50 border p-3 rounded-2xl transition-all duration-300",
+                                                            "group bg-slate-50 dark:bg-slate-900/50 border dark:border-slate-800 p-3 rounded-2xl transition-all duration-300",
                                                             isKabupaten
-                                                                ? "border-blue-100/60 hover:bg-blue-50/30 hover:border-blue-500/30 hover:shadow-blue-100"
-                                                                : "border-emerald-100/60 hover:bg-emerald-50/30 hover:border-emerald-500/30 hover:shadow-emerald-100",
+                                                                ? "border-blue-100/60 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 hover:border-blue-500/30 dark:hover:border-blue-500/30 hover:shadow-blue-100 dark:hover:shadow-blue-900/20"
+                                                                : "border-emerald-100/60 hover:bg-emerald-50/30 dark:hover:bg-emerald-900/10 hover:border-emerald-500/30 dark:hover:border-emerald-500/30 hover:shadow-emerald-100 dark:hover:shadow-emerald-900/20",
                                                             "hover:shadow-xl"
                                                         )}
                                                     >
@@ -149,7 +149,9 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                                                                 </Badge>
                                                                 <Badge variant="secondary" className={cn(
                                                                     "px-1.5 py-0.5 rounded text-[9px] font-bold uppercase",
-                                                                    isKabupaten ? "bg-blue-100 text-blue-600 border-blue-200" : "bg-emerald-100 text-emerald-600 border-emerald-200"
+                                                                    isKabupaten 
+                                                                        ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800" 
+                                                                        : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800"
                                                                 )}>
                                                                     {isKabupaten ? 'Kabupaten' : 'Desa'}
                                                                 </Badge>
@@ -171,33 +173,33 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                                                         <div className="grid grid-cols-2 gap-y-2 text-xs">
                                                             <div className="flex flex-col gap-0.5">
                                                                 <span className="text-slate-400 font-medium text-[10px] uppercase">Panjang</span>
-                                                                <span className="font-bold text-slate-700">{formatNumber(seg.panjang)} m</span>
+                                                                <span className="font-bold text-slate-700 dark:text-slate-300">{formatNumber(seg.panjang)} m</span>
                                                             </div>
                                                             <div className="flex flex-col gap-0.5">
                                                                 <span className="text-slate-400 font-medium text-[10px] uppercase">Lebar</span>
-                                                                <span className="font-bold text-slate-700">{seg.lebar} m</span>
+                                                                <span className="font-bold text-slate-700 dark:text-slate-300">{seg.lebar} m</span>
                                                             </div>
                                                         </div>
                                                         <span className="block text-[10px] pt-1 text-slate-400">{seg.id}</span>
 
                                                         {seg.verifikator && (
-                                                            <div className="mt-3 pt-3 border-t border-slate-200/50 flex items-center gap-2 text-[10px]">
+                                                            <div className="mt-3 pt-3 border-t border-slate-200/50 dark:border-slate-800/50 flex items-center gap-2 text-[10px]">
                                                                 <div className={cn(
                                                                     "w-5 h-5 rounded-full flex items-center justify-center",
-                                                                    isKabupaten ? "bg-blue-100 text-blue-600" : "bg-emerald-100 text-emerald-600"
+                                                                    isKabupaten ? "bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400" : "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400"
                                                                 )}>
                                                                     <HardHat className="w-3 h-3" />
                                                                 </div>
-                                                                <span className="text-slate-400 uppercase font-medium">Verifikator:</span>
-                                                                <span className="text-slate-600 font-bold">{seg.verifikator}</span>
+                                                                <span className="text-slate-400 dark:text-slate-500 uppercase font-medium">Verifikator:</span>
+                                                                <span className="text-slate-600 dark:text-slate-400 font-bold">{seg.verifikator}</span>
                                                             </div>
                                                         )}
 
                                                         {seg.sumber_data && (
-                                                            <div className="mt-2 p-2 rounded-lg bg-amber-50/50 border border-amber-100/50 text-[10px] text-slate-600 italic">
+                                                            <div className="mt-2 p-2 rounded-lg bg-amber-50/50 dark:bg-amber-900/10 border border-amber-100/50 dark:border-amber-900/20 text-[10px] text-slate-600 dark:text-slate-400 italic">
                                                                 <Info className="inline w-3 h-3 mr-1 text-amber-500 shrink-0" />
                                                                 {seg.sumber_data}
-                                                                <span className="block text-[10px] text-slate-400">Update: {seg.created_at ? new Date(seg.created_at).toLocaleDateString() : '-'}</span>
+                                                                <span className="block text-[10px] text-slate-400 dark:text-slate-500">Update: {seg.created_at ? new Date(seg.created_at).toLocaleDateString() : '-'}</span>
                                                             </div>
                                                         )}
                                                     </div>
@@ -219,7 +221,7 @@ export function ConstructionHistoryPanel({ data, isVisible, onClose }: Construct
                 </div>
 
                 {/* Footer Info */}
-                <div className="p-4 border-t bg-slate-50/50 text-[10px] text-muted-foreground">
+                <div className="p-4 border-t dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/50 text-[10px] text-muted-foreground">
                     <div className="flex justify-between items-center">
                         <span>Sumber Data: {jalan.sumber_data}</span>
                         <span>Update: {jalan.created_at ? new Date(jalan.created_at).toLocaleDateString() : '-'}</span>

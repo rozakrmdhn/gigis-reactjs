@@ -32,18 +32,18 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
         },
         {
             accessorKey: "total_panjang_dibangun",
-            header: () => <div className="text-right">Panjang Dibangun (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono text-green-600 font-medium">{formatNumber(row.getValue("total_panjang_dibangun"))}</div>,
+            header: () => <div className="text-right text-slate-800 dark:text-slate-200">Panjang Dibangun (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-green-600 dark:text-emerald-400 font-medium">{formatNumber(row.getValue("total_panjang_dibangun"))}</div>,
         },
         {
             accessorKey: "total_panjang_puk",
-            header: () => <div className="text-right">Peningkatan Status (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono text-green-600 font-medium">{formatNumber(row.getValue("total_panjang_puk"))}</div>,
+            header: () => <div className="text-right text-slate-800 dark:text-slate-200">Peningkatan Status (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-green-600 dark:text-teal-400 font-medium">{formatNumber(row.getValue("total_panjang_puk"))}</div>,
         },
         {
             accessorKey: "selisih",
-            header: () => <div className="text-right">Selisih (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono text-orange-600 font-medium">{formatNumber(row.getValue("selisih"))}</div>,
+            header: () => <div className="text-right text-slate-800 dark:text-slate-200">Selisih (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-orange-600 dark:text-orange-400 font-medium">{formatNumber(row.getValue("selisih"))}</div>,
         },
         {
             accessorKey: "status_pembangunan",
@@ -54,7 +54,7 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
                 return (
                     <Badge variant={isTuntas ? "default" : "secondary"} className={cn(
                         "font-medium",
-                        isTuntas ? "bg-green-100 text-green-700 hover:bg-green-100/80 border-green-200" : "bg-orange-100 text-orange-700 hover:bg-orange-100/80 border-orange-200"
+                        isTuntas ? "bg-green-100 text-green-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-green-100/80 border-green-200 dark:border-emerald-800/50" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 hover:bg-orange-100/80 border-orange-200 dark:border-orange-800/50"
                     )}>
                         {status}
                     </Badge>
@@ -65,7 +65,7 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
 
     return (
         <div className="grid lg:grid-cols-1 gap-4">
-            <Card className="gap-0 overflow-hidden">
+            <Card className="gap-0 overflow-hidden border dark:border-slate-800 bg-white dark:bg-slate-950">
                 <CardHeader>
                     <CardTitle>Data Rekap Jalan Per Desa</CardTitle>
                     <CardDescription>

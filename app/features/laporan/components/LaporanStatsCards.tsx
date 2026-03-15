@@ -12,7 +12,7 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
         return (
             <div className="grid gap-4 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-5">
                 {Array.from({ length: 5 }).map((_, i) => (
-                    <Card key={i} className="gap-1 relative overflow-hidden bg-white">
+                    <Card key={i} className="gap-1 relative overflow-hidden bg-white dark:bg-slate-950">
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4 pt-4">
                             <Skeleton className="h-3 w-24" />
                         </CardHeader>
@@ -38,41 +38,41 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
             title: "Total Desa",
             value: rekapData.length,
             description: "Jumlah desa yang terdata",
-            gradient: "from-slate-50 via-white to-slate-100/60",
-            border: "via-slate-400/60",
-            textColor: ""
+            gradient: "from-slate-50 via-white to-slate-100/60 dark:from-slate-900/50 dark:via-slate-950 dark:to-slate-900/20",
+            border: "via-slate-400/60 dark:via-slate-700/60",
+            textColor: "text-slate-900 dark:text-slate-100"
         },
         {
             title: "Panjang Jalan Desa",
             value: `${formatNumber(totalAset)} m`,
             description: "Total panjang Jalan Desa",
-            gradient: "from-sky-50 via-white to-blue-100/40",
-            border: "via-blue-400/60",
-            textColor: ""
+            gradient: "from-sky-50 via-white to-blue-100/40 dark:from-blue-900/20 dark:via-slate-950 dark:to-blue-900/10",
+            border: "via-blue-400/60 dark:via-blue-500/40",
+            textColor: "text-slate-900 dark:text-blue-100"
         },
         {
             title: "Jalan Desa Dibangun",
             value: `${formatNumber(totalDibangun)} m`,
             description: "Panjang Jalan Desa dibangun",
-            gradient: "from-emerald-50 via-white to-green-100/50",
-            border: "via-green-400/60",
-            textColor: "text-green-600"
+            gradient: "from-emerald-50 via-white to-green-100/50 dark:from-emerald-900/20 dark:via-slate-950 dark:to-emerald-900/10",
+            border: "via-green-400/60 dark:via-emerald-500/40",
+            textColor: "text-green-600 dark:text-emerald-400"
         },
         {
             title: "Peningkatan Status",
             value: `${formatNumber(totalPuk)} m`,
             description: "Total peningkatan status",
-            gradient: "from-teal-50 via-white to-emerald-100/40",
-            border: "via-emerald-400/60",
-            textColor: "text-green-600"
+            gradient: "from-teal-50 via-white to-emerald-100/40 dark:from-teal-900/20 dark:via-slate-950 dark:to-emerald-900/10",
+            border: "via-emerald-400/60 dark:via-teal-500/40",
+            textColor: "text-green-600 dark:text-teal-400"
         },
         {
             title: "Total Selisih",
             value: `${formatNumber(totalSelisih)} m`,
             description: "Sisa yang belum dibangun",
-            gradient: "from-orange-50 via-white to-amber-100/50",
-            border: "via-amber-400/60",
-            textColor: "text-orange-600"
+            gradient: "from-orange-50 via-white to-amber-100/50 dark:from-orange-900/20 dark:via-slate-950 dark:to-amber-900/10",
+            border: "via-amber-400/60 dark:via-orange-500/40",
+            textColor: "text-orange-600 dark:text-orange-400"
         }
     ];
 
@@ -81,9 +81,9 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
             {stats.map((stat, index) => (
                 <Card
                     key={index}
-                    className={`gap-1 relative overflow-hidden bg-gradient-to-br ${stat.gradient} transition-all hover:-translate-y-0.5 hover:shadow-md`}
+                    className={`gap-1 relative overflow-hidden bg-slate-50 dark:bg-slate-950 bg-linear-to-br ${stat.gradient} transition-all hover:-translate-y-0.5 hover:shadow-md dark:hover:shadow-emerald-900/10 border dark:border-slate-800`}
                 >
-                    <span className={`absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-transparent ${stat.border} to-transparent`} />
+                    <span className={`absolute inset-y-0 left-0 w-1 bg-linear-to-b from-transparent ${stat.border} to-transparent opacity-70`} />
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-0 px-4">
                         <CardTitle className="text-xs font-medium text-muted-foreground uppercase tracking-wider">{stat.title}</CardTitle>
                     </CardHeader>

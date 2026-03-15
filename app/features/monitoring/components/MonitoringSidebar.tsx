@@ -32,7 +32,7 @@ export function MonitoringSidebar({
     return (
         <div
             className={cn(
-                "absolute top-0 left-0 bottom-0 bg-background/95 backdrop-blur-sm border-r transition-transform duration-500 ease-in-out flex flex-col z-30 shadow-xl will-change-transform",
+                "absolute top-0 left-0 bottom-0 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm border-r dark:border-slate-800 transition-transform duration-500 ease-in-out flex flex-col z-30 shadow-xl will-change-transform",
                 widthClass,
                 !isOpen && "-translate-x-full",
                 className

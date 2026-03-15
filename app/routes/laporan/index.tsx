@@ -82,7 +82,7 @@ export default function LaporanPage() {
     }, []);
 
     return (
-        <div className="flex flex-1 flex-col gap-4 p-4 relative">
+        <div className="flex flex-1 flex-col gap-4 p-4 relative bg-background dark:bg-slate-950">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">Laporan Rekapitulasi</h1>

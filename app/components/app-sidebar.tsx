@@ -5,11 +5,13 @@ import {
   IconSettings,
   IconFileText,
   IconDatabase,
+  IconTopologyComplex,
 } from "@tabler/icons-react"
 
 import { NavMain } from "~/components/nav-main"
 import { NavSecondary } from "~/components/nav-secondary"
 import { NavUser } from "~/components/nav-user"
+import { ModeToggle } from "~/components/mode-toggle"
 import {
   Sidebar,
   SidebarContent,
@@ -86,15 +88,25 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     <Sidebar collapsible="offcanvas" {...props}>
       <SidebarHeader>
         <SidebarMenu>
-          <SidebarMenuItem>
+          <SidebarMenuItem className="flex items-center justify-between pr-2">
             <SidebarMenuButton
+              size="lg"
               asChild
-              className="data-[slot=sidebar-menu-button]:p-1.5!"
+              className="data-[slot=sidebar-menu-button]:p-1.5! flex-1"
             >
-              <a href="#">
-                <span className="text-base font-bold tracking-widest text-emerald-600">GIS MELAROSA</span>
+              <a href="/" className="flex items-center gap-2.5">
+                <div className="flex aspect-square size-9 items-center justify-center rounded-xl bg-emerald-600 text-white shadow-lg shadow-emerald-600/20 bg-linear-to-br from-emerald-500 to-emerald-700">
+                  <IconTopologyComplex className="size-5" />
+                </div>
+                <div className="flex flex-col gap-0.5 leading-none">
+                  <span className="text-sm font-black tracking-tight text-slate-900 dark:text-white uppercase transition-colors">GIS MELAROSA</span>
+                  <span className="text-[9px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-widest px-0.5 transition-colors">Monitoring System</span>
+                </div>
               </a>
             </SidebarMenuButton>
+            <div className="flex items-center">
+              <ModeToggle />
+            </div>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>

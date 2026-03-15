@@ -73,7 +73,7 @@ export function LaporanFilters({
                 size="sm"
                 onClick={onRefresh}
                 disabled={isLoading}
-                className="w-full sm:w-auto"
+                className="w-full sm:w-auto dark:border-slate-800 dark:hover:bg-slate-900"
             >
                 <RotateCw className={`h-4 w-4 ${isLoading ? "animate-spin" : ""}`} />
             </Button>

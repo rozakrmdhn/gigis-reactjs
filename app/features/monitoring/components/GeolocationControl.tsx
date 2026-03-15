@@ -150,7 +150,7 @@ export function GeolocationControl({ map, className }: GeolocationControlProps) 
         <TooltipProvider>
             <div className={cn("flex flex-col items-start gap-1", className)}>
                 {isTracking && accuracy !== null && (
-                    <div className="bg-white/90 backdrop-blur-md px-2 py-0.5 rounded-full border border-blue-200 shadow-sm text-[10px] font-bold text-blue-600 animate-in fade-in zoom-in duration-300">
+                    <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-900/50 shadow-sm text-[10px] font-bold text-blue-600 dark:text-blue-400 animate-in fade-in zoom-in duration-300">
                         Accuracy: {accuracy.toFixed(1)}m
                     </div>
                 )}
@@ -164,7 +164,7 @@ export function GeolocationControl({ map, className }: GeolocationControlProps) 
                                 "h-10 w-10 rounded-xl shadow-xl transition-all duration-300 cursor-pointer overflow-hidden relative",
                                 isTracking
                                     ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-700"
-                                    : "bg-white/80 backdrop-blur-md border-slate-200 text-slate-600 hover:bg-slate-50"
+                                    : "bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
                             )}
                             onClick={handleToggleTracking}
                             disabled={isLoading}

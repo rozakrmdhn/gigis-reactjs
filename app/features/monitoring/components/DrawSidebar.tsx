@@ -229,9 +229,9 @@ export function DrawSidebar({
 
     return (
         <MonitoringSidebar widthClass="w-80" isOpen={isOpen} onToggle={onToggle}>
-            <div className="flex flex-col h-full bg-slate-50/50 min-h-0">
+            <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/20 min-h-0">
                 <Tabs defaultValue="ruas" className="flex-1 flex flex-col min-h-0 gap-0">
-                    <div className="bg-white border-b px-2 py-2 shrink-0">
+                    <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 px-2 py-2 shrink-0">
                         <TabsList className="w-full grid grid-cols-2 h-8">
                             <TabsTrigger value="ruas" className="text-[10px] uppercase font-bold tracking-wider">Ruas Jalan</TabsTrigger>
                             <TabsTrigger value="koordinat" className="text-[10px] uppercase font-bold tracking-wider">Koordinat</TabsTrigger>
@@ -239,9 +239,9 @@ export function DrawSidebar({
                     </div>
 
                     <TabsContent value="ruas" className="flex-1 flex flex-col min-h-0 m-0">
-                        <div className="bg-white border-b shrink-0">
+                        <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 shrink-0">
                             {/* Header Controls */}
-                            <div className="p-2 border-b space-y-2">
+                            <div className="p-2 border-b dark:border-slate-800 space-y-2">
                                 <div className="flex items-center gap-3">
                                     <div className="flex flex-col gap-0.5 min-w-[70px]">
                                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Data</span>
@@ -287,7 +287,7 @@ export function DrawSidebar({
                                 )} />
                                 <Input
                                     placeholder="Cari ruas jalan..."
-                                    className="pl-8 h-9 text-base md:text-xs bg-slate-50 border-slate-200 focus:bg-white transition-all rounded-lg pr-8"
+                                    className="pl-8 h-9 text-base md:text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-950 transition-all rounded-lg pr-8 dark:text-slate-100"
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                 />
@@ -302,7 +302,7 @@ export function DrawSidebar({
                             </div>
                         </div>
 
-                        <div className="flex-1 overflow-hidden min-h-0 bg-slate-50/50">
+                        <div className="flex-1 overflow-hidden min-h-0 bg-slate-50/50 dark:bg-slate-950/10">
                             <ScrollArea className="h-full">
                                 <div className="p-2 space-y-2">
                                     <MonitoringList
@@ -322,7 +322,7 @@ export function DrawSidebar({
                     </TabsContent>
 
                     <TabsContent value="koordinat" className="flex-1 flex flex-col min-h-0 m-0">
-                        <div className="p-2 flex-1 bg-slate-50/30">
+                        <div className="p-2 flex-1 bg-slate-50/30 dark:bg-slate-950/30">
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest pl-1">Paste Lat Long</label>
@@ -332,7 +332,7 @@ export function DrawSidebar({
                                         </div>
                                         <Textarea
                                             placeholder="Contoh: -7.22, 111.83 (enter) -7.23, 111.84"
-                                            className="pl-10 h-32 text-base md:text-xs bg-white border-slate-200 focus:border-blue-400 focus:ring-4 focus:ring-blue-100 transition-all rounded-xl shadow-sm resize-none py-3 overflow-y-auto"
+                                            className="pl-10 h-32 text-base md:text-xs bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 focus:border-blue-400 dark:focus:border-blue-600 focus:ring-4 focus:ring-blue-100 dark:focus:ring-blue-900/20 transition-all rounded-xl shadow-sm resize-none py-3 overflow-y-auto dark:text-slate-100"
                                             value={coordSearch}
                                             onChange={(e) => setCoordSearch(e.target.value)}
                                         />
@@ -349,7 +349,7 @@ export function DrawSidebar({
                                 </div>
 
                                 <Button
-                                    className="w-full h-10 rounded-xl bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 font-bold text-xs uppercase tracking-widest"
+                                    className="w-full h-10 rounded-xl bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 shadow-lg shadow-blue-200 dark:shadow-blue-900/40 font-bold text-xs uppercase tracking-widest text-white transition-all active:scale-95"
                                     onClick={handleLocateCoordinate}
                                     disabled={!coordSearch}
                                 >
@@ -357,16 +357,16 @@ export function DrawSidebar({
                                 </Button>
 
                                 <div className="space-y-3">
-                                    <div className="p-3 rounded-xl bg-blue-50 border border-blue-100">
-                                        <h5 className="text-[12px] font-bold text-blue-700 uppercase mb-1 tracking-tight">Pencarian Koordinat</h5>
-                                        <p className="text-[10px] text-blue-600 leading-relaxed opacity-80">
+                                    <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-900/30">
+                                        <h5 className="text-[12px] font-bold text-blue-700 dark:text-blue-400 uppercase mb-1 tracking-tight">Pencarian Koordinat</h5>
+                                        <p className="text-[10px] text-blue-600 dark:text-blue-400 leading-relaxed opacity-80">
                                             Fitur ini memungkinkan Anda untuk langsung menuju titik tertentu di peta dengan koordinat GPS.
                                             Marker akan muncul untuk menandai lokasi tersebut.
                                         </p>
                                     </div>
-                                    <div className="p-3 rounded-xl bg-slate-100/50 border border-slate-200">
-                                        <h5 className="text-[12px] font-bold text-slate-700 uppercase mb-1 tracking-tight">Tip</h5>
-                                        <p className="text-[10px] text-slate-500 leading-relaxed">
+                                    <div className="p-3 rounded-xl bg-slate-100/50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                                        <h5 className="text-[12px] font-bold text-slate-700 dark:text-slate-200 uppercase mb-1 tracking-tight">Tip</h5>
+                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-relaxed">
                                             Anda bisa mendapatkan koordinat dengan cara klik kiri di mana saja pada peta.
                                         </p>
                                     </div>
@@ -377,7 +377,7 @@ export function DrawSidebar({
                 </Tabs>
 
                 {/* Footer Pagination & Refresh */}
-                <div className="sticky bottom-0 left-0 right-0 bg-background/95 backdrop-blur-sm border-t p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1 shrink-0">
+                <div className="sticky bottom-0 left-0 right-0 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm border-t dark:border-slate-800 p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1 shrink-0">
                     <Button
                         variant="ghost"
                         size="icon"

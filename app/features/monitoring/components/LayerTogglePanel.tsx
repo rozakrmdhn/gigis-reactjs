@@ -79,8 +79,8 @@ function SortableLayerItem({
             ref={setNodeRef}
             style={style}
             className={cn(
-                "flex items-center space-x-2 p-1.5 rounded-xl hover:bg-slate-50 transition-colors group border border-transparent",
-                isDragging && "bg-blue-50/50 border-blue-200 shadow-lg opacity-90"
+                "flex items-center space-x-2 p-1.5 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group border border-transparent",
+                isDragging && "bg-blue-50/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/30 shadow-lg opacity-90"
             )}
         >
             <div
@@ -91,12 +91,12 @@ function SortableLayerItem({
                     id={layer.id}
                     checked={layer.visible}
                     onCheckedChange={(checked) => onToggle(layer.id, !!checked)}
-                    className="h-4 w-4 border-slate-300 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 rounded-md shrink-0"
+                    className="h-4 w-4 border-slate-300 dark:border-slate-700 data-[state=checked]:bg-blue-600 data-[state=checked]:border-blue-600 rounded-md shrink-0"
                 />
 
                 {/* Legend Icon */}
                 {layer.color && (
-                    <div className="flex items-center justify-center w-6 h-4 bg-slate-100/50 rounded-md overflow-hidden shrink-0">
+                    <div className="flex items-center justify-center w-6 h-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-md overflow-hidden shrink-0">
                         <div
                             className={cn(
                                 "w-full h-1 rounded-full",
@@ -113,7 +113,7 @@ function SortableLayerItem({
 
                 <Label
                     htmlFor={layer.id}
-                    className="text-[10px] font-bold text-slate-700 group-hover:text-slate-900 cursor-pointer uppercase tracking-tight truncate flex-1"
+                    className="text-[10px] font-bold text-slate-700 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-slate-100 cursor-pointer uppercase tracking-tight truncate flex-1"
                     title={layer.label}
                 >
                     {layer.label}
@@ -122,7 +122,7 @@ function SortableLayerItem({
             <div
                 {...attributes}
                 {...listeners}
-                className="cursor-grab active:cursor-grabbing p-1.5 -mr-1 text-slate-300 hover:text-blue-600 transition-colors touch-none shrink-0"
+                className="cursor-grab active:cursor-grabbing p-1.5 -mr-1 text-slate-300 dark:text-slate-600 hover:text-blue-600 dark:hover:text-blue-400 transition-colors touch-none shrink-0"
             >
                 <GripVertical className="w-3.5 h-3.5" />
             </div>
@@ -179,20 +179,20 @@ export function LayerTogglePanel({
 
     return (
         <Drawer open={isVisible} onOpenChange={(open) => !open && onClose()} direction="right">
-            <DrawerContent className={cn("h-full", className)}>
-                <DrawerHeader className="p-3 border-b bg-slate-50 flex flex-col gap-3 shrink-0">
+            <DrawerContent className={cn("h-full dark:bg-slate-900 dark:border-slate-800", className)}>
+                <DrawerHeader className="p-3 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex flex-col gap-3 shrink-0">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <div className="p-2 bg-blue-600 rounded-lg text-white">
                                 <Layers className="w-5 h-5" />
                             </div>
                             <div className="text-left">
-                                <DrawerTitle className="text-sm font-bold text-slate-900 tracking-tight">LAYER SETTINGS</DrawerTitle>
-                                <DrawerDescription className="text-[10px] text-slate-500 uppercase font-semibold">Manage map layers</DrawerDescription>
+                                <DrawerTitle className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight">LAYER SETTINGS</DrawerTitle>
+                                <DrawerDescription className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold">Manage map layers</DrawerDescription>
                             </div>
                         </div>
-                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-200">
-                            <X className="w-5 h-5" />
+                        <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-200 dark:hover:bg-slate-800">
+                            <X className="w-5 h-5 dark:text-slate-400" />
                         </Button>
                     </div>
 
@@ -202,7 +202,7 @@ export function LayerTogglePanel({
                         <input
                             type="text"
                             placeholder="SEARCH LAYERS..."
-                            className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-9 pr-4 text-[10px] font-bold uppercase tracking-wider focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
+                            className="w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl py-2 pl-9 pr-4 text-[10px] font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all shadow-sm"
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                         />
@@ -212,14 +212,14 @@ export function LayerTogglePanel({
                 <div className="flex-1 overflow-y-auto p-4 space-y-6">
                     <div className="space-y-4">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-[10px] font-black text-slate-400 tracking-widest uppercase">Visible Layers</h3>
+                            <h3 className="text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-widest uppercase">Visible Layers</h3>
                             <div className="flex items-center gap-2">
                                 {onClearAll && layers.some(l => l.id.startsWith("road-")) && (
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         onClick={onClearAll}
-                                        className="h-7 px-2 text-[9px] font-bold text-rose-500 hover:text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg gap-2 uppercase tracking-tight transition-all"
+                                        className="h-7 px-2 text-[9px] font-bold text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 bg-rose-50 dark:bg-rose-900/20 hover:bg-rose-100 dark:hover:bg-rose-900/40 rounded-lg gap-2 uppercase tracking-tight transition-all"
                                     >
                                         <Trash2 className="w-3 h-3" />
                                         Clear All
@@ -230,7 +230,7 @@ export function LayerTogglePanel({
                                         variant="ghost"
                                         size="sm"
                                         onClick={onResetOrder}
-                                        className="h-7 px-2 text-[9px] font-bold text-slate-500 hover:text-blue-600 bg-slate-100 hover:bg-blue-50 rounded-lg gap-2 uppercase tracking-tight transition-all"
+                                        className="h-7 px-2 text-[9px] font-bold text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg gap-2 uppercase tracking-tight transition-all"
                                     >
                                         <RotateCcw className="w-3 h-3" />
                                         Reset Order
@@ -297,17 +297,17 @@ export function LayerTogglePanel({
                             )}
 
                             {filteredLayers.length === 0 && (
-                                <div className="py-12 text-center bg-slate-50 rounded-2xl border border-dashed border-slate-200 px-4">
-                                    <Search className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No layers found</p>
+                                <div className="py-12 text-center bg-slate-50 dark:bg-slate-900/50 rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 px-4">
+                                    <Search className="w-8 h-8 text-slate-200 dark:text-slate-800 mx-auto mb-2" />
+                                    <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600 uppercase tracking-widest">No layers found</p>
                                 </div>
                             )}
                         </div>
                     </div>
                 </div>
 
-                <DrawerFooter className="p-4 border-t bg-slate-50">
-                    <p className="text-[9px] text-center text-slate-400 font-medium">
+                <DrawerFooter className="p-4 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                    <p className="text-[9px] text-center text-slate-400 dark:text-slate-500 font-medium">
                         Drag <GripVertical className="inline w-2 h-2 mb-0.5" /> to reorder layers priority
                     </p>
                 </DrawerFooter>

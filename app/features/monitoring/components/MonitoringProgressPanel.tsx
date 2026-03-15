@@ -126,7 +126,7 @@ export function MonitoringProgressPanel({
     return (
         <div
             className={cn(
-                "absolute inset-y-0 right-0 z-60 w-full sm:w-[500px] bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
+                "absolute inset-y-0 right-0 z-60 w-full sm:w-[500px] bg-white dark:bg-slate-900 border-l dark:border-slate-800 shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
                 isVisible ? "translate-x-0" : "translate-x-full"
             )}
         >
@@ -148,24 +148,24 @@ export function MonitoringProgressPanel({
                 </Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
+            <div className="flex-1 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-track]:bg-transparent">
                 {/* Form Section */}
-                <div className="p-4 border-b bg-slate-50/50">
+                <div className="p-4 border-b dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
                     <div className="flex items-center gap-2 mb-4">
-                        <Plus className="w-4 h-4 text-emerald-600" />
-                        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <Plus className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        <h3 className="text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider">
                             {editingId ? "Edit Data Progres" : "Tambah Progres Baru"}
                         </h3>
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] uppercase font-bold text-slate-500">Tanggal</Label>
+                                <Label className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Tanggal</Label>
                                 <div className="relative">
-                                    <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                    <Calendar className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                                     <Input
                                         type="date"
-                                        className="h-9 text-base md:text-xs pl-8"
+                                        className="h-9 text-base md:text-xs pl-8 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                                         value={formData.tanggal}
                                         onChange={e => setFormData({ ...formData, tanggal: e.target.value })}
                                         required
@@ -173,14 +173,14 @@ export function MonitoringProgressPanel({
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] uppercase font-bold text-slate-500">Progres (%)</Label>
+                                <Label className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Progres (%)</Label>
                                 <div className="relative">
-                                    <Activity className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                    <Activity className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                                     <Input
                                         type="number"
                                         min="0"
                                         max="100"
-                                        className="h-9 text-base md:text-xs pl-8"
+                                        className="h-9 text-base md:text-xs pl-8 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                                         placeholder="0-100"
                                         value={formData.progres}
                                         onChange={e => setFormData({ ...formData, progres: parseInt(e.target.value) || 0 })}
@@ -190,11 +190,11 @@ export function MonitoringProgressPanel({
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] uppercase font-bold text-slate-500">Catatan</Label>
+                            <Label className="text-[10px] uppercase font-bold text-slate-500 dark:text-slate-400">Catatan</Label>
                             <div className="relative">
-                                <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                                <FileText className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 dark:text-slate-500" />
                                 <Textarea
-                                    className="text-base md:text-xs pl-8 min-h-[80px] pt-2"
+                                    className="text-base md:text-xs pl-8 min-h-[80px] pt-2 dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
                                     placeholder="Catatan progres..."
                                     value={formData.catatan}
                                     onChange={e => setFormData({ ...formData, catatan: e.target.value })}
@@ -207,12 +207,12 @@ export function MonitoringProgressPanel({
                                     type="button"
                                     variant="outline"
                                     onClick={handleCancelEdit}
-                                    className="flex-1 h-9 text-xs font-bold"
+                                    className="flex-1 h-9 text-xs font-bold dark:bg-slate-800 dark:border-slate-700 dark:text-slate-200"
                                 >
                                     BATAL
                                 </Button>
                             )}
-                            <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-xs font-bold gap-2 shadow-lg shadow-emerald-100">
+                            <Button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 h-9 text-xs font-bold gap-2 shadow-lg shadow-emerald-100 dark:shadow-emerald-900/20">
                                 <Save className="w-4 h-4" />
                                 {editingId ? "UPDATE PROGRES" : "SIMPAN PROGRES"}
                             </Button>
@@ -223,38 +223,38 @@ export function MonitoringProgressPanel({
                 {/* History Table */}
                 <div className="p-4">
                     <div className="flex items-center gap-2 mb-4">
-                        <LayoutList className="w-4 h-4 text-slate-600" />
-                        <h3 className="text-xs font-bold text-slate-700 uppercase tracking-wider">Riwayat Monitoring</h3>
+                        <LayoutList className="w-4 h-4 text-slate-600 dark:text-slate-400" />
+                        <h3 className="text-xs font-bold text-slate-700 dark:text-slate-100 uppercase tracking-wider">Riwayat Monitoring</h3>
                     </div>
 
-                    <div className="border rounded-xl overflow-hidden shadow-sm">
+                    <div className="border dark:border-slate-800 rounded-xl overflow-hidden shadow-sm">
                         <Table>
-                            <TableHeader className="bg-slate-50">
-                                <TableRow>
-                                    <TableHead className="text-[10px] font-bold uppercase py-2">Tanggal</TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase py-2">Progres</TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase py-2">Catatan</TableHead>
-                                    <TableHead className="text-[10px] font-bold uppercase py-2 w-[80px]"></TableHead>
+                            <TableHeader className="bg-slate-50 dark:bg-slate-900">
+                                <TableRow className="dark:border-slate-800">
+                                    <TableHead className="text-[10px] font-bold uppercase py-2 dark:text-slate-400">Tanggal</TableHead>
+                                    <TableHead className="text-[10px] font-bold uppercase py-2 dark:text-slate-400">Progres</TableHead>
+                                    <TableHead className="text-[10px] font-bold uppercase py-2 dark:text-slate-400">Catatan</TableHead>
+                                    <TableHead className="text-[10px] font-bold uppercase py-2 w-[80px] dark:text-slate-400"></TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {isLoading ? (
                                     <TableRow>
                                         <TableCell colSpan={4} className="text-center py-8">
-                                            <Activity className="w-6 h-6 text-slate-300 animate-spin mx-auto mb-2" />
-                                            <p className="text-[10px] font-bold text-slate-400">MEMUAT DATA...</p>
+                                            <Activity className="w-6 h-6 text-slate-300 dark:text-slate-700 animate-spin mx-auto mb-2" />
+                                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500">MEMUAT DATA...</p>
                                         </TableCell>
                                     </TableRow>
                                 ) : history.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={4} className="text-center py-12">
-                                            <p className="text-[10px] font-bold text-slate-400">BELUM ADA DATA MONITORING</p>
+                                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-600">BELUM ADA DATA MONITORING</p>
                                         </TableCell>
                                     </TableRow>
                                 ) : (
                                     history.map((item) => (
-                                        <TableRow key={item.id} className="hover:bg-slate-50/50">
-                                            <TableCell className="text-[11px] font-medium py-3">
+                                        <TableRow key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 dark:border-slate-800">
+                                            <TableCell className="text-[11px] font-medium py-3 dark:text-slate-300">
                                                 {new Date(item.tanggal).toLocaleDateString('id-ID', {
                                                     day: 'numeric',
                                                     month: 'short',
@@ -263,14 +263,14 @@ export function MonitoringProgressPanel({
                                             </TableCell>
                                             <TableCell className="py-3">
                                                 <div className="space-y-1.5 w-[100px]">
-                                                    <div className="flex justify-between items-center text-[10px] font-bold">
+                                                    <div className="flex justify-between items-center text-[10px] font-bold dark:text-slate-300">
                                                         <span>{item.progres}%</span>
                                                         {item.progres === 100 && <CheckCircle2 className="w-3 h-3 text-emerald-500" />}
                                                     </div>
-                                                    <Progress value={item.progres} className="h-1.5 bg-slate-100" />
+                                                    <Progress value={item.progres} className="h-1.5 bg-slate-100 dark:bg-slate-800" />
                                                 </div>
                                             </TableCell>
-                                            <TableCell className="text-[11px] text-slate-600 py-3 whitespace-normal max-w-[150px]">
+                                            <TableCell className="text-[11px] text-slate-600 dark:text-slate-400 py-3 whitespace-normal max-w-[150px]">
                                                 {item.catatan || "-"}
                                             </TableCell>
                                             <TableCell className="py-3">
@@ -278,7 +278,7 @@ export function MonitoringProgressPanel({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                                                        className="h-7 w-7 text-blue-500 dark:text-blue-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                                                         onClick={() => handleEdit(item)}
                                                     >
                                                         <Pencil className="w-3.5 h-3.5" />
@@ -286,7 +286,7 @@ export function MonitoringProgressPanel({
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7 text-rose-500 hover:text-rose-600 hover:bg-rose-50"
+                                                        className="h-7 w-7 text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 hover:bg-rose-50 dark:hover:bg-rose-900/30"
                                                         onClick={() => handleDelete(item.id)}
                                                     >
                                                         <Trash2 className="w-3.5 h-3.5" />

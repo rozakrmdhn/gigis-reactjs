@@ -31,20 +31,20 @@ export function BasemapToggle({ activeBasemap, onBasemapChange, className }: Bas
                     variant="outline"
                     size="icon"
                     className={cn(
-                        "bg-white/95 backdrop-blur-md border border-slate-200 shadow-xl hover:bg-slate-50 transition-all rounded-xl h-10 w-10 cursor-pointer",
+                        "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl h-10 w-10 cursor-pointer",
                         className
                     )}
                 >
-                    <MapIcon className="h-5 w-5 text-slate-600" />
+                    <MapIcon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
                 </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 p-3 rounded-2xl border border-slate-100 shadow-2xl bg-white/95 backdrop-blur-md z-50">
+            <PopoverContent align="end" className="w-64 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-50">
                 <div className="space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
                         <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-600 flex items-center justify-center">
                             <div className="w-1 h-1 bg-blue-600 rounded-full" />
                         </div>
-                        <h3 className="text-[10px] font-black text-slate-800 tracking-wider uppercase">Basemap</h3>
+                        <h3 className="text-[10px] font-black text-slate-800 dark:text-slate-100 tracking-wider uppercase">Basemap</h3>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -55,14 +55,14 @@ export function BasemapToggle({ activeBasemap, onBasemapChange, className }: Bas
                                 className={cn(
                                     "flex flex-col items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer",
                                     activeBasemap === map.id
-                                        ? "bg-blue-50 border-blue-200 text-blue-700 shadow-sm"
-                                        : "bg-white border-slate-100 text-slate-500 hover:border-slate-200 hover:bg-slate-50"
+                                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-400 shadow-sm"
+                                        : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
                                 )}
                             >
                                 <div
                                     className={cn(
                                         "w-full h-8 rounded-lg border",
-                                        activeBasemap === map.id ? "border-blue-400" : "border-slate-200"
+                                        activeBasemap === map.id ? "border-blue-400 dark:border-blue-500" : "border-slate-200 dark:border-slate-700"
                                     )}
                                     style={{ backgroundImage: `url(${map.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
                                 />

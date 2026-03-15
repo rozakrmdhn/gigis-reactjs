@@ -145,34 +145,34 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     return (
         <div
             className={cn(
-                "absolute inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-white border-l shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
+                "absolute inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-white dark:bg-slate-900 border-l dark:border-slate-800 shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
                 isVisible ? "translate-x-0" : "translate-x-full"
             )}
         >
-            <div className="p-3 border-b bg-slate-50 flex items-center justify-between">
+            <div className="p-3 border-b dark:border-slate-800 bg-slate-50 dark:bg-slate-900 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="p-2 bg-blue-600 rounded-lg text-white">
                         <Save className="w-5 h-5" />
                     </div>
                     <div>
-                        <h2 className="text-sm font-bold text-slate-900 tracking-tight">{selectedRoad ? "SIMPAN SEGMEN BARU" : "TAMBAH JALAN LINGKUNGAN"}</h2>
-                        <p className="text-[10px] text-slate-500 uppercase font-semibold">{selectedRoad ? `Ruas #${selectedRoad.jalan.kode_ruas}` : "Non-Ruas (Jalan Lingkungan)"}</p>
+                        <h2 className="text-sm font-bold text-slate-900 dark:text-slate-100 tracking-tight">{selectedRoad ? "SIMPAN SEGMEN BARU" : "TAMBAH JALAN LINGKUNGAN"}</h2>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 uppercase font-semibold">{selectedRoad ? `Ruas #${selectedRoad.jalan.kode_ruas}` : "Non-Ruas (Jalan Lingkungan)"}</p>
                     </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
-                    <X className="w-5 h-5" />
+                <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full hover:bg-slate-200 dark:hover:bg-slate-800">
+                    <X className="w-5 h-5 dark:text-slate-400" />
                 </Button>
             </div>
 
-            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3 space-y-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-track]:bg-transparent">
+            <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-3 space-y-6 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-slate-300 dark:[&::-webkit-scrollbar-thumb]:bg-slate-700 [&::-webkit-scrollbar-track]:bg-transparent">
                 <div className="space-y-4">
 
                     {/* Basic Info Readonly/Disabled */}
-                    <div className="grid grid-cols-2 gap-4 bg-slate-50 p-3 rounded-xl border border-slate-100">
+                    <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                         <div className="space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400">Desa</Label>
+                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Desa</Label>
                             {selectedRoad ? (
-                                <div className="font-bold text-xs text-slate-700">{formData.desa}</div>
+                                <div className="font-bold text-xs text-slate-700 dark:text-slate-300">{formData.desa}</div>
                             ) : (
                                 <Select
                                     value={formData.desa_id}
@@ -200,9 +200,9 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                             )}
                         </div>
                         <div className="space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400">Kecamatan</Label>
+                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Kecamatan</Label>
                             {selectedRoad ? (
-                                <div className="font-bold text-xs text-slate-700">{formData.kecamatan}</div>
+                                <div className="font-bold text-xs text-slate-700 dark:text-slate-300">{formData.kecamatan}</div>
                             ) : (
                                 <Select
                                     value={formData.kecamatan_id}
@@ -231,9 +231,9 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                             )}
                         </div>
                         <div className="col-span-2 space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400">Nama Jalan</Label>
+                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Nama Jalan</Label>
                             {selectedRoad ? (
-                                <div className="font-bold text-xs text-slate-700">{formData.nama_jalan}</div>
+                                <div className="font-bold text-xs text-slate-700 dark:text-slate-300">{formData.nama_jalan}</div>
                             ) : (
                                 <Input
                                     value={formData.nama_jalan}
@@ -245,13 +245,13 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 border-blue-100">
+                    <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
                         <Checkbox
                             id="melarosa-new"
                             checked={formData.check_melarosa}
                             onCheckedChange={(c) => setFormData({ ...formData, check_melarosa: c as boolean })}
                         />
-                        <Label htmlFor="melarosa-new" className="text-xs font-bold text-slate-700 cursor-pointer">
+                        <Label htmlFor="melarosa-new" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
                             Check Melarosa
                         </Label>
                     </div>
@@ -375,8 +375,8 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                 </div>
             </form>
 
-            <div className="p-3 border-t bg-slate-50">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 h-10 text-sm font-bold shadow-lg shadow-blue-200" onClick={handleSubmit}>
+            <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                <Button className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 h-10 text-sm font-bold shadow-lg shadow-blue-200 dark:shadow-blue-900/40" onClick={handleSubmit}>
                     <Save className="w-4 h-4 mr-2" />
                     SIMPAN DATA SEGMEN
                 </Button>

@@ -39,7 +39,7 @@ export function DrawControls({
 
     return (
         <TooltipProvider>
-            <div className={cn("flex flex-col gap-1.5 p-1 bg-white/80 backdrop-blur-md border rounded-xl shadow-xl", className)}>
+            <div className={cn("flex flex-col gap-1.5 p-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border dark:border-slate-800 rounded-xl shadow-xl", className)}>
                 {tools.map((tool) => (
                     <Tooltip key={tool.id}>
                         <TooltipTrigger asChild>
@@ -49,8 +49,8 @@ export function DrawControls({
                                 className={cn(
                                     "h-8 w-8 rounded-xl transition-all duration-300",
                                     mode === tool.id
-                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200"
-                                        : "hover:bg-blue-50 hover:text-blue-600 cursor-pointer"
+                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-blue-900/20"
+                                        : "hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
                                 )}
                                 onClick={() => onSetMode(tool.id as DrawMode)}
                             >
@@ -63,7 +63,7 @@ export function DrawControls({
                     </Tooltip>
                 ))}
 
-                <div className="h-px bg-slate-200/60 mx-1" />
+                <div className="h-px bg-slate-200/60 dark:bg-slate-800/60 mx-1" />
 
                 {canFinishReshape && (
                     <Tooltip>
@@ -107,37 +107,41 @@ export function DrawControls({
 
 
 
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all duration-300 cursor-pointer"
-                            onClick={onClear}
-                        >
-                            <Trash2 className="h-4 w-4" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                        <p className="text-xs font-semibold text-red-600">Clear All</p>
-                    </TooltipContent>
-                </Tooltip>
+                {mode.startsWith("draw-") && (
+                    <>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all duration-300 cursor-pointer"
+                                    onClick={onClear}
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                <p className="text-xs font-semibold text-red-600">Clear All</p>
+                            </TooltipContent>
+                        </Tooltip>
 
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all duration-300 cursor-pointer"
-                            onClick={onExport}
-                        >
-                            <Download className="h-4 w-4" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                        <p className="text-xs font-semibold text-blue-600">Export GeoJSON</p>
-                    </TooltipContent>
-                </Tooltip>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all duration-300 cursor-pointer"
+                                    onClick={onExport}
+                                >
+                                    <Download className="h-4 w-4" />
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">
+                                <p className="text-xs font-semibold text-blue-600">Export GeoJSON</p>
+                            </TooltipContent>
+                        </Tooltip>
+                    </>
+                )}
 
             </div>
         </TooltipProvider>
