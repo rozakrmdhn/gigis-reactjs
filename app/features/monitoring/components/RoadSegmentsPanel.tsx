@@ -30,6 +30,7 @@ interface RoadSegmentsPanelProps {
     isOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
     className?: string;
+    selectedRoad?: any | null;
 }
 
 export function RoadSegmentsPanel({
@@ -44,7 +45,8 @@ export function RoadSegmentsPanel({
     onAddLingkungan,
     isOpen: propIsOpen,
     onOpenChange,
-    className
+    className,
+    selectedRoad
 }: RoadSegmentsPanelProps) {
     const [internalIsOpen, setInternalIsOpen] = useState(true);
 
@@ -243,6 +245,31 @@ export function RoadSegmentsPanel({
                         <X className="w-4 h-4 text-slate-500" />
                     </Button>
                 </div>
+
+                {/* Road Info Section */}
+                {selectedRoad && (
+                    <div className="mt-2 p-3 bg-blue-50/50 rounded-2xl border border-blue-100/50 animate-in slide-in-from-top-2 duration-300">
+                        <div className="flex items-center gap-2 mb-2">
+                            <div className="p-1 bg-blue-500 rounded-lg">
+                                <MapPin className="w-3 h-3 text-white" />
+                            </div>
+                            <span className="text-[10px] uppercase font-black text-blue-600 tracking-widest">Ruas Terpilih</span>
+                        </div>
+                        <h3 className="text-sm font-bold text-slate-800 leading-tight mb-3">
+                            {selectedRoad.jalan.nama_ruas || 'Nama tidak tersedia'}
+                        </h3>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="bg-white/80 p-2 rounded-xl border border-blue-100/30">
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Panjang</p>
+                                <p className="text-xs font-black text-slate-700">{formatNumber(selectedRoad.jalan.panjang)}m</p>
+                            </div>
+                            <div className="bg-white/80 p-2 rounded-xl border border-blue-100/30">
+                                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-tighter">Lebar</p>
+                                <p className="text-xs font-black text-slate-700">{formatNumber(selectedRoad.jalan.lebar)}m</p>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
 
             <div className="flex-1 flex flex-col min-h-0">
