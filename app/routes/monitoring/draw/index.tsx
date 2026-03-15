@@ -204,9 +204,9 @@ export default function DrawPage() {
     const [contextMenuCoords, setContextMenuCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [lastCopiedCoords, setLastCopiedCoords] = useState<{ lat: number; lng: number } | null>(null);
     const [isCopied, setIsCopied] = useState(false);
-    const [selectedVectorInfo, setSelectedVectorInfo] = useState<{ 
-        properties: any; 
-        coordinate: number[] | null; 
+    const [selectedVectorInfo, setSelectedVectorInfo] = useState<{
+        properties: any;
+        coordinate: number[] | null;
         id?: string | number | null;
     } | null>(null);
     const [selectedVectorId, setSelectedVectorId] = useState<string | number | null>(null);
@@ -385,7 +385,7 @@ export default function DrawPage() {
                 const kondisi = feature.get("kondisi") || "baik";
 
                 let color = "#22c55e"; // emerald 500
-                if (isKabupaten) color = "oklch(0.546 0.245 262.881)"; 
+                if (isKabupaten) color = "oklch(0.546 0.245 262.881)";
                 else if (kondisi.toLowerCase().includes("rusak berat")) color = "#f43f5e"; // rose 500
                 else if (kondisi.toLowerCase().includes("rusak ringan")) color = "#f59e0b"; // amber 500
                 else if (kondisi.toLowerCase().includes("sedang")) color = "#3b82f6"; // blue 500
@@ -512,9 +512,9 @@ export default function DrawPage() {
 
         const jalanKabupatenWmsLayer = new TileLayer({
             source: new TileWMS({
-                url: 'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms',
+                url: 'https://geoportal.saggaserv.my.id/geoserver/sagga/wms',
                 params: {
-                    'LAYERS': 'palapa:JALAN_KABUPATEN_2022',
+                    'LAYERS': 'sagga:JALAN_KABUPATEN_2022',
                     'TILED': true,
                     'TRANSPARENT': true,
                     'VERSION': '1.1.1'
@@ -1995,7 +1995,7 @@ export default function DrawPage() {
                             "absolute top-2 right-2 transition-transform duration-500 z-40 will-change-transform flex gap-2 items-center",
                             segmentPanelVisible && isSegmentPanelOpen && "-translate-x-80"
                         )}>
-                            
+
                             {/* Clear Selected Layers Button */}
                             {checkedRoadIds.length > 0 && (
                                 <Button
@@ -2008,7 +2008,7 @@ export default function DrawPage() {
                                     Clear
                                 </Button>
                             )}
-                            
+
                             <LayerToggle
                                 onClick={() => setIsLayerPanelOpen(!isLayerPanelOpen)}
                                 isActive={isLayerPanelOpen}
@@ -2135,7 +2135,7 @@ export default function DrawPage() {
 
                         {/* Vector Feature Popup (Portal/Overlay) */}
                         {selectedVectorInfo && vectorPopupElementRef.current && createPortal(
-                            <div 
+                            <div
                                 className={cn(
                                     "bg-white/95 dark:bg-slate-950/95 backdrop-blur-md rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-2xl w-64 flex flex-col animate-in zoom-in-95 duration-300 pointer-events-auto relative overflow-visible group mb-4 transition-all ease-in-out",
                                     isPopupMinimized ? "p-2.5 h-auto overflow-hidden" : "p-3.5 max-h-[350px]"
@@ -2143,7 +2143,7 @@ export default function DrawPage() {
                             >
                                 {/* Pointer Arrow */}
                                 <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white dark:bg-slate-950 rotate-45 border-r border-b border-blue-100/50 dark:border-blue-900/50" />
-                                
+
                                 <style>{`
                                     .custom-scrollbar::-webkit-scrollbar {
                                         width: 3px;
