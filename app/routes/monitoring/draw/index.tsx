@@ -14,7 +14,7 @@ import { createBox } from "ol/interaction/Draw";
 import { defaults as defaultControls } from "ol/control";
 import GeoJSON from "ol/format/GeoJSON";
 import { fromLonLat, toLonLat } from "ol/proj";
-import { createEmpty as createEmptyExtent, extend as extendExtent } from 'ol/extent';
+import { createEmpty as createEmptyExtent, extend as extendExtent, isEmpty as isEmptyExtent } from 'ol/extent';
 import { getLength } from 'ol/sphere';
 import { Circle as CircleStyle, Fill, Stroke, Style, Text } from "ol/style";
 import { altKeyOnly } from "ol/events/condition";
@@ -674,6 +674,16 @@ export default function DrawPage() {
                 if (feature instanceof Feature) {
                     const highlightFeature = feature.clone();
                     highlightSourceRef.current?.addFeature(highlightFeature);
+
+                    // ZOOM TO EXTENT of the clicked feature
+                    const geometry = feature.getGeometry();
+                    if (geometry) {
+                        const extent = geometry.getExtent();
+                        mapRef.current?.getView().fit(extent, {
+                            padding: [100, 100, 100, 100],
+                            duration: 1000
+                        });
+                    }
                 }
                 return;
             }
@@ -738,6 +748,15 @@ export default function DrawPage() {
 
                                     if (features.length > 0) {
                                         highlightSourceRef.current?.addFeatures(features as Feature[]);
+
+                                        // ZOOM TO EXTENT of the WMS features
+                                        const extent = highlightSourceRef.current?.getExtent();
+                                        if (extent && !isEmptyExtent(extent)) {
+                                            mapRef.current?.getView().fit(extent, {
+                                                padding: [120, 120, 120, 120],
+                                                duration: 1000
+                                            });
+                                        }
                                     }
                                 } catch (parseErr) {
                                     console.error("Error parsing GeoJSON from WMS:", parseErr);
