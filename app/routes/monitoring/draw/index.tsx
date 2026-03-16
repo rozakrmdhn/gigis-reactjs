@@ -167,6 +167,8 @@ export default function DrawPage() {
     const roadDesaWmsLayerRef = useRef<TileLayer<TileWMS> | null>(null);
     const jalanKabupatenWmsLayerRef = useRef<TileLayer<TileWMS> | null>(null);
     const searchSourceRef = useRef<VectorSource | null>(null);
+    const highlightSourceRef = useRef<VectorSource | null>(null);
+    const highlightLayerRef = useRef<VectorLayer | null>(null);
     const pulseOverlayRef = useRef<Overlay | null>(null);
     const pulseElementRef = useRef<HTMLDivElement | null>(null);
     const vectorPopupRef = useRef<Overlay | null>(null);
@@ -215,6 +217,8 @@ export default function DrawPage() {
         selectedVectorIdRef.current = selectedVectorId;
     }, [selectedVectorId]);
     const [isPopupMinimized, setIsPopupMinimized] = useState(false);
+    const [isPopupClosing, setIsPopupClosing] = useState(false);
+    const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
     const [activeBasemap, setActiveBasemap] = useState<BasemapId>("hybrid");
 
     const tileLayerRef = useRef<TileLayer<any> | null>(null);
@@ -241,6 +245,7 @@ export default function DrawPage() {
         if (!jalanKabupatenSourceRef.current) jalanKabupatenSourceRef.current = new VectorSource();
         if (!nonBaseSourceRef.current) nonBaseSourceRef.current = new VectorSource();
         if (!searchSourceRef.current) searchSourceRef.current = new VectorSource();
+        if (!highlightSourceRef.current) highlightSourceRef.current = new VectorSource();
         if (!staSourceRef.current) staSourceRef.current = new VectorSource();
         if (!desaSourceRef.current) desaSourceRef.current = new VectorSource();
     }, []);
@@ -488,6 +493,32 @@ export default function DrawPage() {
             zIndex: 100
         });
 
+        const highlightLayer = new VectorLayer({
+            source: highlightSourceRef.current ?? undefined,
+            style: [
+                new Style({
+                    stroke: new Stroke({
+                        color: "rgba(34, 211, 238, 0.4)",
+                        width: 12,
+                    }),
+                }),
+                new Style({
+                    stroke: new Stroke({
+                        color: "rgba(34, 211, 238, 0.6)",
+                        width: 8,
+                    }),
+                }),
+                new Style({
+                    stroke: new Stroke({
+                        color: "#22d3ee", // cyan 400
+                        width: 4,
+                    }),
+                }),
+            ],
+            zIndex: 500
+        });
+        highlightLayerRef.current = highlightLayer;
+
         const tileLayer = new TileLayer({
             source: BASEMAPS[activeBasemap].source,
         });
@@ -543,6 +574,7 @@ export default function DrawPage() {
                 staLayer,
                 searchLayer,
                 vectorLayer,
+                highlightLayer,
             ],
             controls: defaultControls({
                 zoom: false,
@@ -617,6 +649,9 @@ export default function DrawPage() {
 
         // Map Click Handler (Coordinate Copy + Vector Feature Popup)
         map.on('click', async (evt) => {
+            // Clear existing highlight
+            highlightSourceRef.current?.clear();
+
             // 1. Check for Vector Feature Click (Drawing/Existing Segments)
             const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, {
                 layerFilter: (l) => l === vectorLayerRef.current || l === existingLayerRef.current
@@ -625,6 +660,8 @@ export default function DrawPage() {
             if (feature) {
                 const properties = feature.getProperties();
                 const featureId = feature.getId();
+                setIsPopupClosing(false);
+                setHighlightedKey(null);
                 setSelectedVectorId(featureId ?? null);
                 setSelectedVectorInfo({
                     properties,
@@ -632,6 +669,12 @@ export default function DrawPage() {
                     id: featureId
                 });
                 vectorPopupRef.current?.setPosition(evt.coordinate);
+
+                // Add to highlight source
+                if (feature instanceof Feature) {
+                    const highlightFeature = feature.clone();
+                    highlightSourceRef.current?.addFeature(highlightFeature);
+                }
                 return;
             }
 
@@ -665,6 +708,8 @@ export default function DrawPage() {
 
                         if (data.features && data.features.length > 0) {
                             const feat = data.features[0];
+                            setIsPopupClosing(false);
+                            setHighlightedKey(null);
                             setSelectedVectorId(feat.id ?? id);
                             setSelectedVectorInfo({
                                 properties: feat.properties,
@@ -672,6 +717,32 @@ export default function DrawPage() {
                                 id: feat.id
                             });
                             vectorPopupRef.current?.setPosition(evt.coordinate);
+
+                            // Add to highlight source if geometry is present
+                            if (feat.geometry) {
+                                try {
+                                    // Try reading as a collection first
+                                    let features: any[] = geojsonFormat.readFeatures(data, {
+                                        dataProjection: 'EPSG:3857',
+                                        featureProjection: 'EPSG:3857'
+                                    });
+
+                                    // Fallback: try reading the individual feature if collection parsing returned nothing
+                                    if (features.length === 0) {
+                                        const feature = geojsonFormat.readFeature(feat, {
+                                            dataProjection: 'EPSG:3857',
+                                            featureProjection: 'EPSG:3857'
+                                        });
+                                        if (feature) features = [feature];
+                                    }
+
+                                    if (features.length > 0) {
+                                        highlightSourceRef.current?.addFeatures(features as Feature[]);
+                                    }
+                                } catch (parseErr) {
+                                    console.error("Error parsing GeoJSON from WMS:", parseErr);
+                                }
+                            }
                             return;
                         }
                     } catch (err) {
@@ -684,6 +755,7 @@ export default function DrawPage() {
             setSelectedVectorId(null);
             setSelectedVectorInfo(null);
             vectorPopupRef.current?.setPosition(undefined);
+            highlightSourceRef.current?.clear();
 
             // 2. Original Coordinate Copy Logic (Mobile only)
             if (isMobile) {
@@ -2137,8 +2209,11 @@ export default function DrawPage() {
                         {selectedVectorInfo && vectorPopupElementRef.current && createPortal(
                             <div
                                 className={cn(
-                                    "bg-white/95 dark:bg-slate-950/95 backdrop-blur-md rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-2xl w-64 flex flex-col animate-in zoom-in-95 duration-300 pointer-events-auto relative overflow-visible group mb-4 transition-all ease-in-out",
-                                    isPopupMinimized ? "p-2.5 h-auto overflow-hidden" : "p-3.5 max-h-[350px]"
+                                    "bg-white/95 dark:bg-slate-950/95 backdrop-blur-md rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-2xl w-64 flex flex-col pointer-events-auto relative overflow-visible group mb-4 transition-all ease-in-out",
+                                    isPopupMinimized ? "p-2.5 h-auto overflow-hidden" : "p-3.5 max-h-[350px]",
+                                    isPopupClosing
+                                        ? "animate-out zoom-out-95 fade-out duration-250"
+                                        : "animate-in zoom-in-95 fade-in duration-300"
                                 )}
                             >
                                 {/* Pointer Arrow */}
@@ -2154,6 +2229,14 @@ export default function DrawPage() {
                                     .custom-scrollbar::-webkit-scrollbar-thumb {
                                         background: var(--border);
                                         border-radius: 20px;
+                                    }
+                                    @keyframes popup-highlight-flash {
+                                        0%   { background-color: oklch(0.488 0.243 264.376 / 0.15); border-color: oklch(0.488 0.243 264.376 / 0.4); }
+                                        60%  { background-color: oklch(0.488 0.243 264.376 / 0.12); border-color: oklch(0.488 0.243 264.376 / 0.3); }
+                                        100% { background-color: transparent; border-color: transparent; }
+                                    }
+                                    .popup-item-highlighted {
+                                        animation: popup-highlight-flash 1.2s ease-out forwards;
                                     }
                                 `}</style>
 
@@ -2172,13 +2255,20 @@ export default function DrawPage() {
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
-                                            setSelectedVectorId(null);
-                                            setSelectedVectorInfo(null);
-                                            vectorPopupRef.current?.setPosition(undefined);
-                                            jalanKabupatenWmsLayerRef.current?.changed();
-                                            setIsPopupMinimized(false); // Reset for next use
+                                            // Trigger close animation then clear state
+                                            setIsPopupClosing(true);
+                                            setTimeout(() => {
+                                                setSelectedVectorId(null);
+                                                setSelectedVectorInfo(null);
+                                                setHighlightedKey(null);
+                                                vectorPopupRef.current?.setPosition(undefined);
+                                                highlightSourceRef.current?.clear();
+                                                jalanKabupatenWmsLayerRef.current?.changed();
+                                                setIsPopupMinimized(false);
+                                                setIsPopupClosing(false);
+                                            }, 220);
                                         }}
-                                        className="h-6 w-6 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center transition-all active:scale-95 text-slate-500 dark:text-slate-400"
+                                        className="h-6 w-6 bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-900/20 border border-slate-200 dark:border-slate-700 hover:border-red-200 dark:hover:border-red-800 rounded-lg flex items-center justify-center transition-all active:scale-95 text-slate-500 dark:text-slate-400 hover:text-red-500"
                                     >
                                         <X className="w-3 h-3" />
                                     </button>
@@ -2205,20 +2295,45 @@ export default function DrawPage() {
                                     isPopupMinimized ? "max-h-0 opacity-0 pointer-events-none" : "max-h-[300px] opacity-100 border-t border-slate-100 dark:border-slate-800 mt-2.5 pt-2.5"
                                 )}>
                                     <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar min-h-0">
-                                        <div className="flex flex-col gap-3 pb-2">
+                                        <div className="flex flex-col gap-1.5 pb-2">
                                             {Object.entries(selectedVectorInfo.properties)
                                                 .filter(([key]) => !['geometry', 'bbox', 'fid', 'id', 'type'].includes(key.toLowerCase()))
-                                                .map(([key, value]) => (
-                                                    <div key={key} className="flex flex-col gap-1 group/item">
-                                                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider group-hover/item:text-blue-400 transition-colors">
-                                                            {key.replace(/_/g, ' ')}
-                                                        </span>
-                                                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 wrap-break-word font-mono bg-slate-50 dark:bg-slate-800/50 px-2 py-1 rounded-lg border border-transparent group-hover/item:border-slate-100 dark:group-hover/item:border-slate-700 transition-all">
-                                                            {typeof value === 'number' ? formatNumber(value) : String(value || '-')}
-                                                            {key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar') ? ' m' : ''}
-                                                        </span>
-                                                    </div>
-                                                ))}
+                                                .map(([key, value]) => {
+                                                    const isHighlighted = highlightedKey === key;
+                                                    return (
+                                                        <button
+                                                            key={key}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setHighlightedKey(key);
+                                                                // Auto-clear after animation completes
+                                                                setTimeout(() => setHighlightedKey(null), 1200);
+                                                            }}
+                                                            className={cn(
+                                                                "flex flex-col gap-1 text-left w-full rounded-lg px-2 py-1.5 border transition-all duration-150 cursor-pointer",
+                                                                isHighlighted
+                                                                    ? "popup-item-highlighted ring-1 ring-blue-400/30"
+                                                                    : "border-transparent hover:border-slate-100 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40"
+                                                            )}
+                                                        >
+                                                            <span className={cn(
+                                                                "text-[9px] font-black uppercase tracking-wider transition-colors",
+                                                                isHighlighted ? "text-blue-500" : "text-slate-400"
+                                                            )}>
+                                                                {key.replace(/_/g, ' ')}
+                                                            </span>
+                                                            <span className={cn(
+                                                                "text-xs font-bold wrap-break-word font-mono px-2 py-1 rounded-md border transition-all",
+                                                                isHighlighted
+                                                                    ? "text-blue-700 dark:text-blue-300 bg-blue-50/80 dark:bg-blue-900/30 border-blue-200/60 dark:border-blue-700/50"
+                                                                    : "text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border-transparent"
+                                                            )}>
+                                                                {typeof value === 'number' ? formatNumber(value) : String(value || '-')}
+                                                                {key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar') ? ' m' : ''}
+                                                            </span>
+                                                        </button>
+                                                    );
+                                                })}
                                         </div>
                                     </div>
 
