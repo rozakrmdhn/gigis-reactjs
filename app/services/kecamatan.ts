@@ -18,5 +18,28 @@ export const kecamatanService = {
         const response = await apiClient.get<Kecamatan[]>(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
         return response.result || [];
     },
-};
 
+    /**
+     * Fetch GeoJSON data for a specific Kecamatan by its ID.
+     * @param idKecamatan The ID of the Kecamatan
+     * @returns Promise resolving to a GeoJSON data
+     */
+    getKecamatanGeojsonById: async (idKecamatan: string | number): Promise<any | null> => {
+        const url = `${import.meta.env.VITE_API_BASE_URL}/kecamatan/${encodeURIComponent(idKecamatan.toString())}?format=geojson`;
+        const response = await apiClient.get<any>(url) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
+    },
+
+    /**
+     * Fetch GeoJSON data for a specific Kecamatan by its Name.
+     * @param namaKecamatan The name of the Kecamatan
+     * @returns Promise resolving to a GeoJSON data
+     */
+    getKecamatanGeojsonByName: async (namaKecamatan: string): Promise<any | null> => {
+        const url = `${import.meta.env.VITE_API_BASE_URL}/kecamatan?nama_kecamatan=${encodeURIComponent(namaKecamatan.toLowerCase())}&format=geojson`;
+        const response = await apiClient.get<any>(url) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
+    },
+};

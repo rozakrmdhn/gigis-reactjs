@@ -10,6 +10,7 @@ import {
   IconActivity
 } from "@tabler/icons-react";
 import type { MetaFunction } from "react-router";
+import { PublicNavbar } from "~/components/public-navbar";
 
 export const meta: MetaFunction = () => {
   return [
@@ -24,30 +25,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Navigation */}
-      <nav className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
-        <div className="container mx-auto flex h-16 items-center justify-between px-4">
-          <div className="flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-200">
-              <IconActivity size={24} />
-            </div>
-            <span className="text-xl font-bold tracking-tight text-slate-900">GIGI'S</span>
-          </div>
-          <div className="flex items-center gap-4">
-            {isAuthenticated ? (
-              <Button onClick={() => navigate("/dashboard")} className="gap-2">
-                Dashboard <IconArrowRight size={18} />
-              </Button>
-            ) : (
-              <Link to="/login">
-                <Button variant="ghost" className="gap-2">
-                  Masuk <IconLogin size={18} />
-                </Button>
-              </Link>
-            )}
-          </div>
-        </div>
-      </nav>
+      <PublicNavbar />
 
       {/* Hero Section */}
       <section className="relative overflow-hidden pt-16 pb-24 lg:pt-32 lg:pb-40">

@@ -1,87 +1,60 @@
-# Welcome to React Router!
+# GIGI'S - Monitoring Jalan Poros Desa
 
-A modern, production-ready template for building full-stack React applications using React Router.
+**GIGI'S (Geographic Information & Infrastructure System)** adalah platform pemantauan infrastruktur jalan poros desa di Kabupaten Bojonegoro. Aplikasi ini dirancang untuk memberikan visualisasi real-time kondisi jalan serta mempermudah pengambilan keputusan berbasis data geospasial.
 
-[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/remix-run/react-router-templates/tree/main/default)
+## 🚀 Fitur Utama
 
-## Features
+### 📊 Dashboard & Analisis
+- **Statistik Kondisi Jalan**: Ringkasan total panjang jalan dalam kondisi Baik, Sedang, Rusak Ringan, dan Rusak Berat.
+- **Visualisasi Grafik**: Representasi data infrastruktur menggunakan chart yang interaktif (Recharts).
+- **Laporan Hierarkis**: Sistem pelaporan data jalan berdasarkan tingkat Kabupaten, Kecamatan, hingga Desa.
 
-- 🚀 Server-side rendering
-- ⚡️ Hot Module Replacement (HMR)
-- 📦 Asset bundling and optimization
-- 🔄 Data loading and mutations
-- 🔒 TypeScript by default
-- 🎉 TailwindCSS for styling
-- 📖 [React Router docs](https://reactrouter.com/)
+### 🗺️ Visualisasi Peta (GIS)
+- **Multi-Engine GIS Support**: Integrasi OpenLayers, Leaflet, dan Mapbox GL untuk visualisasi peta yang kaya.
+- **Basemap Toggle**: Pilihan berbagai jenis peta (Satelit, Street, Dark/Light mode).
+- **Layer Management**: Kontrol tampilan berbagai layer seperti batas administrasi, ruas jalan, dan titik STA.
+- **Interactive Popup**: Informasi detail ruas jalan yang muncul saat berinteraksi dengan peta.
 
-## Getting Started
+### 🛠️ Monitoring & Infrastruktur
+- **Draw & Edit Tools**: Alat untuk menggambar dan mengedit fitur geografis langsung di peta.
+- **Tracking Progress**: Pemantauan tahapan pembangunan konstruksi jalan dari pengurukan hingga pengaspalan.
+- **Histori Konstruksi**: Log detail perubahan dan pembangunan pada setiap ruas jalan.
+- **Geolocation**: Fitur pelacakan lokasi pengguna secara real-time untuk verifikasi lapangan.
 
-### Installation
+### 📁 Manajemen Data (Master Data)
+- **Data Jalan**: Pengelolaan basis data ruas jalan poros desa.
+- **Wilayah Administrasi**: Manajemen data Kecamatan dan Desa.
+- **Data Monitoring**: Integrasi data lapangan dengan sistem pusat.
 
-Install the dependencies:
+## 🛠️ Tech Stack
 
+- **Framework**: [React 19](https://react.dev/), [React Router 7](https://reactrouter.com/)
+- **Build Tool**: [Vite](https://vitejs.dev/)
+- **Styling**: [Tailwind CSS 4](https://tailwindcss.com/), [Radix UI](https://www.radix-ui.com/)
+- **Geospasial**: [OpenLayers](https://openlayers.org/), [Leaflet](https://leafletjs.com/), [Mapbox GL](https://www.mapbox.com/mapbox-gljs), [Turf.js](https://turfjs.org/)
+- **Data & Forms**: [TanStack Table](https://tanstack.com/table/v8), [React Hook Form](https://react-hook-form.com/), [Zod](https://zod.dev/)
+- **Visualisasi**: [Recharts](https://recharts.org/)
+- **Icons**: [Tabler Icons](https://tabler.io/icons), [Lucide React](https://lucide.dev/)
+- **Notifications**: [Sonner](https://sonner.stevenly.me/)
+
+## 📦 Memulai Pengembangan
+
+### Instalasi Dependensi
 ```bash
 npm install
 ```
 
-### Development
-
-Start the development server with HMR:
-
+### Jalankan Server Pengembangan
 ```bash
 npm run dev
 ```
+Aplikasi akan berjalan di `http://localhost:5173`.
 
-Your application will be available at `http://localhost:5173`.
-
-## Building for Production
-
-Create a production build:
-
+### Build untuk Produksi
 ```bash
 npm run build
 ```
 
-## Deployment
-
-### Docker Deployment
-
-To build and run using Docker:
-
-```bash
-docker build -t my-app .
-
-# Run the container
-docker run -p 3000:3000 my-app
-```
-
-The containerized application can be deployed to any platform that supports Docker, including:
-
-- AWS ECS
-- Google Cloud Run
-- Azure Container Apps
-- Digital Ocean App Platform
-- Fly.io
-- Railway
-
-### DIY Deployment
-
-If you're familiar with deploying Node applications, the built-in app server is production-ready.
-
-Make sure to deploy the output of `npm run build`
-
-```
-├── package.json
-├── package-lock.json (or pnpm-lock.yaml, or bun.lockb)
-├── build/
-│   ├── client/    # Static assets
-│   └── server/    # Server-side code
-```
-
-## Styling
-
-This template comes with [Tailwind CSS](https://tailwindcss.com/) already configured for a simple default starting experience. You can use whatever CSS framework you prefer.
-
 ---
 
-Built with ❤️ using React Router.
+Dibuat untuk mendukung transparansi dan efisiensi pembangunan infrastruktur di Kabupaten Bojonegoro.

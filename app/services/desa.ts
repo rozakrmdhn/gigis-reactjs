@@ -7,19 +7,52 @@ export interface DesaGeoJSONResponse {
     result: FeatureCollection<Geometry, GeoJsonProperties>;
 }
 
+export interface Desa {
+    id: number;
+    id_kecamatan: number;
+    nama_desa: string;
+    created_at: string | null;
+    updated_at: string | null;
+}
+
 export const desaService = {
+    /**
+     * Fetch list of villages (desa), optionally filtered by kecamatan.
+     * @param idKecamatan Optional kecamatan ID to filter villages
+     * @returns Promise resolving to a list of Desa
+     */
+    getDesa: async (idKecamatan?: string | number): Promise<Desa[]> => {
+        const url = idKecamatan
+            ? `${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${encodeURIComponent(idKecamatan.toString())}`
+            : `${import.meta.env.VITE_API_BASE_URL}/desa`;
+
+        const response = await apiClient.get<Desa[]>(url);
+        return response.result || [];
+    },
+
     /**
      * Fetch GeoJSON data for villages (desa), optionally filtered by kecamatan.
      * @param idKecamatan Optional kecamatan ID to filter villages
      * @returns Promise resolving to a GeoJSON FeatureCollection
      */
-    getGeojsonDesa: async (idKecamatan?: string): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
+    getGeojsonDesa: async (idKecamatan?: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         const url = idKecamatan
-            ? `${import.meta.env.VITE_API_BASE_URL}/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan)}`
-            : `${import.meta.env.VITE_API_BASE_URL}/desa/geojson`;
+            ? `${import.meta.env.VITE_API_BASE_URL}/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan.toString())}&format=geojson`
+            : `${import.meta.env.VITE_API_BASE_URL}/desa/geojson?format=geojson`;
 
-        const response = await apiClient.get<FeatureCollection<Geometry, GeoJsonProperties>>(url);
-        return response.result || null;
+        const response = await apiClient.get<any>(url) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
+    },
+    /**
+     * Fetch GeoJSON data for a specific Desa by its ID.
+     * @param idDesa The ID of the Desa
+     * @returns Promise resolving to a GeoJSON FeatureCollection
+     */
+    getDesaGeojsonById: async (idDesa: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
+        const url = `${import.meta.env.VITE_API_BASE_URL}/desa/geojson?id_desa=${encodeURIComponent(idDesa.toString())}&format=geojson`;
+        const response = await apiClient.get<any>(url) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
     },
 };
-

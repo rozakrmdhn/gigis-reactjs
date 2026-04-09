@@ -640,7 +640,15 @@ export default function DrawPage() {
             // Change cursor to pointer when over vector features
             const pixel = map.getEventPixel(evt.originalEvent);
             const hit = map.hasFeatureAtPixel(pixel, {
-                layerFilter: (l) => l === vectorLayerRef.current || l === existingLayerRef.current
+                layerFilter: (l) => 
+                    l === vectorLayerRef.current || 
+                    l === existingLayerRef.current ||
+                    l === ruasUtamaLayerRef.current ||
+                    l === segmenDesaLayerRef.current ||
+                    l === jalanKabupatenLayerRef.current ||
+                    l === nonBaseLayerRef.current ||
+                    l === staLayerRef.current,
+                hitTolerance: 10
             });
             map.getTargetElement().style.cursor = hit ? 'pointer' : '';
         }, 50);
@@ -654,7 +662,15 @@ export default function DrawPage() {
 
             // 1. Check for Vector Feature Click (Drawing/Existing Segments)
             const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, {
-                layerFilter: (l) => l === vectorLayerRef.current || l === existingLayerRef.current
+                layerFilter: (l) => 
+                    l === vectorLayerRef.current || 
+                    l === existingLayerRef.current ||
+                    l === ruasUtamaLayerRef.current ||
+                    l === segmenDesaLayerRef.current ||
+                    l === jalanKabupatenLayerRef.current ||
+                    l === nonBaseLayerRef.current ||
+                    l === staLayerRef.current,
+                hitTolerance: 10
             });
 
             if (feature) {
@@ -681,7 +697,8 @@ export default function DrawPage() {
                         const extent = geometry.getExtent();
                         mapRef.current?.getView().fit(extent, {
                             padding: [100, 100, 100, 100],
-                            duration: 1000
+                            duration: 1000,
+                            maxZoom: 18
                         });
                     }
                 }
@@ -754,7 +771,8 @@ export default function DrawPage() {
                                         if (extent && !isEmptyExtent(extent)) {
                                             mapRef.current?.getView().fit(extent, {
                                                 padding: [120, 120, 120, 120],
-                                                duration: 1000
+                                                duration: 1000,
+                                                maxZoom: 18
                                             });
                                         }
                                     }
@@ -1112,7 +1130,8 @@ export default function DrawPage() {
                         const extent = geometry.getExtent();
                         mapRef.current?.getView().fit(extent, {
                             padding: [100, 100, 100, 100],
-                            duration: 1000
+                            duration: 1000,
+                            maxZoom: 18
                         });
                     } catch (e) { }
                 }
@@ -1284,7 +1303,8 @@ export default function DrawPage() {
                 if (hasAnyFeatures) {
                     mapRef.current?.getView().fit(combinedExtent, {
                         padding: [50, 50, 50, 50],
-                        duration: 1000
+                        duration: 1000,
+                        maxZoom: 18
                     });
                 } else {
                     toast.info("Belum ada data visual untuk jalan ini");
@@ -1454,7 +1474,7 @@ export default function DrawPage() {
             view.animate({ rotation: 0, duration: 250 });
             if (existingSourceRef.current && existingSourceRef.current.getFeatures().length > 0) {
                 const extent = existingSourceRef.current.getExtent();
-                view.fit(extent, { padding: [100, 100, 100, 100], duration: 1000 });
+                view.fit(extent, { padding: [100, 100, 100, 100], duration: 1000, maxZoom: 18 });
             }
         }
     };

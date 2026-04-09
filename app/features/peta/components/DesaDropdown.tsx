@@ -3,7 +3,6 @@ import { MapPin, Search } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import {
     DropdownMenu,
-
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
@@ -12,42 +11,53 @@ import {
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { ScrollArea } from '~/components/ui/scroll-area';
-import { kecamatanService, type Kecamatan } from '~/services/kecamatan';
+import { desaService, type Desa } from '~/services/desa';
 
-interface KecamatanDropdownProps {
-    selectedKecamatanName: string | undefined;
-    onSelectKecamatan: (kecamatan: Kecamatan) => void;
+interface DesaDropdownProps {
+    idKecamatan: string | number | undefined;
+    selectedDesaName: string | undefined;
+    onSelectDesa: (desa: Desa) => void;
     className?: string;
 }
 
-export function KecamatanDropdown({ selectedKecamatanName, onSelectKecamatan, className }: KecamatanDropdownProps) {
+export function DesaDropdown({ idKecamatan, selectedDesaName, onSelectDesa, className }: DesaDropdownProps) {
 
-    const [kecamatanData, setKecamatanData] = useState<Kecamatan[]>([]);
-    const [loading, setLoading] = useState(true);
+    const [desaData, setDesaData] = useState<Desa[]>([]);
+    const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
 
-    // Fetch Kecamatan List
+    // Fetch Desa List
     useEffect(() => {
-        const fetchKecamatan = async () => {
-            setLoading(true);
-            const data = await kecamatanService.getKecamatan();
-            setKecamatanData(data);
-            setLoading(false);
-        };
-        fetchKecamatan();
-    }, []);
+        if (!idKecamatan) {
+            setDesaData([]);
+            return;
+        }
 
-    const filteredKecamatan = kecamatanData.filter((item) =>
-        item.nama_kecamatan.toLowerCase().includes(search.toLowerCase())
+        const fetchDesa = async () => {
+            setLoading(true);
+            try {
+                const data = await desaService.getDesa(idKecamatan);
+                setDesaData(data);
+            } catch (error) {
+                console.error("Failed to fetch desa", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchDesa();
+    }, [idKecamatan]);
+
+    const filteredDesa = desaData.filter((item) =>
+        item.nama_desa.toLowerCase().includes(search.toLowerCase())
     );
 
     return (
         <DropdownMenu onOpenChange={(open) => { if (!open) setSearch(""); }}>
             <DropdownMenuTrigger asChild>
-                <Button variant="secondary" className={cn("shadow-md w-full justify-start text-xs font-bold h-9 px-3", className)}>
+                <Button variant="secondary" className={cn("shadow-md w-full justify-start text-xs font-bold h-9 px-3", className)} disabled={!idKecamatan}>
                     <MapPin className="mr-2 h-3.5 w-3.5 shrink-0" />
                     <span className="truncate">
-                        {selectedKecamatanName ? `Kec. ${selectedKecamatanName}` : 'Pilih Kecamatan'}
+                        {selectedDesaName ? `Desa ${selectedDesaName}` : 'Pilih Desa'}
                     </span>
                 </Button>
             </DropdownMenuTrigger>
@@ -57,7 +67,7 @@ export function KecamatanDropdown({ selectedKecamatanName, onSelectKecamatan, cl
                     <div className="relative">
                         <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
-                            placeholder="Cari kecamatan..."
+                            placeholder="Cari desa..."
                             className="pl-9 h-9"
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
@@ -68,18 +78,20 @@ export function KecamatanDropdown({ selectedKecamatanName, onSelectKecamatan, cl
                 <DropdownMenuSeparator />
                 <ScrollArea className="h-72">
                     <div className="p-1">
-                        {loading ? (
+                        {!idKecamatan ? (
+                            <div className="p-4 text-center text-sm text-muted-foreground">Pilih kecamatan terlebih dahulu</div>
+                        ) : loading ? (
                             <div className="p-4 text-center text-sm text-muted-foreground">Memuat data...</div>
-                        ) : filteredKecamatan.length === 0 ? (
+                        ) : filteredDesa.length === 0 ? (
                             <div className="p-4 text-center text-sm text-muted-foreground">Tidak ada hasil</div>
                         ) : (
-                            filteredKecamatan.map((kec) => (
+                            filteredDesa.map((desa) => (
                                 <DropdownMenuItem
-                                    key={kec.id}
+                                    key={desa.id}
                                     className="flex items-center py-2 px-3 cursor-pointer"
-                                    onClick={() => onSelectKecamatan(kec)}
+                                    onClick={() => onSelectDesa(desa)}
                                 >
-                                    <span className="font-medium text-sm">{kec.nama_kecamatan}</span>
+                                    <span className="font-medium text-sm">{desa.nama_desa}</span>
                                 </DropdownMenuItem>
                             ))
                         )}

@@ -10,6 +10,8 @@ import {
 import type { Route } from "./+types/root";
 import "./app.css";
 import "leaflet/dist/leaflet.css";
+import "ol/ol.css";
+
 import { Spinner } from "./components/ui/spinner";
 import { AuthProvider } from "./contexts/auth-context";
 import { Toaster } from "./components/ui/sonner";
