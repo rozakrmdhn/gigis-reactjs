@@ -7,24 +7,42 @@ import OSM from 'ol/source/OSM';
 import TileWMS from 'ol/source/TileWMS';
 import VectorLayer from 'ol/layer/Vector';
 import VectorSource from 'ol/source/Vector';
+import XYZ from 'ol/source/XYZ';
 import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat, toLonLat } from 'ol/proj';
-import { Style, Stroke, Fill } from 'ol/style';
+import { Style, Stroke, Fill, Text } from 'ol/style';
 import Overlay from 'ol/Overlay';
 import Feature from 'ol/Feature';
 import { X, ChevronUp, ChevronDown, Layers, MapPin } from 'lucide-react';
 import { cn } from '~/lib/utils';
+import { CORE_LAYER_COLORS } from '~/lib/map-config';
 import 'ol/ol.css';
+
+export interface MapLayerConfig {
+    id: string;
+    title: string;
+    type: 'wms' | 'vector' | 'osm' | 'tile';
+    url?: string;
+    params?: any;
+    data?: any;
+    visible?: boolean;
+    opacity?: number;
+    zIndex?: number;
+    style?: any;
+}
 
 interface OpenLayersMapProps {
     className?: string;
     center?: [number, number];
     zoom?: number;
+    layers?: MapLayerConfig[];
+    // Legacy props for compatibility, can be phased out
     geojsonData?: any;
     showJalanKabupaten?: boolean;
     showBatasDesa?: boolean;
     showJalanUtama?: boolean;
     showSegmenJalan?: boolean;
+    basemapUrl?: string | 'osm';
 }
 
 export interface OpenLayersMapRef {
@@ -38,23 +56,24 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     className,
     center = [111.8328268, -7.2288555], // Bojonegoro
     zoom = 10,
+    layers = [],
     geojsonData,
-    showJalanKabupaten = true,
     showBatasDesa = true,
     showJalanUtama = true,
     showSegmenJalan = true,
+    basemapUrl = 'osm',
 }, ref) => {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<Map | null>(null);
     const vectorSourceRef = useRef<VectorSource>(new VectorSource());
     const highlightSourceRef = useRef<VectorSource>(new VectorSource());
-    
+
     // Layer Refs
+    const basemapLayerRef = useRef<TileLayer<OSM | XYZ> | null>(null);
     const batasDesaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const utamaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const segmenLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
-    const jalanKabupatenWmsLayerRef = useRef<TileLayer<TileWMS> | null>(null);
-    
+
     const vectorPopupRef = useRef<Overlay | null>(null);
     const vectorPopupElementRef = useRef<HTMLDivElement | null>(null);
 
@@ -69,21 +88,25 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
     useImperativeHandle(ref, () => ({
         zoomToFeature: (geojson: any) => {
-            if (!geojson || !mapRef.current) return;
-            
+            if (!mapRef.current) return;
+
+            vectorSourceRef.current.clear();
+            if (!geojson) return;
+
             const format = new GeoJSON();
             const features = format.readFeatures(geojson, {
                 featureProjection: 'EPSG:3857'
             });
 
-            vectorSourceRef.current.clear();
             vectorSourceRef.current.addFeatures(features);
 
             const extent = vectorSourceRef.current.getExtent();
-            mapRef.current.getView().fit(extent, {
-                padding: [50, 50, 50, 50],
-                duration: 1000
-            });
+            if (extent && extent[0] !== Infinity) {
+                mapRef.current.getView().fit(extent, {
+                    padding: [50, 50, 50, 50],
+                    duration: 1000
+                });
+            }
         },
         zoomIn: () => {
             const view = mapRef.current?.getView();
@@ -118,12 +141,12 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 if (layer === 'batas_desa') {
                     return new Style({
                         stroke: new Stroke({
-                            color: '#3b82f6',
+                            color: CORE_LAYER_COLORS.ADMIN.hex,
                             width: 2,
                             lineDash: [4, 4],
                         }),
                         fill: new Fill({
-                            color: 'rgba(59, 130, 246, 0.05)',
+                            color: `${CORE_LAYER_COLORS.ADMIN.hex}0d`, // 05 opacity
                         }),
                     });
                 }
@@ -143,8 +166,8 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 if (layer === 'jalan_utama') {
                     return new Style({
                         stroke: new Stroke({
-                            color: '#64748b',
-                            width: 4,
+                            color: CORE_LAYER_COLORS.GENERAL.hex,
+                            width: 2,
                         }),
                     });
                 }
@@ -153,24 +176,6 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         });
         utamaLayerRef.current = utamaLayer;
 
-        // 3. WMS Jalan Kabupaten Layer
-        const wmsLayer = new TileLayer({
-            source: new TileWMS({
-                url: 'https://geoportal.saggaserv.my.id/geoserver/sagga/wms',
-                params: {
-                    'LAYERS': 'sagga:JALAN_KABUPATEN_2022',
-                    'TILED': true,
-                    'TRANSPARENT': true,
-                    'VERSION': '1.1.1'
-                },
-                serverType: 'geoserver',
-                crossOrigin: 'anonymous'
-            }),
-            visible: showJalanKabupaten,
-            opacity: 0.8,
-            zIndex: 30
-        });
-        jalanKabupatenWmsLayerRef.current = wmsLayer;
 
         // 4. Jalan Segmen Layer
         const segmenLayer = new VectorLayer({
@@ -181,12 +186,37 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 const props = feature.getProperties();
                 const layer = props._layer;
                 if (layer === 'jalan_segmen') {
-                    return new Style({
-                        stroke: new Stroke({
-                            color: '#10b981',
-                            width: 7,
+                    const styles = [
+                        new Style({
+                            stroke: new Stroke({
+                                color: '#00af54',
+                                width: 10,
+                            }),
                         }),
-                    });
+                        new Style({
+                            stroke: new Stroke({
+                                color: CORE_LAYER_COLORS.SEGMENTS.hex,
+                                width: 7,
+                            }),
+                        }),
+                    ];
+
+                    const label = props.nama_ruas || props.NM_RUAS;
+                    if (label) {
+                        styles.push(new Style({
+                            text: new Text({
+                                text: label.toString().toUpperCase(),
+                                font: 'bold 10px Inter, sans-serif',
+                                fill: new Fill({ color: '#fff' }),
+                                stroke: new Stroke({ color: '#00af54', width: 3 }),
+                                offsetY: -12,
+                                placement: 'line',
+                                repeat: 300,
+                                overflow: true
+                            })
+                        }));
+                    }
+                    return styles;
                 }
                 return [];
             },
@@ -225,16 +255,22 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         });
         vectorPopupRef.current = vectorPopup;
 
+        const initialBasemapSource = (basemapUrl && basemapUrl !== 'osm')
+            ? new XYZ({ url: basemapUrl, crossOrigin: 'anonymous' })
+            : new OSM();
+
+        const basemapLayer = new TileLayer({
+            source: initialBasemapSource,
+            zIndex: 0
+        });
+        basemapLayerRef.current = basemapLayer;
+
         const map = new Map({
             target: mapElement.current,
             layers: [
-                new TileLayer({
-                    source: new OSM(),
-                    zIndex: 0
-                }),
+                basemapLayer,
                 batasDesaLayer,
                 utamaLayer,
-                wmsLayer,
                 segmenLayer,
                 highlightLayer,
             ],
@@ -245,6 +281,43 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 zoom: zoom,
             }),
         });
+
+        // 6. Pointer Move Handler for cursor style
+        map.on('pointermove', (evt) => {
+            if (evt.dragging) return;
+
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hit = map.hasFeatureAtPixel(pixel, {
+                layerFilter: (l) => l.get('id') !== 'highlight',
+                hitTolerance: 5
+            });
+
+            // Precise check for WMS: use layer.getData(pixel) to reliably detect non-transparent content
+            let wmsHit = false;
+            if (!hit) {
+                const layers = map.getLayers().getArray();
+                for (const layer of layers) {
+                    if (layer.get('type') === 'wms' && layer.getVisible()) {
+                        try {
+                            const data = (layer as any).getData(pixel);
+                            if (data && (data instanceof Uint8Array || data instanceof Uint8ClampedArray || data instanceof Float32Array)) {
+                                if (data.length >= 4 && data[3] > 0) {
+                                    wmsHit = true;
+                                    break;
+                                }
+                            }
+                        } catch (e) {
+                            // Ignore CORS or other canvas extraction errors
+                        }
+                    }
+                }
+            }
+
+            map.getTargetElement().style.cursor = (hit || wmsHit) ? 'pointer' : '';
+        });
+
+        // 7. Dynamic Layers Management
+        // (Handled via useEffect now)
 
         mapRef.current = map;
 
@@ -261,7 +334,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             if (feature instanceof Feature) {
                 const props = feature.getProperties();
                 const featureId = feature.getId();
-                
+
                 setIsPopupClosing(false);
                 setSelectedVectorInfo({
                     properties: props,
@@ -276,7 +349,51 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 return;
             }
 
-            // 2. Check WMS Feature Info
+            // 2. Check WMS Feature Info from dynamic layers
+            // Get all visible WMS layers
+            const visibleWmsLayers = map.getLayers().getArray()
+                .filter(l => l instanceof TileLayer && l.get('type') === 'wms' && l.getVisible());
+
+            for (const layer of visibleWmsLayers) {
+                const source = (layer as TileLayer<TileWMS>).getSource();
+                const view = map.getView();
+                if (source) {
+                    const url = source.getFeatureInfoUrl(
+                        evt.coordinate,
+                        view.getResolution() || 0,
+                        view.getProjection(),
+                        { 'INFO_FORMAT': 'application/json', 'FEATURE_COUNT': 1 }
+                    );
+
+                    if (url) {
+                        try {
+                            const response = await fetch(url);
+                            const data = await response.json();
+                            if (data.features && data.features.length > 0) {
+                                const feat = data.features[0];
+                                setIsPopupClosing(false);
+                                setSelectedVectorInfo({
+                                    properties: feat.properties,
+                                    coordinate: evt.coordinate,
+                                    id: feat.id
+                                });
+                                vectorPopup.setPosition(evt.coordinate);
+
+                                if (feat.geometry) {
+                                    const format = new GeoJSON();
+                                    const wmsFeatures = format.readFeatures(data);
+                                    highlightSourceRef.current.addFeatures(wmsFeatures);
+                                }
+                                return;
+                            }
+                        } catch (err) {
+                            console.error("WMS GetFeatureInfo failed", err);
+                        }
+                    }
+                }
+            }
+
+            // Fallback to legacy WMS check
             if (showJalanKabupaten && jalanKabupatenWmsLayerRef.current) {
                 const source = jalanKabupatenWmsLayerRef.current.getSource();
                 const view = map.getView();
@@ -334,7 +451,16 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             map.setTarget(undefined);
             mapRef.current = null;
         };
-    }, []);
+    }, []); // Removed basemapUrl from dependency to avoid recreation. We use a separate useEffect.
+
+    useEffect(() => {
+        if (!basemapLayerRef.current) return;
+        if (!basemapUrl || basemapUrl === 'osm') {
+            basemapLayerRef.current.setSource(new OSM());
+        } else {
+            basemapLayerRef.current.setSource(new XYZ({ url: basemapUrl, crossOrigin: 'anonymous' }));
+        }
+    }, [basemapUrl]);
 
     const closePopup = () => {
         setIsPopupClosing(true);
@@ -347,24 +473,195 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         }, 200);
     };
 
-    // Layer Visibility Effects
     useEffect(() => {
-        if (batasDesaLayerRef.current) batasDesaLayerRef.current.setVisible(!!showBatasDesa);
-    }, [showBatasDesa]);
+        if (!mapRef.current) return;
+        const map = mapRef.current;
+        const existingLayers = map.getLayers();
 
-    useEffect(() => {
-        if (utamaLayerRef.current) utamaLayerRef.current.setVisible(!!showJalanUtama);
-    }, [showJalanUtama]);
+        // 1. Tag legacy layers if they don't have an ID
+        if (batasDesaLayerRef.current) batasDesaLayerRef.current.set('id', 'legacy_batas_desa');
+        if (utamaLayerRef.current) utamaLayerRef.current.set('id', 'legacy_utama');
+        if (segmenLayerRef.current) segmenLayerRef.current.set('id', 'legacy_segmen');
 
-    useEffect(() => {
-        if (segmenLayerRef.current) segmenLayerRef.current.setVisible(!!showSegmenJalan);
-    }, [showSegmenJalan]);
+        // 2. Process dynamic layers
+        layers.forEach((layerConfig) => {
+            let layer = existingLayers.getArray().find(l => l.get('id') === layerConfig.id);
 
-    useEffect(() => {
-        if (jalanKabupatenWmsLayerRef.current) {
-            jalanKabupatenWmsLayerRef.current.setVisible(!!showJalanKabupaten);
-        }
-    }, [showJalanKabupaten]);
+            if (!layer) {
+                // Create new layer
+                if (layerConfig.type === 'wms' && layerConfig.url) {
+                    layer = new TileLayer({
+                        source: new TileWMS({
+                            url: layerConfig.url,
+                            params: {
+                                ...layerConfig.params,
+                                'TILED': true,
+                                'TRANSPARENT': true
+                            },
+                            crossOrigin: 'anonymous'
+                        }),
+                        zIndex: layerConfig.zIndex ?? 50
+                    });
+                } else if (layerConfig.type === 'vector' && layerConfig.data) {
+                    layer = new VectorLayer({
+                        source: new VectorSource({
+                            features: new GeoJSON().readFeatures(layerConfig.data, {
+                                featureProjection: 'EPSG:3857'
+                            })
+                        }),
+                        zIndex: layerConfig.zIndex ?? 50,
+                        style: (feature) => {
+                            // If a specific style is provided in config
+                            if (layerConfig.style) {
+                                const customStyle = new Style({
+                                    stroke: new Stroke({
+                                        color: layerConfig.style.stroke || '#3b82f6',
+                                        width: layerConfig.style.width || 2,
+                                        lineDash: layerConfig.style.lineDash
+                                    }),
+                                    fill: new Fill({
+                                        color: layerConfig.style.fill || 'rgba(59, 130, 246, 0.05)'
+                                    })
+                                });
+
+                                if (layerConfig.style.labelField) {
+                                    const label = feature.get(layerConfig.style.labelField);
+                                    if (label) {
+                                        customStyle.setText(new Text({
+                                            text: label.toString().toUpperCase(),
+                                            font: 'bold 10px sans-serif',
+                                            fill: new Fill({ color: CORE_LAYER_COLORS.ADMIN.hex }),
+                                            stroke: new Stroke({ color: '#ffffff', width: 3 }),
+                                            overflow: true
+                                        }));
+                                    }
+                                }
+
+                                return customStyle;
+                            }
+
+                            // Default styles for administrative layers
+                            const id = layerConfig.id;
+                            if (id === 'legacy_batas_desa') {
+                                return new Style({
+                                    stroke: new Stroke({ color: CORE_LAYER_COLORS.ADMIN.hex, width: 2, lineDash: [4, 4] }),
+                                    fill: new Fill({ color: `${CORE_LAYER_COLORS.ADMIN.hex}0d` })
+                                });
+                            }
+                            if (id.startsWith('legacy_desa_')) {
+                                return new Style({
+                                    stroke: new Stroke({ color: CORE_LAYER_COLORS.ADMIN.hex, width: 2.5 }),
+                                    fill: new Fill({ color: `${CORE_LAYER_COLORS.ADMIN.hex}0d` })
+                                });
+                            }
+                            if (id.startsWith('legacy_poros_')) {
+                                return new Style({
+                                    stroke: new Stroke({ color: '#000000', width: 3 })
+                                });
+                            }
+                            if (id.startsWith('legacy_segments_')) {
+                                const checkMelarosa = feature.get('check_melarosa');
+                                const statusJalan = feature.get('status_jalan');
+
+                                let segmentColor = '#22c55e'; // Default Green
+                                let borderColor = '#22c55e';
+                                let lineDash: number[] | undefined = undefined;
+
+                                if (checkMelarosa === 'Ya' && statusJalan === 'Jalan Desa') {
+                                    segmentColor = '#22c55e'; // Green
+                                    borderColor = '#22c55e';
+                                } else if (statusJalan === 'Jalan Kabupaten') {
+                                    segmentColor = '#2563eb'; // Blue
+                                    borderColor = '#2563eb';
+                                } else if (checkMelarosa === 'Tidak') {
+                                    segmentColor = '#ef4444'; // Red
+                                    borderColor = '#ef4444';
+                                    lineDash = [6, 6];
+                                }
+
+                                const styles = [
+                                    new Style({
+                                        stroke: new Stroke({
+                                            color: borderColor,
+                                            width: 5,
+                                            lineDash: lineDash
+                                        })
+                                    }),
+                                    new Style({
+                                        stroke: new Stroke({
+                                            color: segmentColor,
+                                            width: 3,
+                                            lineDash: lineDash
+                                        })
+                                    })
+                                ];
+
+                                const label = feature.get('nama_ruas') || feature.get('NM_RUAS');
+                                if (label) {
+                                    styles.push(new Style({
+                                        text: new Text({
+                                            text: label.toString().toUpperCase(),
+                                            font: 'bold 10px Inter, sans-serif',
+                                            fill: new Fill({ color: '#fff' }),
+                                            stroke: new Stroke({ color: borderColor, width: 3 }),
+                                            offsetY: -12,
+                                            placement: 'line',
+                                            repeat: 300,
+                                            overflow: true
+                                        })
+                                    }));
+                                }
+                                return styles;
+                            }
+
+                            return new Style({
+                                stroke: new Stroke({ color: CORE_LAYER_COLORS.CATALOG.hex, width: 2 }),
+                                fill: new Fill({ color: `${CORE_LAYER_COLORS.CATALOG.hex}1a` }) // 10% opacity
+                            });
+                        }
+                    });
+                } else if (layerConfig.type === 'tile' && layerConfig.url) {
+                    layer = new TileLayer({
+                        source: new OSM({
+                            url: layerConfig.url
+                        }),
+                        zIndex: layerConfig.zIndex ?? 0
+                    });
+                }
+
+                if (layer) {
+                    layer.set('id', layerConfig.id);
+                    layer.set('type', layerConfig.type);
+                    map.addLayer(layer);
+                }
+            }
+
+            if (layer) {
+                layer.setVisible(layerConfig.visible !== false);
+                layer.setOpacity(layerConfig.opacity ?? 1);
+                layer.setZIndex(layerConfig.zIndex ?? 50);
+
+                // Update WMS params if changed (crucial for reactive CQL filtering)
+                if (layerConfig.type === 'wms') {
+                    const source = layer.getSource() as TileWMS;
+                    if (source && layerConfig.params) {
+                        source.updateParams(layerConfig.params);
+                    }
+                }
+            }
+        });
+
+        // 3. Remove layers that are no longer in the config (only for dynamic layers)
+        const PROTECTED_LAYER_IDS = ['legacy_batas_desa', 'legacy_utama', 'legacy_segmen', 'highlight', 'legacy_poros'];
+        const dynamicLayerIds = new Set(layers.map(l => l.id));
+        existingLayers.getArray().forEach(l => {
+            const id = l.get('id');
+            if (id && !PROTECTED_LAYER_IDS.includes(id) && !dynamicLayerIds.has(id)) {
+                map.removeLayer(l);
+            }
+        });
+
+    }, [layers]);
 
     useEffect(() => {
         if (geojsonData && (geojsonData as any).type && mapRef.current) {
@@ -374,7 +671,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             });
             vectorSourceRef.current.clear();
             vectorSourceRef.current.addFeatures(features);
-            
+
             const extent = vectorSourceRef.current.getExtent();
 
             if (extent && extent[0] !== Infinity) {
@@ -407,13 +704,13 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
                     {/* Actions */}
                     <div className="absolute top-3 right-3 flex gap-1 z-10">
-                        <button 
+                        <button
                             onClick={() => setIsPopupMinimized(!isPopupMinimized)}
                             className="p-1 hover:bg-slate-100 rounded-md transition-colors text-slate-400"
                         >
                             {isPopupMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
-                        <button 
+                        <button
                             onClick={closePopup}
                             className="p-1 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors text-slate-400"
                         >
@@ -440,7 +737,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                         isPopupMinimized ? "max-h-0 opacity-0" : "max-h-[250px] opacity-100 border-t border-slate-100 pt-3"
                     )}>
                         <div className="overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                           {Object.entries(selectedVectorInfo.properties)
+                            {Object.entries(selectedVectorInfo.properties)
                                 .filter(([key]) => !['geometry', '_layer', 'bbox', 'fid', 'id'].includes(key))
                                 .map(([key, value]) => (
                                     <div key={key} className="flex flex-col p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
@@ -452,9 +749,9 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                             {(key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar')) ? ' m' : ''}
                                         </span>
                                     </div>
-                           ))}
+                                ))}
                         </div>
-                        
+
                         <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
                             <span className="text-[9px] font-bold text-slate-400 uppercase">Koordinat</span>
                             <code className="text-[9px] font-bold bg-slate-50 px-2 py-0.5 rounded border text-blue-600">

@@ -27,7 +27,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Data Monitoring - GIGI'S Monitoring" },
+        { title: "Data Monitoring - GIGIS Monitoring" },
         { name: "description", content: "Daftar monitoring ruas jalan poros desa Bojonegoro" },
     ];
 };

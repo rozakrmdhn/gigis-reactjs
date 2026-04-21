@@ -18,7 +18,7 @@ export function DynamicBreadcrumb() {
             <BreadcrumbList>
                 <BreadcrumbItem>
                     <BreadcrumbLink asChild>
-                        <Link to="/">Home</Link>
+                        <Link to="/">System</Link>
                     </BreadcrumbLink>
                 </BreadcrumbItem>
                 {pathnames.length > 0 && <BreadcrumbSeparator />}

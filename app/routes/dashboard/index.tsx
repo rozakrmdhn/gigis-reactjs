@@ -23,7 +23,7 @@ import {
 
 export function meta({ }: Route.MetaArgs) {
     return [
-        { title: "Dashboard Heatmap - GIGI'S Monitoring" },
+        { title: "Dashboard Heatmap - GIGIS Monitoring" },
         { name: "description", content: "Visualisasi Kepadatan Segmen Jalan Poros Desa Bojonegoro" },
     ];
 }

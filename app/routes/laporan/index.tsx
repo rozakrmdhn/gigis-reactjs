@@ -10,7 +10,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Laporan Rekapitulasi - GIGI'S Monitoring" },
+        { title: "Laporan Rekapitulasi - GIGIS Monitoring" },
         { name: "description", content: "Ringkasan data pembangunan jalan desa Bojonegoro" },
     ];
 };
@@ -65,14 +65,10 @@ export default function LaporanPage() {
         fetchData();
     }, [fetchData]);
 
-    // Handle search input debounce
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setFilters(prev => ({ ...prev, desa: search || undefined }));
-        }, 500);
-
-        return () => clearTimeout(timer);
-    }, [search]);
+    // Handle search manual trigger
+    const handleSearchSubmit = useCallback((value: string) => {
+        setFilters(prev => ({ ...prev, desa: value || undefined }));
+    }, []);
 
     const handleFilterChange = useCallback((key: string, value: string) => {
         setFilters(prev => ({
@@ -102,6 +98,7 @@ export default function LaporanPage() {
                 rekapData={rekapData}
                 search={search}
                 setSearch={setSearch}
+                onSearchSubmit={handleSearchSubmit}
                 isLoading={isLoading}
             />
         </div>

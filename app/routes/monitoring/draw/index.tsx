@@ -75,7 +75,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Editor Peta - GIGI'S Monitoring" },
+        { title: "Editor Peta - GIGIS Monitoring" },
         { name: "description", content: "Editor Peta Infrastruktur Jalan Poros Desa Bojonegoro" },
     ];
 };
@@ -194,7 +194,7 @@ export default function DrawPage() {
     const [checkedRoadIds, setCheckedRoadIds] = useState<string[]>([]);
     const [visibleLayers, setVisibleLayers] = useState([
         { id: "non-base", label: "Jalan Lingkungan", visible: true, color: "#ef4444", lineDash: [6, 6] },
-        { id: "wms-jalan-kabupaten", label: "WMS Jalan Kabupaten 2022", visible: true, color: "oklch(0.546 0.245 262.881)" },
+        { id: "wms-jalan-kabupaten", label: "WMS Jalan Kabupaten 2026", visible: true, color: "oklch(0.546 0.245 262.881)" },
         { id: "road-desa-wms", label: "WMS Jalan Desa", visible: false, color: "#94a3b8" },
         { id: "ruas-utama", label: "Jalan Poros Desa", visible: true, color: "#FFA500" },
         { id: "segmen-desa", label: "Segmen Jalan Desa", visible: true, color: "#22c55e" },
@@ -543,9 +543,9 @@ export default function DrawPage() {
 
         const jalanKabupatenWmsLayer = new TileLayer({
             source: new TileWMS({
-                url: 'https://geoportal.saggaserv.my.id/geoserver/sagga/wms',
+                url: 'https://saggaserv.my.id/geoserver/geonode/wms',
                 params: {
-                    'LAYERS': 'sagga:JALAN_KABUPATEN_2022',
+                    'LAYERS': 'geonode:jalan_kabupaten_sk2026_ln',
                     'TILED': true,
                     'TRANSPARENT': true,
                     'VERSION': '1.1.1'
@@ -637,11 +637,11 @@ export default function DrawPage() {
                 lat: coordinate[1]
             });
 
-            // Change cursor to pointer when over vector features
+            // Change cursor to pointer when over vector features or WMS features
             const pixel = map.getEventPixel(evt.originalEvent);
-            const hit = map.hasFeatureAtPixel(pixel, {
-                layerFilter: (l) => 
-                    l === vectorLayerRef.current || 
+            const vectorHit = map.hasFeatureAtPixel(pixel, {
+                layerFilter: (l) =>
+                    l === vectorLayerRef.current ||
                     l === existingLayerRef.current ||
                     l === ruasUtamaLayerRef.current ||
                     l === segmenDesaLayerRef.current ||
@@ -650,7 +650,27 @@ export default function DrawPage() {
                     l === staLayerRef.current,
                 hitTolerance: 10
             });
-            map.getTargetElement().style.cursor = hit ? 'pointer' : '';
+
+            // Check WMS layers
+            let wmsHit = false;
+            const checkWmsHit = (layer: TileLayer<any> | null) => {
+                if (!layer || !layer.getVisible()) return false;
+                try {
+                    const data = layer.getData(pixel);
+                    if (data && (data instanceof Uint8Array || data instanceof Uint8ClampedArray || data instanceof Float32Array)) {
+                        if (data.length >= 4 && data[3] > 0) {
+                            return true;
+                        }
+                    }
+                } catch (e) {
+                    // Ignore cross-origin issues
+                }
+                return false;
+            };
+
+            wmsHit = checkWmsHit(roadDesaWmsLayerRef.current) || checkWmsHit(jalanKabupatenWmsLayerRef.current);
+
+            map.getTargetElement().style.cursor = (vectorHit || wmsHit) ? 'pointer' : '';
         }, 50);
 
         map.on('pointermove', throttledPointerMove);
@@ -662,8 +682,8 @@ export default function DrawPage() {
 
             // 1. Check for Vector Feature Click (Drawing/Existing Segments)
             const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, {
-                layerFilter: (l) => 
-                    l === vectorLayerRef.current || 
+                layerFilter: (l) =>
+                    l === vectorLayerRef.current ||
                     l === existingLayerRef.current ||
                     l === ruasUtamaLayerRef.current ||
                     l === segmenDesaLayerRef.current ||

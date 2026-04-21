@@ -14,8 +14,8 @@ import { PublicNavbar } from "~/components/public-navbar";
 
 export const meta: MetaFunction = () => {
   return [
-    { title: "Beranda - GIGI'S Monitoring" },
-    { name: "description", content: "Selamat datang di GIGI'S Monitoring Jalan Poros Desa Bojonegoro" },
+    { title: "Beranda - GIGIS Monitoring" },
+    { name: "description", content: "Selamat datang di GIGIS Monitoring Jalan Poros Desa Bojonegoro" },
   ];
 };
 
@@ -28,8 +28,19 @@ export default function Home() {
       <PublicNavbar />
 
       {/* Hero Section */}
-      <section className="relative overflow-hidden pt-16 pb-24 lg:pt-32 lg:pb-40">
-        <div className="container mx-auto px-4">
+      <section className="relative flex min-h-[calc(100vh-4rem)] items-center justify-center overflow-hidden py-12 lg:py-20">
+        {/* Background Illustration */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+          <img
+            src="/images/gis-hero.png"
+            className="w-full h-full object-cover opacity-60 dark:opacity-70 scale-105 animate-[pulse_8s_ease-in-out_infinite]"
+            alt="GIS Infrastructure Background"
+          />
+          <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 via-slate-50/40 to-slate-50 dark:from-slate-950/90 dark:via-slate-950/50 dark:to-slate-950" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(248,250,252,1)_100%)] dark:bg-[radial-gradient(circle_at_center,transparent_0%,rgba(2,6,23,1)_100%)]" />
+        </div>
+
+        <div className="container mx-auto px-4 relative z-10">
           <div className="flex flex-col items-center text-center">
             <div className="mb-6 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-600 shadow-sm">
               <span className="flex h-2 w-2 rounded-full bg-blue-600 animate-pulse" />
@@ -39,11 +50,11 @@ export default function Home() {
               Pantau Pembangunan Infrastruktur Bojonegoro <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">Lebih Akurat</span>
             </h1>
             <p className="mt-8 max-w-2xl text-lg text-slate-600">
-              GIGI'S (Geographic Information & Infrastructure System) memberikan visualisasi real-time
+              GIGIS (Geographic Information & Infrastructure System) memberikan visualisasi real-time
               kondisi jalan poros desa untuk pengambilan keputusan yang lebih tepat.
             </p>
             <div className="mt-10 flex flex-wrap justify-center gap-4">
-              <Link to={isAuthenticated ? "/dashboard" : "/login"}>
+              <Link to="/map-view">
                 <Button size="lg" className="h-14 px-8 text-base font-bold shadow-xl shadow-blue-200">Mulai Sekarang</Button>
               </Link>
               <Button variant="outline" size="lg" className="h-14 px-8 text-base font-bold bg-white">Pelajari Fitur</Button>
@@ -99,7 +110,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t bg-slate-50 py-12">
         <div className="container mx-auto px-4 text-center text-slate-500">
-          <p>© 2026 GIGI'S Monitoring Jalan Poros. All rights reserved.</p>
+          <p>© 2026 GIGIS Monitoring Jalan Poros. All rights reserved.</p>
         </div>
       </footer>
     </div>

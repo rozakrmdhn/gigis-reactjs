@@ -80,6 +80,7 @@ interface DataTableProps<TData, TValue> {
     getRowId?: (row: TData) => string
     searchValue?: string
     onSearchChange?: (value: string) => void
+    onSearchSubmit?: (value: string) => void
     defaultPageSize?: number
     pageSizeOptions?: number[]
 }
@@ -118,6 +119,7 @@ export function DataTable<TData, TValue>({
     getRowId,
     searchValue,
     onSearchChange,
+    onSearchSubmit,
     defaultPageSize = 10,
     pageSizeOptions = [10, 20, 30, 40, 50],
 }: DataTableProps<TData, TValue>) {
@@ -197,18 +199,33 @@ export function DataTable<TData, TValue>({
             <div className="flex items-center justify-between px-4 lg:px-6">
                 <div className="flex flex-1 items-center space-x-2">
                     {searchKey && (
-                        <div className="relative">
-                            <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder={searchPlaceholder}
-                                value={onSearchChange ? searchValue : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "")}
-                                onChange={(event) =>
-                                    onSearchChange
-                                        ? onSearchChange(event.target.value)
-                                        : table.getColumn(searchKey)?.setFilterValue(event.target.value)
-                                }
-                                className="h-9 w-[150px] lg:w-[250px] pl-9"
-                            />
+                        <div className="flex items-center gap-2">
+                            <div className="relative">
+                                <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder={searchPlaceholder}
+                                    value={onSearchChange ? searchValue : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? "")}
+                                    onChange={(event) =>
+                                        onSearchChange
+                                            ? onSearchChange(event.target.value)
+                                            : table.getColumn(searchKey)?.setFilterValue(event.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter" && onSearchSubmit) {
+                                            onSearchSubmit(onSearchChange ? (searchValue ?? "") : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? ""))
+                                        }
+                                    }}
+                                    className="h-9 w-[150px] lg:w-[250px] pl-9"
+                                />
+                            </div>
+                            {onSearchSubmit && (
+                                <Button 
+                                    size="sm" 
+                                    onClick={() => onSearchSubmit(onSearchChange ? (searchValue ?? "") : ((table.getColumn(searchKey)?.getFilterValue() as string) ?? ""))}
+                                >
+                                    Cari
+                                </Button>
+                            )}
                         </div>
                     )}
                 </div>

@@ -10,40 +10,48 @@ interface LaporanTableProps {
     rekapData: RekapDibangun[];
     search: string;
     setSearch: (value: string) => void;
+    onSearchSubmit?: (value: string) => void;
     isLoading?: boolean;
 }
 
-export function LaporanTable({ rekapData, search, setSearch, isLoading }: LaporanTableProps) {
+export function LaporanTable({ rekapData, search, setSearch, onSearchSubmit, isLoading }: LaporanTableProps) {
     const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const columns: ColumnDef<RekapDibangun>[] = [
         {
             accessorKey: "nama_kecamatan",
             header: "Kecamatan",
+            cell: ({ row }) => <div className="font-medium text-slate-900 dark:text-slate-100">{row.getValue("nama_kecamatan")}</div>,
         },
         {
             accessorKey: "nama_desa",
             header: "Desa",
+            cell: ({ row }) => <div className="font-medium text-slate-700 dark:text-slate-300">{row.getValue("nama_desa")}</div>,
         },
         {
             accessorKey: "total_panjang_aset",
-            header: () => <div className="text-right">Panjang Jalan Desa (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono">{formatNumber(row.getValue("total_panjang_aset"))}</div>,
+            header: () => <div className="text-right font-semibold">Total Panjang (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-slate-600 dark:text-slate-400">{formatNumber(row.getValue("total_panjang_aset"))}</div>,
+        },
+        {
+            accessorKey: "sisa_intervensi",
+            header: () => <div className="text-right font-semibold text-indigo-700 dark:text-indigo-400">Sisa Intervensi (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-indigo-600 dark:text-indigo-400 font-medium">{formatNumber(row.original.sisa_intervensi)}</div>,
         },
         {
             accessorKey: "total_panjang_dibangun",
-            header: () => <div className="text-right text-slate-800 dark:text-slate-200">Panjang Dibangun (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono text-green-600 dark:text-emerald-400 font-medium">{formatNumber(row.getValue("total_panjang_dibangun"))}</div>,
+            header: () => <div className="text-right font-semibold text-emerald-700 dark:text-emerald-400">Dibangun (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-emerald-600 dark:text-emerald-400 font-bold">{formatNumber(row.getValue("total_panjang_dibangun"))}</div>,
         },
         {
             accessorKey: "total_panjang_puk",
-            header: () => <div className="text-right text-slate-800 dark:text-slate-200">Peningkatan Status (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono text-green-600 dark:text-teal-400 font-medium">{formatNumber(row.getValue("total_panjang_puk"))}</div>,
+            header: () => <div className="text-right font-semibold text-teal-700 dark:text-teal-400">Peningkatan Status (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-teal-600 dark:text-teal-400 font-medium">{formatNumber(row.getValue("total_panjang_puk"))}</div>,
         },
         {
             accessorKey: "selisih",
-            header: () => <div className="text-right text-slate-800 dark:text-slate-200">Selisih (m)</div>,
-            cell: ({ row }) => <div className="text-right font-mono text-orange-600 dark:text-orange-400 font-medium">{formatNumber(row.getValue("selisih"))}</div>,
+            header: () => <div className="text-right font-semibold text-orange-700 dark:text-orange-400">Selisih (m)</div>,
+            cell: ({ row }) => <div className="text-right font-mono text-orange-600 dark:text-orange-400 font-bold">{formatNumber(row.getValue("selisih"))}</div>,
         },
         {
             accessorKey: "status_pembangunan",
@@ -53,8 +61,10 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
                 const isTuntas = status.toLowerCase() === "tuntas";
                 return (
                     <Badge variant={isTuntas ? "default" : "secondary"} className={cn(
-                        "font-medium",
-                        isTuntas ? "bg-green-100 text-green-700 dark:bg-emerald-900/30 dark:text-emerald-400 hover:bg-green-100/80 border-green-200 dark:border-emerald-800/50" : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 hover:bg-orange-100/80 border-orange-200 dark:border-orange-800/50"
+                        "font-semibold px-2.5 py-0.5 rounded-full transition-all duration-300",
+                        isTuntas 
+                            ? "bg-green-100 text-green-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-green-200 dark:border-emerald-800/50 hover:scale-105" 
+                            : "bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-400 border-orange-200 dark:border-orange-800/50 hover:scale-105"
                     )}>
                         {status}
                     </Badge>
@@ -90,6 +100,7 @@ export function LaporanTable({ rekapData, search, setSearch, isLoading }: Lapora
                                 searchPlaceholder="Cari nama desa..."
                                 searchValue={search}
                                 onSearchChange={setSearch}
+                                onSearchSubmit={onSearchSubmit}
                                 defaultPageSize={50}
                                 pageSizeOptions={[10, 20, 30, 40, 50, 9999]}
                             />

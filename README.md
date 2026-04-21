@@ -1,6 +1,6 @@
-# GIGI'S - Monitoring Jalan Poros Desa
+# GIGIS - Monitoring Jalan Poros Desa
 
-**GIGI'S (Geographic Information & Infrastructure System)** adalah platform pemantauan infrastruktur jalan poros desa di Kabupaten Bojonegoro. Aplikasi ini dirancang untuk memberikan visualisasi real-time kondisi jalan serta mempermudah pengambilan keputusan berbasis data geospasial.
+**GIGIS (Geographic Information & Infrastructure System)** adalah platform pemantauan infrastruktur jalan poros desa di Kabupaten Bojonegoro. Aplikasi ini dirancang untuk memberikan visualisasi real-time kondisi jalan serta mempermudah pengambilan keputusan berbasis data geospasial.
 
 ## 🚀 Fitur Utama
 

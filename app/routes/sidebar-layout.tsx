@@ -10,7 +10,7 @@ export default function SidebarLayout() {
     const navigation = useNavigation();
     const location = useLocation();
     const navigate = useNavigate();
-    const isFullHeightView = location.pathname.includes("/monitoring/draw") || location.pathname.includes("/monitoring/maps");
+    const isFullHeightView = location.pathname.includes("/admin/monitoring/draw") || location.pathname.includes("/admin/monitoring/maps");
 
     // Client-side auth check - redirect if not authenticated
     useEffect(() => {

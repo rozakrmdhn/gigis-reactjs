@@ -40,7 +40,7 @@ export default function Login() {
     // Redirect if already authenticated
     useEffect(() => {
         if (authService.isAuthenticated()) {
-            window.location.href = '/dashboard';
+            window.location.href = '/admin/dashboard';
         }
     }, []);
 
@@ -52,7 +52,7 @@ export default function Login() {
             toast.success('Login berhasil! Mengalihkan ke dashboard...');
             // Use window.location for more reliable redirect after login
             setTimeout(() => {
-                window.location.href = '/dashboard';
+                window.location.href = '/admin/dashboard';
             }, 500);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Login gagal. Silakan coba lagi.';

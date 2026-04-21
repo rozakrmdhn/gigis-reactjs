@@ -19,7 +19,7 @@ import { SessionExpiredAlert } from "./features/auth/components/SessionExpiredAl
 
 export const meta: Route.MetaFunction = () => {
   return [
-    { title: "GIGI'S - Monitoring Jalan Poros" },
+    { title: "GIGIS - Monitoring Jalan Poros" },
     { name: "description", content: "Sistem Informasi Geografis & Infrastruktur - Monitoring Jalan Poros Desa Bojonegoro" },
   ];
 };

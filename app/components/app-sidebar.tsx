@@ -26,50 +26,50 @@ const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "/dashboard",
+      url: "/admin/dashboard",
       icon: IconDashboard,
     },
     {
       title: "Peta",
-      url: "/peta",
+      url: "/admin/peta",
       icon: IconMap,
     },
     {
       title: "Monitoring",
-      url: "/monitoring",
+      url: "/admin/monitoring",
       icon: IconMap,
       items: [
         {
           title: "Maps",
-          url: "/monitoring/maps",
+          url: "/admin/monitoring/maps",
         },
         {
           title: "Draw",
-          url: "/monitoring/draw",
+          url: "/admin/monitoring/draw",
         },
       ],
     },
     {
       title: "Laporan",
-      url: "/laporan",
+      url: "/admin/laporan",
       icon: IconFileText,
     },
     {
       title: "Data Master",
-      url: "/master",
+      url: "/admin/master",
       icon: IconDatabase,
       items: [
         {
           title: "Data Desa",
-          url: "/master/desa",
+          url: "/admin/master/desa",
         },
         {
           title: "Data Kecamatan",
-          url: "/master/kecamatan",
+          url: "/admin/master/kecamatan",
         },
         {
           title: "Data Jalan",
-          url: "/master/jalan",
+          url: "/admin/master/jalan",
         },
       ],
     },

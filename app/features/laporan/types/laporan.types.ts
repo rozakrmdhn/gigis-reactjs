@@ -7,6 +7,7 @@ export interface RekapDibangun {
     total_panjang_puk: number;
     total_panjang_dibangun: number;
     selisih: number;
+    sisa_intervensi: number;
     status_pembangunan: string;
 }
 

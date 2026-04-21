@@ -3,10 +3,14 @@ import { type RouteConfig, index, route, layout } from "@react-router/dev/routes
 export default [
     index("routes/home.tsx"),
     route("login", "routes/login.tsx"),
-    route("peta-interaktif", "routes/peta-interaktif.tsx"),
-    layout("routes/sidebar-layout.tsx", [
-
-        route("dashboard", "routes/dashboard/index.tsx"),
+    route("map-view", "routes/map-view.tsx"),
+    route("jalan-desa", "routes/jalan-desa.tsx"),
+    route("jalan-desa/:slug", "routes/jalan-desa.$slug.tsx"),
+    route("statistik", "routes/statistik.tsx"),
+    // Admin routes
+    route("admin", "routes/sidebar-layout.tsx", [
+        index("routes/dashboard/index.tsx"),
+        route("dashboard", "routes/dashboard/index.tsx", { id: "admin-dashboard" }),
         route("peta", "routes/peta/index.tsx"),
         route("laporan", "routes/laporan/index.tsx"),
         route("master/desa", "routes/master/desa/index.tsx"),

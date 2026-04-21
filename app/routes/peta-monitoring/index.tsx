@@ -4,7 +4,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Peta Monitoring - GIGI'S Monitoring" },
+        { title: "Peta Monitoring - GIGIS Monitoring" },
         { name: "description", content: "Peta Monitoring Infrastruktur Jalan Poros Desa Bojonegoro" },
     ];
 };
