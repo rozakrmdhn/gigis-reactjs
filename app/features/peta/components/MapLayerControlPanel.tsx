@@ -413,7 +413,7 @@ export function MapLayerControlPanel({
     };
 
     return (
-        <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-2xl overflow-hidden">
+        <div className="flex flex-col h-full bg-white dark:bg-slate-950/50 overflow-hidden">
             {/* Header */}
             <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
                 <div className="flex items-center gap-2">

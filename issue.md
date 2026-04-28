@@ -1,64 +1,63 @@
-# Issue: Implementasi Halaman Katalog Dataset (GeoNode Integration)
+# Rencana Implementasi: Perbaikan Interaksi Peta dan Integrasi Geonode Katalog pada Monitoring Draw
 
-## 📌 Deskripsi Tugas
-Kita perlu membuat halaman **Katalog Dataset** baru di aplikasi GIGIS. Halaman ini akan menampilkan daftar dataset yang diambil dari server GeoNode kita (`saggaserv.my.id`), serta memungkinkan pengguna untuk melakukan preview dataset langsung di atas peta (OpenLayers). Peta preview juga harus interaktif dengan fitur pop-up informasi atribut dan pilihan basemap.
+Dokumen ini berisi panduan untuk mengimplementasikan beberapa fitur dan perbaikan pada rute `/admin/monitoring/draw` dan service terkait. Silakan ikuti langkah-langkah di bawah ini untuk mengimplementasikan perubahannya.
 
-Dokumen ini ditulis agar mudah diikuti oleh Junior Programmer atau AI Assistant untuk mengimplementasikan fitur tersebut.
+## Daftar Tugas
 
----
+### 1. Menghilangkan Interaksi Pop-up Saat Draw Segmen
+**Lokasi File:** `app/routes/monitoring/draw/index.tsx`
 
-## ✅ Kriteria Penerimaan (Acceptance Criteria)
-1. **Halaman Katalog (`/katalog-dataset`)**: Menampilkan daftar dataset dari GeoNode dalam bentuk card grid.
-2. **Preview Peta**: Pengguna dapat melihat layer dataset di atas peta OpenLayers.
-3. **Fitur Pop-up (Feature Info)**: Jika pengguna mengklik fitur/layer di peta, akan muncul pop-up berisi informasi atribut data tersebut.
-4. **Basemap**: Tersedia opsi untuk mengganti basemap (misalnya: OSM, Google Satellite, dll).
+**Masalah:** Saat ini, ketika pengguna sedang melakukan *drawing* segmen jalan (menambahkan segmen baru), fitur pop-up mungkin masih terpicu jika pengguna tanpa sengaja menekan area peta yang memiliki fitur vector/WMS.
+**Instruksi:**
+- Cari fungsi handler `map.on('click', ...)` di dalam `useEffect`.
+- Tambahkan pengecekan kondisi untuk mode draw. Jika variabel state `mode` sedang bernilai `"draw"`, maka instruksikan handler untuk melakukan *return/escape* awal (early return) atau melewatinya sehingga pop-up tidak muncul (`setSelectedVectorId` tidak dipanggil, dan `vectorPopupRef` tidak diset posisinya).
 
----
+### 2. Menghilangkan Interaksi Pop-up Saat Edit Segmen
+**Lokasi File:** `app/routes/monitoring/draw/index.tsx`
 
-## 🛠 Langkah-langkah Implementasi
+**Masalah:** Mirip dengan isu di atas, saat mode *edit* fitur jalan, pop-up tidak seharusnya mengganggu proses editing.
+**Instruksi:**
+- Cari handler klik yang sama (`map.on('click', ...)`).
+- Tambahkan juga pengecekan jika state `mode` sedang bernilai `"edit"`, lakukan hal yang sama (early return atau matikan eksekusi pemanggilan pop-up informasi).
+- Pastikan bahwa klik pada peta hanya berfokus pada interaksi `Modify` bawaan dari OpenLayers, tanpa membuka modal/popup detail fitur.
 
-### Langkah 1: Setup Service API GeoNode
-Buat service baru untuk menangani request ke API GeoNode.
-*   **File**: `app/features/katalog/services/geonode.service.ts`
-*   **Tugas**:
-    *   Buat fungsi `getDatasets()` yang memanggil endpoint GeoNode API (biasanya `https://saggaserv.my.id/api/v2/datasets`).
-    *   Pastikan untuk mengambil informasi penting seperti `title`, `abstract` (deskripsi), `alternate` (nama layer/workspace geoserver), dan link `thumbnail`.
-    *   **Catatan Penting**: Waspada terhadap masalah **CORS**. Jika API GeoNode tidak mengizinkan akses langsung dari browser frontend, mintalah backend untuk membuatkan endpoint *proxy* atau setel header proxy di sisi server (jika menggunakan framework fullstack seperti Remix).
+### 3. Fitur Dialog Katalog Dataset Geonode & Menghapus WMS Default
+**Lokasi File Utama:** `app/routes/monitoring/draw/index.tsx`
+**Komponen Referensi:** `app/features/peta/components/GeonodeDatasetPanel`
 
-### Langkah 2: Buat Halaman UI Katalog
-Buat route baru untuk menampilkan list dataset.
-*   **File**: `app/routes/katalog-dataset.tsx`
-*   **Tugas**:
-    *   Gunakan komponen `PublicNavbar` agar konsisten dengan halaman lain.
-    *   Fetch data dari `geonode.service.ts`.
-    *   Tampilkan data dalam bentuk **Card Grid** (gunakan `grid-cols-1 md:grid-cols-3` dll).
-    *   Tiap Card harus menampilkan: Thumbnail/Ikon, Judul Dataset, Deskripsi singkat, dan tombol **"Preview Peta"**.
+**Masalah:** Pengguna butuh kemudahan memuat layer data dari Geonode langsung pada halaman editor/draw, namun dua layer bawaan seringkali memberatkan atau menutupi view.
+**Instruksi:**
+- **Hapus Layer Default:** 
+  1. Pada `useState` deklarasi `visibleLayers`, hapus atau set `visible: false` dan hilangkan inisialisasi default dari object WMS untuk `"wms-jalan-kabupaten"` dan `"road-desa-wms"`. 
+  2. Pada inisialisasi objek `OLMap` (di dalam `useEffect`), hapus layer `roadDesaWmsLayer` dan `jalanKabupatenWmsLayer` dari array `layers`.
+- **Tambahkan Fitur Dialog Katalog:**
+  1. Import komponen dialog UI standar (seperti `Dialog`, `DialogContent`, `DialogHeader`, `DialogTitle`, dll dari `~/components/ui/dialog`).
+  2. Import komponen `GeonodeDatasetPanel` dari `~/features/peta/components/GeonodeDatasetPanel`.
+  3. Buat sebuah tombol baru di *map controls* (misalnya ikon `Database` atau `Layers`) yang membuka state Dialog ini (`isCatalogOpen`).
+  4. Di dalam konten dialog, render komponen `<GeonodeDatasetPanel onAddLayer={handleAddLayer} activeLayerIds={...} />`.
+  5. Pastikan membuat fungsi helper `handleAddLayer` yang menerima layer dari Geonode dan memasukkannya ke dalam map `mapRef.current` (menggunakan method `.addLayer()` dari OpenLayers) agar datanya tampil pada peta draw.
 
-### Langkah 3: Buat Halaman Preview Peta
-Buat route detail untuk memuat peta berdasarkan dataset yang dipilih.
-*   **File**: `app/routes/katalog-dataset.$id.tsx` (atau bisa juga dibuat dalam bentuk Modal/Dialog besar di halaman yang sama).
-*   **Tugas**:
-    *   Gunakan pustaka **OpenLayers** (bisa merujuk/me-reuse `OpenLayersMap.tsx` yang sudah ada di proyek).
-    *   **Tambahkan Basemap**: Implementasikan layer grup atau kontrol sederhana untuk beralih antara Basemap (OSM Standar dan Satelit).
-    *   **Load Layer GeoNode**:
-        *   GeoNode menggunakan GeoServer di belakangnya.
-        *   Tambahkan layer sebagai **WMS (Web Map Service)** (lebih ringan untuk data besar) atau **Vector/WFS** (jika data kecil). URL WMS biasanya mengarah ke `https://saggaserv.my.id/geoserver/wms`.
-        *   Gunakan parameter `LAYERS` dengan nilai dari atribut `alternate` (misal: `geonode:nama_layer`) yang didapat dari API pada langkah 1.
+### 4. Perbaikan Query Parameter Endpoint Segmen (desa_id -> id_desa)
+**Lokasi File:** `app/features/monitoring/services/monitoring.service.ts`
 
-### Langkah 4: Implementasi Fitur Pop-up (Feature Info)
-Agar peta interaktif, kita harus menampilkan data saat fitur diklik.
-*   **Tugas**:
-    *   **Jika menggunakan WMS**: Gunakan method `getFeatureInfoUrl` dari sumber WMS OpenLayers (`TileWMS` atau `ImageWMS`) saat event `singleclick` terjadi pada peta. Fetch URL tersebut (biasanya mereturn format JSON) dan parse isinya.
-    *   **Jika menggunakan WFS/Vector**: Gunakan interaksi `Select` dari OpenLayers dan ambil properties dari fitur yang ter-select.
-    *   **UI Pop-up**: Buat elemen HTML absolute atau gunakan `Overlay` bawaan OpenLayers untuk menampilkan tabel `Key-Value` dari atribut data yang diklik tersebut.
-
----
-
-## 💡 Panduan Khusus & Tips
-1. **Desain UI/UX**: Gunakan kelas Tailwind CSS yang sudah ada (misalnya komponen UI dari Radix/Shadcn) agar memiliki kesan modern, "glassmorphism", dan profesional seperti halaman `/jalan-desa`.
-2. **Loading State**: Pastikan memberikan state loading (seperti komponen Skeleton) saat mengambil data dari server `saggaserv.my.id` karena server spasial kadang membutuhkan waktu respon beberapa detik.
-3. **Pusatkan Peta (Fit Bounds)**: Saat layer berhasil dimuat, idealnya peta otomatis melakukan `fit` ke koordinat batas layer (Bounding Box / Extent). Metadata API GeoNode biasanya menyediakan atribut `bbox`.
-4. **Handling CORS Layer**: Seringkali pemuatan image WMS terblokir CORS. Pastikan saat inisialisasi WMS di OpenLayers menggunakan konfigurasi `crossOrigin: 'anonymous'` atau `'use-credentials'` tergantung settingan server saggaserv.
+**Masalah:** Terdapat inkonsistensi query parameter saat mengambil data segmen non-base jalan, di mana backend meminta `id_desa` tetapi frontend mengirim `desa_id`.
+**Instruksi:**
+- Temukan metode `getNonBaseSegments` di dalam `monitoring.service.ts`.
+- Saat ini kode terlihat seperti:
+  ```typescript
+  if (id_desa) {
+      url += `&desa_id=${id_desa}`;
+  }
+  ```
+- Ubah baris tersebut menjadi:
+  ```typescript
+  if (id_desa) {
+      url += `&id_desa=${id_desa}`;
+  }
+  ```
+- Pastikan tidak ada fungsi lain yang memanggil query parameter yang salah (lakukan pencarian teks `desa_id=` jika perlu).
 
 ---
-*Siap dikerjakan? Silakan mulai dari Langkah 1!*
+
+## Catatan untuk Junior Programmer / AI:
+Kerjakan langkah perbaikan API (`monitoring.service.ts`) terlebih dahulu untuk menstabilkan pengambilan data, kemudian lanjutkan ke logika penghapusan *pop-up* (draw/edit) di peta. Tutup pengerjaan dengan penambahan fitur UI Dialog untuk Katalog Geonode. Gunakan metode OpenLayers `map.addLayer()` secara dinamis ketika menerima output *layer* dari `GeonodeDatasetPanel`.

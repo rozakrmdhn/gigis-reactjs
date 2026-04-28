@@ -10,10 +10,11 @@ import {
     Filter,
     ChevronDown,
     Info,
+    X,
 } from 'lucide-react';
 import { PublicNavbar } from "~/components/public-navbar";
 import { OpenLayersMap, type OpenLayersMapRef, type MapLayerConfig } from "~/features/peta/components/OpenLayersMap";
-import { MapControls } from "~/features/monitoring/components/MapControls";
+// Removed Input import as it's no longer needed in this file
 import { GeonodeDatasetPanel } from "~/features/peta/components/GeonodeDatasetPanel";
 import { MapLayerControlPanel } from "~/features/peta/components/MapLayerControlPanel";
 import { KecamatanDropdown } from "~/features/peta/components/KecamatanDropdown";
@@ -42,8 +43,20 @@ import { Activity, BarChart3, CheckCircle2, Ruler, AlertCircle } from "lucide-re
 import type { MetaFunction } from "react-router";
 
 
+import {
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+} from "~/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { CORE_LAYER_COLORS } from '~/lib/map-config';
+import { MapViewSidebar } from "~/features/peta/components/MapViewSidebar";
+import { MapViewMapControls } from "~/features/peta/components/MapViewMapControls";
+import { ScrollArea } from "~/components/ui/scroll-area";
+import { Spinner } from "~/components/ui/spinner";
+import { SegmenMiniMap } from "~/features/peta/components/SegmenMiniMap";
+import { MapPin, Navigation } from 'lucide-react';
 
 export const meta: MetaFunction = () => {
     return [
@@ -65,20 +78,29 @@ export default function MapViewPage() {
     const mapRef = useRef<OpenLayersMapRef>(null);
     const isMobile = useIsMobile();
     const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
     const [isRekapOpen, setIsRekapOpen] = useState(false);
+
+    // Sidebar state initialization for mobile
+    useEffect(() => {
+        if (isMobile) {
+            setIsSidebarOpen(false);
+        }
+    }, [isMobile]);
 
     // Basemap & Legend State
     const [activeBasemap, setActiveBasemap] = useState(BASEMAPS[3]);
     const [isBasemapPanelOpen, setIsBasemapPanelOpen] = useState(false);
     const [isLegendOpen, setIsLegendOpen] = useState(false);
     const [rekapData, setRekapData] = useState<RekapDibangun | null>(null);
+    const [segmentsData, setSegmentsData] = useState<any>(null);
 
     // Administrative Filters State
     const [selectedKecamatan, setSelectedKecamatan] = useState<Kecamatan | null>(null);
     const [selectedDesa, setSelectedDesa] = useState<Desa | null>(null);
-    const [selectedSegmen, setSelectedSegmen] = useState<any>(null);
     const [loading, setLoading] = useState(false);
+    const [selectedSegmen, setSelectedSegmen] = useState<any>(null);
+
+    // Monitoring state removed as it is no longer used in the sidebar
 
     // Map Layers State
     const [activeLayers, setActiveLayers] = useState<MapLayerConfig[]>([]);
@@ -95,8 +117,13 @@ export default function MapViewPage() {
 
     // Handlers
     const handleAddLayer = (newLayer: MapLayerConfig) => {
-        setActiveLayers(prev => [newLayer, ...prev]);
-        // Shadcn Tabs handles state via component props or defaultValue
+        setActiveLayers(prev => {
+            const next = [newLayer, ...prev];
+            return next.map((l, i) => ({
+                ...l,
+                zIndex: 100 + (next.length - i) * 10
+            }));
+        });
     };
 
     const handleRemoveLayer = (id: string) => {
@@ -106,7 +133,7 @@ export default function MapViewPage() {
     const handleReorderLayers = (newOrder: MapLayerConfig[]) => {
         const updated = newOrder.map((layer, index) => ({
             ...layer,
-            zIndex: (newOrder.length - index) * 10
+            zIndex: 100 + (newOrder.length - index) * 10
         }));
         setActiveLayers(updated);
     };
@@ -256,6 +283,7 @@ export default function MapViewPage() {
             console.log(`MapView: Rekap = ${rekap ? 'Found' : 'Failed'}`);
 
             setRekapData(rekap);
+            setSegmentsData(rawSegments);
 
             // Inject metadata for Master Road
             const porosGeojson = rawPoros && rawPoros.features ? {
@@ -331,182 +359,80 @@ export default function MapViewPage() {
         }
     };
 
-    // Animated Tab State
-    const TAB_KEYS = ['catalog', 'layers', 'filters'] as const;
-    type TabKey = typeof TAB_KEYS[number];
-    const [activeTab, setActiveTab] = useState<TabKey>('catalog');
-    const [prevTabIndex, setPrevTabIndex] = useState(0);
-    const [isTransitioning, setIsTransitioning] = useState(false);
-
-    const handleTabChange = (tab: TabKey) => {
-        if (tab === activeTab || isTransitioning) return;
-        setPrevTabIndex(TAB_KEYS.indexOf(activeTab));
-        setIsTransitioning(true);
-        // Small delay for exit animation to start, then switch
-        setTimeout(() => {
-            setActiveTab(tab);
-            // Allow enter animation to complete
-            setTimeout(() => setIsTransitioning(false), 300);
-        }, 150);
-    };
-
-    const currentTabIndex = TAB_KEYS.indexOf(activeTab);
-    const slideDirection = currentTabIndex > prevTabIndex ? 1 : -1; // 1 = right, -1 = left
+    // Tabs State
+    const [activeTab, setActiveTab] = useState<string>('catalog');
 
     // Sidebar content component/variable for reuse
     const SidebarContent = (
-        <div className={cn(
-            "flex flex-col h-full",
-            isMobile ? "w-full" : "w-[340px]"
-        )}>
-            <div className="w-full h-full flex flex-col gap-3">
-                {/* Navigation Tabs List */}
-                <div className="w-full h-12 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-2xl border border-white dark:border-slate-800 shadow-2xl shrink-0 flex items-center justify-center">
-                    {TAB_KEYS.map((tab) => (
-                        <button
-                            key={tab}
-                            onClick={() => handleTabChange(tab)}
-                            className={cn(
-                                "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 relative",
-                                activeTab === tab
-                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-200/50 dark:shadow-blue-900/30 scale-[1.02]"
-                                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
-                            )}
-                        >
-                            {tab === 'catalog' && <Database size={16} className={cn("transition-transform duration-300", activeTab === tab && "scale-110")} />}
-                            {tab === 'layers' && <LayersIcon size={16} className={cn("transition-transform duration-300", activeTab === tab && "scale-110")} />}
-                            {tab === 'filters' && <Filter size={16} className={cn("transition-transform duration-300", activeTab === tab && "scale-110")} />}
-                            <span>{tab === 'catalog' ? 'Katalog' : tab === 'layers' ? 'Layer' : 'Filter'}</span>
-                            {tab === 'filters' && selectedKecamatan && (
-                                <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_5px_rgba(52,211,153,0.8)]" />
-                            )}
-                        </button>
-                    ))}
+        <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/20 min-h-0">
+            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val)} className="flex-1 flex flex-col min-h-0 gap-0">
+                <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 px-2 py-2 shrink-0">
+                    <TabsList className="w-full grid grid-cols-3 h-9">
+                        <TabsTrigger value="catalog" className="text-[9px] uppercase font-bold tracking-tight">Katalog</TabsTrigger>
+                        <TabsTrigger value="layers" className="text-[9px] uppercase font-bold tracking-tight">Layer</TabsTrigger>
+                        <TabsTrigger value="filters" className="text-[9px] uppercase font-bold tracking-tight">Filter</TabsTrigger>
+                    </TabsList>
                 </div>
 
-                {/* Animated Panel Content */}
-                <div className="flex-1 min-h-0 relative overflow-hidden">
-                    {TAB_KEYS.map((tab) => {
-                        const tabIndex = TAB_KEYS.indexOf(tab);
-                        const isActive = activeTab === tab;
+                <TabsContent value="catalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
+                    <GeonodeDatasetPanel
+                        onAddLayer={handleAddLayer}
+                        activeLayerIds={activeLayerIds}
+                    />
+                </TabsContent>
 
-                        // Calculate transform for inactive tabs
-                        let translateX = '0%';
-                        if (!isActive) {
-                            if (tabIndex < currentTabIndex) {
-                                translateX = '-30%';
-                            } else {
-                                translateX = '30%';
-                            }
-                        }
+                <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
+                    <MapLayerControlPanel
+                        layers={activeLayers}
+                        onRemoveLayer={handleRemoveLayer}
+                        onReorder={handleReorderLayers}
+                        onToggleVisibility={handleToggleVisibility}
+                        onOpacityChange={handleOpacityChange}
+                        onUpdateLayerParams={handleUpdateLayerParams}
+                    />
+                </TabsContent>
 
-                        return (
-                            <div
-                                key={tab}
-                                className="absolute inset-0 transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]"
-                                style={{
-                                    transform: `translateX(${translateX})`,
-                                    opacity: isActive ? 1 : 0,
-                                    pointerEvents: isActive ? 'auto' : 'none',
-                                    visibility: isActive ? 'visible' : 'hidden',
-                                }}
-                            >
-                                {tab === 'catalog' && (
-                                    <GeonodeDatasetPanel
-                                        onAddLayer={handleAddLayer}
-                                        activeLayerIds={activeLayerIds}
-                                    />
-                                )}
-                                {tab === 'layers' && (
-                                    <MapLayerControlPanel
-                                        layers={activeLayers}
-                                        onReorder={handleReorderLayers}
-                                        onToggleVisibility={handleToggleVisibility}
-                                        onRemoveLayer={handleRemoveLayer}
-                                        onOpacityChange={handleOpacityChange}
-                                        onUpdateLayerParams={handleUpdateLayerParams}
-                                        onReset={() => setActiveLayers([activeLayers[activeLayers.length - 1]])}
-                                    />
-                                )}
-                                {tab === 'filters' && (
-                                    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-2xl overflow-hidden">
-                                        {/* Header */}
-                                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-2 bg-emerald-600 rounded-lg text-white shadow-lg shadow-emerald-200 dark:shadow-none">
-                                                    <Filter size={18} />
-                                                </div>
-                                                <div className="text-left">
-                                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight uppercase">Eksplorasi Wilayah</h3>
-                                                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Filter Administrasi</p>
-                                                </div>
-                                            </div>
-                                        </div>
+                <TabsContent value="filters" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden">
+                    <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar bg-white dark:bg-slate-950/50">
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Pencarian Alamat</label>
+                            <AddressSearch onSelect={handleSearchSelect} />
+                        </div>
 
-                                        {/* Content */}
-                                        <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-4 custom-scrollbar">
-                                            <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 pt-2 pb-2 border-b border-slate-50 dark:border-slate-800 -mx-4 px-4 shadow-sm">
-                                                <div className="space-y-1.5">
-                                                    <AddressSearch onSelect={handleSearchSelect} />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-3">
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[10px] font-black text-slate-900 dark:text-slate-400 uppercase tracking-widest ml-1">Kecamatan</label>
-                                                    <KecamatanDropdown
-                                                        className="w-full h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 font-bold"
-                                                        selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
-                                                        onSelectKecamatan={handleSelectKecamatan}
-                                                    />
-                                                </div>
-
-                                                <div className="space-y-2">
-                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-slate-400 ml-1">Desa / Kelurahan</label>
-                                                    <DesaDropdown
-                                                        className="w-full h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 font-bold"
-                                                        idKecamatan={selectedKecamatan?.id}
-                                                        selectedDesaName={selectedDesa?.nama_desa}
-                                                        onSelectDesa={handleSelectDesa}
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                                                <CoordinateInput
-                                                    markers={markers}
-                                                    onAdd={handleAddMarker}
-                                                    onRemove={handleRemoveMarker}
-                                                    onUpdate={handleUpdateMarker}
-                                                    onZoomTo={(m) => mapRef.current?.zoomToCoordinate(m.lon, m.lat)}
-                                                />
-                                            </div>
-
-                                            <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100/50 dark:border-emerald-900/20 rounded-2xl">
-                                                <div className="flex items-start gap-3">
-                                                    <div className="mt-0.5 text-emerald-600">
-                                                        <MapIcon size={14} />
-                                                    </div>
-                                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic">
-                                                        Pilih wilayah untuk memfokuskan peta dan menampilkan data jalan poros desa yang relevan secara otomatis.
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Footer */}
-                                        <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
-                                            <p className="text-[9px] text-center text-slate-400 font-medium italic">
-                                                Gunakan filter untuk navigasi cepat antar wilayah
-                                            </p>
-                                        </div>
-                                    </div>
-                                )}
+                        <div className="space-y-3 pt-2 border-t dark:border-slate-800">
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Kecamatan</label>
+                                <KecamatanDropdown
+                                    className="w-full h-10 rounded-xl shadow-sm border-slate-200 dark:border-slate-800 font-bold"
+                                    selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
+                                    onSelectKecamatan={handleSelectKecamatan}
+                                />
                             </div>
-                        );
-                    })}
-                </div>
-            </div>
+
+                            <div className="space-y-1.5">
+                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Desa / Kelurahan</label>
+                                <DesaDropdown
+                                    className="w-full h-10 rounded-xl shadow-sm border-slate-200 dark:border-slate-800 font-bold"
+                                    idKecamatan={selectedKecamatan?.id}
+                                    selectedDesaName={selectedDesa?.nama_desa}
+                                    onSelectDesa={handleSelectDesa}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-4 pt-4 border-t dark:border-slate-800">
+                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Input Koordinat</label>
+                            <CoordinateInput
+                                markers={markers}
+                                onAdd={handleAddMarker}
+                                onRemove={handleRemoveMarker}
+                                onUpdate={handleUpdateMarker}
+                                onZoomTo={(m) => mapRef.current?.zoomToCoordinate(m.lon, m.lat)}
+                            />
+                        </div>
+                    </div>
+                </TabsContent>
+            </Tabs>
         </div>
     );
 
@@ -515,65 +441,26 @@ export default function MapViewPage() {
             <PublicNavbar />
 
             <main className="flex-1 relative flex overflow-hidden">
-                {/* Sidebar Controls */}
-                {!isMobile ? (
-                    <div
-                        className={cn(
-                            "absolute top-6 left-6 z-30 flex flex-col gap-3 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                            isSidebarOpen ? "translate-x-0" : "-translate-x-[calc(100%+24px)]"
-                        )}
-                    >
-                        <div className="w-[340px] h-[calc(100vh-110px)] flex flex-col">
-                            {SidebarContent}
-                        </div>
+                <MapViewSidebar
+                    isOpen={isSidebarOpen}
+                    onToggle={setIsSidebarOpen}
+                    widthClass="w-[340px]"
+                    className="z-40"
+                >
+                    <div className="h-full flex flex-col">
+                        {SidebarContent}
                     </div>
-                ) : (
-                    <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
-                        <SheetTrigger asChild>
-                            <Button
-                                variant="outline"
-                                size="icon"
-                                className="absolute top-4 left-4 z-30 w-11 h-11 rounded-2xl shadow-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-white/60 dark:border-slate-700 active:scale-95 transition-all"
-                            >
-                                <PanelLeftOpen size={20} />
-                            </Button>
-                        </SheetTrigger>
-                        <SheetContent
-                            side="left"
-                            className="w-[85vw] max-w-[340px] p-0 border-none bg-white dark:bg-slate-900 h-[100dvh]"
-                        >
-                            <SheetHeader className="sr-only">
-                                <SheetTitle>Peta Panel Kontrol</SheetTitle>
-                            </SheetHeader>
-                            <div className="h-full pt-safe pb-safe p-0 overflow-hidden flex flex-col">
-                                {SidebarContent}
-                            </div>
-                        </SheetContent>
-                    </Sheet>
-                )}
-
-                {/* Sidebar Toggle Button (Desktop Only) */}
-                {!isMobile && (
-                    <button
-                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                        className={cn(
-                            "absolute z-30 left-0 top-1/2 -translate-y-1/2 flex items-center justify-center w-8 h-16 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl rounded-r-xl transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                            isSidebarOpen ? "translate-x-[364px]" : "translate-x-0"
-                        )}
-                    >
-                        {isSidebarOpen ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-                    </button>
-                )}
+                </MapViewSidebar>
 
                 {/* Map Section */}
                 <div className="flex-1 relative">
                     {loading && (
                         <div
                             className={cn(
-                                "absolute z-20 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                                "absolute z-50 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
                                 isMobile
                                     ? "top-4 left-[72px]"
-                                    : cn("top-6", isSidebarOpen ? "left-6 translate-x-[352px]" : "left-6")
+                                    : cn("top-6 transition-all duration-500", isSidebarOpen ? "left-[352px]" : "left-6")
                             )}
                         >
                             <div className="h-4 w-4 border-[2.5px] border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -637,21 +524,39 @@ export default function MapViewPage() {
                         </button>
                     </div>
 
-                    {/* Left Bottom Corner: Legend / Attribution */}
+                    {/* Top Left Corner (Beside Sidebar): Legend */}
                     <div className={cn(
-                        "absolute z-20 pointer-events-none flex flex-col justify-end items-start gap-2",
-                        isMobile ? "bottom-4 left-4" : "bottom-6 left-6"
+                        "absolute z-20 pointer-events-none flex flex-col items-start gap-2 transition-all duration-500 ease-in-out",
+                        isMobile ? "top-4" : "top-6",
+                        isSidebarOpen
+                            ? (isMobile ? "left-4" : "left-[360px]")
+                            : (isMobile ? "left-4" : "left-6")
                     )}>
-                        {/* Legend Content */}
+                        {/* Toggle Button (Now at the top) */}
+                        <button
+                            onClick={() => setIsLegendOpen(!isLegendOpen)}
+                            className={cn(
+                                "pointer-events-auto rounded-xl backdrop-blur-md border shadow-xl transition-all flex items-center gap-2 group active:scale-95",
+                                isMobile ? "h-9 px-3" : "h-10 px-4 gap-2.5",
+                                isLegendOpen
+                                    ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-700"
+                                    : "bg-white/90 dark:bg-slate-900/90 text-slate-600 dark:text-slate-200 border-white dark:border-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800"
+                            )}
+                        >
+                            {isLegendOpen ? <ChevronDown size={13} className="opacity-70 rotate-180" /> : <MapIcon size={13} className="group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />}
+                            <span className={cn("font-black uppercase tracking-widest", isMobile ? "text-[9px]" : "text-[10px]")}>
+                                {isLegendOpen ? "Tutup Legenda" : "Legenda"}
+                            </span>
+                        </button>
+
+                        {/* Legend Content (Expands downwards) */}
                         <div className={cn(
-                            "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-xl transition-all duration-500 overflow-hidden pointer-events-auto",
+                            "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-xl transition-all duration-500 overflow-hidden pointer-events-auto origin-top",
                             isLegendOpen
                                 ? isMobile
                                     ? "max-h-[300px] opacity-100 w-[min(220px,calc(100vw-112px))]"
                                     : "max-h-[400px] opacity-100 w-[260px]"
-                                : isMobile
-                                    ? "max-h-0 opacity-0 w-[min(220px,calc(100vw-112px))] border-transparent shadow-none"
-                                    : "max-h-0 opacity-0 w-[260px] border-transparent shadow-none"
+                                : "max-h-0 opacity-0 w-[260px] border-transparent shadow-none"
                         )}>
                             <div className={cn("p-4", isMobile && "p-3")}>
                                 <div className="flex items-center gap-2 mb-3">
@@ -667,18 +572,18 @@ export default function MapViewPage() {
                                                 boxShadow: hasSegments ? `0 0 8px ${CORE_LAYER_COLORS.SEGMENTS.hex}80` : 'none'
                                             }}
                                         />
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Segmen Jalan Desa</span>
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Segmen Jalan Desa</span>
                                     </div>
                                     <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasMainRoads && "opacity-40")}>
                                         <div className="w-6 h-1.5 rounded-full shrink-0" style={{ backgroundColor: CORE_LAYER_COLORS.GENERAL.hex }} />
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Jalan Utama / Kab</span>
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Jalan Utama / Kab</span>
                                     </div>
                                     <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasAdmin && "opacity-40")}>
                                         <div className="relative w-6 h-2 flex items-center justify-center shrink-0">
                                             <div className="w-full h-0 border-t-2 border-dashed" style={{ borderColor: CORE_LAYER_COLORS.ADMIN.hex }} />
                                             <div className="absolute inset-0 rounded-sm" style={{ backgroundColor: `${CORE_LAYER_COLORS.ADMIN.hex}1a` }} />
                                         </div>
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Batas Wilayah Desa</span>
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Batas Wilayah Desa</span>
                                     </div>
                                     <div className={cn("flex items-center gap-3 mt-1 transition-opacity duration-300", !hasCatalog && "opacity-40 grayscale-[0.5]")}>
                                         <div
@@ -688,46 +593,30 @@ export default function MapViewPage() {
                                                 borderColor: CORE_LAYER_COLORS.CATALOG.hex
                                             }}
                                         />
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Wilayah/Poligon Katalog</span>
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Wilayah/Poligon Katalog</span>
                                     </div>
                                 </div>
                                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                    <p className="text-[8px] text-slate-400 dark:text-slate-500 font-bold leading-relaxed uppercase tracking-widest">
+                                    <p className="text-[8px] text-slate-400 dark:text-slate-500 font-bold leading-relaxed uppercase tracking-widest text-left">
                                         GIS Melarosa Bojonegoro.
                                     </p>
                                 </div>
                             </div>
                         </div>
-
-                        {/* Toggle Button */}
-                        <button
-                            onClick={() => setIsLegendOpen(!isLegendOpen)}
-                            className={cn(
-                                "pointer-events-auto rounded-xl backdrop-blur-md border shadow-xl transition-all flex items-center gap-2 group active:scale-95",
-                                isMobile ? "h-9 px-3" : "h-10 px-4 gap-2.5",
-                                isLegendOpen
-                                    ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-700"
-                                    : "bg-white/90 dark:bg-slate-900/90 text-slate-600 dark:text-slate-200 border-white dark:border-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800"
-                            )}
-                        >
-                            {isLegendOpen ? <ChevronDown size={13} className="opacity-70" /> : <MapIcon size={13} className="group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />}
-                            <span className={cn("font-black uppercase tracking-widest", isMobile ? "text-[9px]" : "text-[10px]")}>
-                                {isLegendOpen ? "Tutup" : "Legenda"}
-                            </span>
-                        </button>
                     </div>
 
-                    {/* Right Top Corner: Controls */}
-                    <div className={cn(
-                        "absolute z-10 flex flex-col gap-2",
-                        isMobile ? "top-4 right-4" : "top-6 right-6 gap-3"
-                    )}>
-                        <MapControls
-                            onZoomIn={() => mapRef.current?.zoomIn()}
-                            onZoomOut={() => mapRef.current?.zoomOut()}
-                            onResetBearing={() => mapRef.current?.resetRotation()}
-                        />
-                    </div>
+                    {/* Map Controls (Bottom Left like Draw) */}
+                    <MapViewMapControls
+                        onZoomIn={() => mapRef.current?.zoomIn()}
+                        onZoomOut={() => mapRef.current?.zoomOut()}
+                        onResetBearing={() => mapRef.current?.resetRotation()}
+                        className={cn(
+                            "absolute bottom-6 transition-all duration-500 z-20",
+                            isMobile
+                                ? "left-4"
+                                : isSidebarOpen ? "left-[352px]" : "left-6"
+                        )}
+                    />
                 </div>
             </main>
 
@@ -746,111 +635,347 @@ export default function MapViewPage() {
 
             {/* Bottom Sheet for Rekap Data */}
             <Sheet open={isRekapOpen} onOpenChange={setIsRekapOpen}>
-                <SheetContent side="bottom" className="h-auto max-h-[90dvh] rounded-t-[32px] border-t-0 p-0 overflow-hidden shadow-2xl overflow-y-auto">
+                <SheetContent side="bottom" className="h-auto max-h-[90dvh] rounded-t-[32px] border-t-0 p-0 overflow-hidden shadow-2xl overflow-y-auto [&>button]:hidden">
                     <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full" />
 
-                    <div className="p-6 pt-10 md:px-12 bg-white dark:bg-slate-900">
-                        <SheetHeader className="p-0 mb-4 text-left">
+                    <SheetTitle className="sr-only">Rekap Pembangunan - {selectedDesa?.name}</SheetTitle>
+                    <SheetDescription className="sr-only">Detail informasi progres pembangunan jalan di Desa {selectedDesa?.name}.</SheetDescription>
+
+                    {/* Modern Close Button */}
+                    <div className="absolute top-6 right-6 z-50">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => setIsRekapOpen(false)}
+                            className="w-10 h-10 rounded-2xl bg-slate-100/50 dark:bg-slate-800/50 backdrop-blur-md hover:bg-red-500 hover:text-white transition-all active:scale-90 shadow-sm"
+                        >
+                            <X size={18} className="stroke-[2.5]" />
+                        </Button>
+                    </div>
+
+                    <div className="flex-1 flex flex-col min-h-0 pt-10 md:px-12 bg-white dark:bg-slate-900">
+                        <SheetHeader className="px-6 pb-2 text-left">
                             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                                 <div className="space-y-1">
                                     <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
                                         <Activity className="w-4 h-4" />
                                         <span className="text-[10px] font-black uppercase tracking-[0.2em]">Ringkasan Infrastruktur</span>
                                     </div>
-                                    <SheetTitle className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
+                                    <SheetTitle className="text-lg md:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
                                         {rekapData?.nama_desa}
                                     </SheetTitle>
-                                    <SheetDescription className="text-slate-500 dark:text-slate-400 font-medium">
+                                    <SheetDescription className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
                                         Kecamatan {rekapData?.nama_kecamatan} • Kabupaten Bojonegoro
                                     </SheetDescription>
                                 </div>
-                                <Badge
-                                    className={cn(
-                                        "w-fit px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border-2 shadow-lg",
-                                        rekapData?.status_pembangunan === 'Sudah Tuntas'
-                                            ? "bg-green-500 hover:bg-green-600 border-green-200 text-white"
-                                            : "bg-orange-500 hover:bg-orange-600 border-orange-200 text-white"
-                                    )}
-                                >
-                                    {rekapData?.status_pembangunan === 'Sudah Tuntas' ? <CheckCircle2 className="w-3.5 h-3.5 mr-2 inline" /> : <AlertCircle className="w-3.5 h-3.5 mr-2 inline" />}
-                                    {rekapData?.status_pembangunan}
-                                </Badge>
+                                <div className="flex flex-col gap-2 items-end">
+                                    {(() => {
+                                        const pemetaan = rekapData?.total_panjang_aset || 0;
+                                        const naikStatus = rekapData?.total_panjang_puk || 0;
+                                        const jalanDesaSekarang = Math.max(0, pemetaan - naikStatus);
+                                        const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
+
+                                        const pct = jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100;
+                                        const isDone = pct >= 100;
+
+                                        return (
+                                            <Badge
+                                                className={cn(
+                                                    "w-fit px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-lg flex items-center gap-2 transition-all",
+                                                    isDone
+                                                        ? "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-800 ring-4 ring-emerald-500/5"
+                                                        : "bg-red-500/10 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-800 ring-4 ring-red-500/5"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "w-2 h-2 rounded-full",
+                                                    isDone ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]",
+                                                    !isDone && "animate-pulse"
+                                                )} />
+                                                {isDone ? (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" />
+                                                        Infrastruktur Tuntas
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center gap-1.5">
+                                                        <AlertCircle size={12} className="text-red-600 dark:text-red-400" />
+                                                        Belum Tuntas
+                                                    </span>
+                                                )}
+                                            </Badge>
+                                        );
+                                    })()}
+                                </div>
                             </div>
                         </SheetHeader>
 
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-6">
-                            <Card className="border-0 shadow-sm bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden">
-                                <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Panjang Jalan Desa</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-3 pt-0 text-center">
-                                    <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">
-                                        {((rekapData?.total_panjang_aset || 0) / 1000).toFixed(2)}
-                                        <span className="text-[10px] ml-1 text-slate-400 font-bold">km</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="border-0 shadow-sm bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden">
-                                <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Naik Status Kabupaten</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-3 pt-0 text-center">
-                                    <div className="text-2xl font-black text-slate-900 dark:text-white tabular-nums">
-                                        {((rekapData?.total_panjang_puk || 0) / 1000).toFixed(2)}
-                                        <span className="text-[10px] ml-1 text-slate-400 font-bold">km</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="border-0 shadow-sm bg-blue-50/50 dark:bg-blue-900/10 rounded-xl overflow-hidden border border-blue-100 dark:border-blue-900/20">
-                                <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Jalan Desa Sekarang</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-3 pt-0 text-center">
-                                    <div className="text-2xl font-black text-blue-700 dark:text-blue-300 tabular-nums">
-                                        {((rekapData?.sisa_intervensi || 0) / 1000).toFixed(2)}
-                                        <span className="text-[10px] ml-1 text-blue-400 font-bold">km</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="border-0 shadow-sm bg-orange-50/50 dark:bg-orange-900/10 rounded-xl overflow-hidden border border-orange-100 dark:border-orange-900/20">
-                                <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                    <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">Belum Tertangani</CardTitle>
-                                </CardHeader>
-                                <CardContent className="p-3 pt-0 text-center">
-                                    <div className="text-2xl font-black text-orange-700 dark:text-orange-300 tabular-nums">
-                                        {((rekapData?.selisih || 0) / 1000).toFixed(2)}
-                                        <span className="text-[10px] ml-1 text-orange-400 font-bold">km</span>
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        </div>
-
-                        <div className="bg-slate-50 dark:bg-slate-800/30 px-6 py-5 rounded-[24px] mb-4 border border-slate-100 dark:border-slate-800 shadow-sm">
-                            <div className="flex justify-between items-center mb-3">
-                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Progress Pembangunan Keseluruhan</span>
-                                <span className="text-base font-black text-blue-600 dark:text-blue-400">
-                                    {Math.round(((rekapData?.total_panjang_dibangun || 0) / (rekapData?.sisa_intervensi || 1)) * 100)}%
-                                </span>
+                        <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0 mt-4">
+                            <div className="px-6">
+                                <TabsList className="w-full max-w-md grid grid-cols-2 h-11 p-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl">
+                                    <TabsTrigger value="overview" className="rounded-lg font-bold text-xs uppercase tracking-widest">
+                                        Status Capaian
+                                    </TabsTrigger>
+                                    <TabsTrigger value="segments" className="rounded-lg font-bold text-xs uppercase tracking-widest">
+                                        Segmen List
+                                    </TabsTrigger>
+                                </TabsList>
                             </div>
-                            <Progress
-                                value={((rekapData?.total_panjang_dibangun || 0) / (rekapData?.sisa_intervensi || 1)) * 100}
-                                className="h-2.5 bg-slate-200 dark:bg-slate-700"
-                            />
-                        </div>
 
-                        <SheetFooter className="p-0 sm:justify-start">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setIsRekapOpen(false)}
-                                className="w-full md:w-auto h-12 px-8 rounded-2xl border-2 font-bold uppercase tracking-widest text-xs hover:bg-slate-100 transition-all"
-                            >
-                                Close
-                            </Button>
-                        </SheetFooter>
+                            <TabsContent value="overview" className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar outline-none">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-6">
+                                    <Card className="border-0 shadow-sm bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden">
+                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
+                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pemetaan Jalan Desa</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-3 pt-0 text-center">
+                                            <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+                                                {(rekapData?.total_panjang_aset || 0).toLocaleString('id-ID')}
+                                                <span className="text-[10px] ml-1 text-slate-400 font-bold uppercase tracking-wider">m</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="border-0 shadow-sm bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden">
+                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
+                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Naik Status Kabupaten</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-3 pt-0 text-center">
+                                            <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
+                                                {(rekapData?.total_panjang_puk || 0).toLocaleString('id-ID')}
+                                                <span className="text-[10px] ml-1 text-slate-400 font-bold uppercase tracking-wider">m</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="border-0 shadow-sm bg-blue-50/50 dark:bg-blue-900/10 rounded-xl overflow-hidden border border-blue-100 dark:border-blue-900/20">
+                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
+                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Jalan Desa Sekarang</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-3 pt-0 text-center">
+                                            <div className="text-xl font-black text-blue-700 dark:text-blue-300 tabular-nums">
+                                                {Math.max(0, (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)).toLocaleString('id-ID')}
+                                                <span className="text-[10px] ml-1 text-blue-400 font-bold uppercase tracking-wider">m</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card className="border-0 shadow-sm bg-orange-50/50 dark:bg-orange-900/10 rounded-xl overflow-hidden border border-orange-100 dark:border-orange-900/20">
+                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
+                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">Belum Tertangani</CardTitle>
+                                        </CardHeader>
+                                        <CardContent className="p-3 pt-0 text-center">
+                                            <div className="text-xl font-black text-orange-700 dark:text-orange-300 tabular-nums">
+                                                {Math.max(0, ((rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)) - (rekapData?.total_panjang_dibangun || 0)).toLocaleString('id-ID')}
+                                                <span className="text-[10px] ml-1 text-orange-400 font-bold uppercase tracking-wider">m</span>
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {(() => {
+                                    const jalanDesaSekarang = (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0);
+                                    const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
+                                    const pct = Math.min(100, Math.round(jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100));
+                                    const isDone = pct >= 100;
+
+                                    return (
+                                        <div className="bg-white dark:bg-slate-900 px-6 py-6 rounded-[32px] mb-6 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden group">
+                                            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-colors" />
+
+                                            <div className="flex justify-between items-end mb-6">
+                                                <div className="space-y-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className={cn(
+                                                            "w-1.5 h-1.5 rounded-full",
+                                                            isDone ? "bg-emerald-500" : "bg-blue-500 animate-pulse"
+                                                        )} />
+                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 block">Status Capaian</span>
+                                                    </div>
+                                                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Progress Pembangunan</h4>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className={cn(
+                                                            "text-3xl font-black leading-none tabular-nums tracking-tighter",
+                                                            isDone ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"
+                                                        )}>
+                                                            {pct}
+                                                        </span>
+                                                        <span className="text-lg font-black text-slate-300 dark:text-slate-600">%</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="relative mb-6">
+                                                <div
+                                                    className="absolute -top-2 transition-all duration-1000 ease-out z-10 hidden md:block"
+                                                    style={{ left: `calc(${pct}% - 20px)` }}
+                                                >
+                                                    <div className="bg-slate-900 text-white text-[8px] font-black px-2 py-1 rounded-md shadow-lg relative after:content-[''] after:absolute after:top-full after:left-1/2 after:-ml-1 after:border-4 after:border-transparent after:border-t-slate-900">
+                                                        {pct}%
+                                                    </div>
+                                                </div>
+
+                                                <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 shadow-inner">
+                                                    <div
+                                                        className={cn(
+                                                            "h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden",
+                                                            isDone
+                                                                ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
+                                                                : "bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-400 shadow-[0_0_12px_rgba(37,99,235,0.3)]"
+                                                        )}
+                                                        style={{ width: `${pct}%` }}
+                                                    >
+                                                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
+                                                        {!isDone && (
+                                                            <div
+                                                                className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg]"
+                                                                style={{
+                                                                    animation: 'shimmer 2s infinite linear',
+                                                                    backgroundSize: '200% 100%'
+                                                                }}
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-1">
+                                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sudah Dibangun</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{jalanDibangun.toLocaleString('id-ID')}</span>
+                                                        <span className="text-[10px] font-bold text-slate-400">m</span>
+                                                    </div>
+                                                </div>
+                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-1">
+                                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Target Tersisa</span>
+                                                    <div className="flex items-baseline gap-1">
+                                                        <span className="text-sm font-black text-slate-900 dark:text-white">
+                                                            {Math.max(0, jalanDesaSekarang - jalanDibangun).toLocaleString('id-ID')}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-slate-400">m</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <style>{`
+                                                @keyframes shimmer {
+                                                    0% { transform: translateX(-150%) skewX(-20deg); }
+                                                    100% { transform: translateX(250%) skewX(-20deg); }
+                                                }
+                                            `}</style>
+                                        </div>
+                                    );
+                                })()}
+                            </TabsContent>
+
+                            <TabsContent value="segments" className="flex-1 flex flex-col min-h-0 m-0 outline-none">
+                                <div className="py-4 flex-1 flex flex-col gap-4 overflow-hidden">
+                                    <div className="px-6 flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Navigation size={14} className="text-blue-500" />
+                                            <span className="text-[12px] tracking-widest text-slate-400">Daftar Segmen</span>
+                                        </div>
+                                        <Badge variant="outline" className="text-[12px] px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-900">
+                                            {segmentsData?.features?.length} Segmen
+                                        </Badge>
+                                    </div>
+
+                                    <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar snap-x snap-mandatory pb-10 scroll-px-6">
+                                        <div className="flex flex-nowrap gap-4 px-6 w-max min-w-full">
+                                            {segmentsData?.features?.map((feature: any, idx: number) => {
+                                                const props = feature.properties;
+                                                const isDone = props.status_pembangunan === 'Sudah Tuntas';
+
+                                                return (
+                                                    <Card key={idx} className="w-[280px] md:w-[320px] gap-0 p-0 shrink-0 snap-start border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-2xl overflow-hidden group bg-white dark:bg-slate-900">
+                                                        <div className="h-[160px] bg-slate-50 dark:bg-slate-950/50 relative overflow-hidden">
+                                                            {/* Background Pattern */}
+                                                            <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }} />
+
+                                                            <SegmenMiniMap
+                                                                feature={feature}
+                                                                strokeColor={isDone ? '#10b981' : '#3b82f6'}
+                                                                className="w-full h-full p-6 transition-transform duration-500 group-hover:scale-110"
+                                                            />
+
+                                                            <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
+                                                                <Badge className={cn(
+                                                                    "text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border-0 shadow-xl backdrop-blur-md",
+                                                                    isDone
+                                                                        ? "bg-emerald-500/90 text-white ring-4 ring-emerald-500/10"
+                                                                        : "bg-blue-600/90 text-white ring-4 ring-blue-600/10"
+                                                                )}>
+                                                                    {isDone ? 'Sudah Tuntas' : 'Aktif'}
+                                                                </Badge>
+                                                                {props.tahun_pembangunan && (
+                                                                    <Badge variant="outline" className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm text-[8px] font-black border-slate-200 dark:border-slate-700 rounded-lg">
+                                                                        TA. {props.tahun_pembangunan}
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <CardContent className="p-4 space-y-4">
+                                                            <div className="space-y-1">
+                                                                <div className="flex items-center gap-1.5 mb-1">
+                                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                                                    <span className="text-[8px] font-black text-slate-400 tracking-widest">Detail Segmen</span>
+                                                                </div>
+                                                                <h5 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight line-clamp-1">
+                                                                    {props.nama_segmen || `Segmen ${idx + 1}`}
+                                                                </h5>
+                                                                <p className="text-[10px] font-bold text-slate-400 tracking-tighter truncate">
+                                                                    Kode Ruas : {props.kode_ruas}
+                                                                </p>
+                                                            </div>
+
+                                                            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
+                                                                <div className="space-y-1">
+                                                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">Dimensi</span>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Ruler size={10} className="text-blue-500" />
+                                                                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{Math.round(props.panjang || 0)}<span className="text-[8px] text-slate-400 ml-0.5">m</span></span>
+                                                                        </div>
+                                                                        <div className="w-px h-2 bg-slate-200 dark:bg-slate-700" />
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Navigation size={10} className="text-indigo-500" />
+                                                                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{props.lebar || 0}<span className="text-[8px] text-slate-400 ml-0.5">m</span></span>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                                <div className="space-y-1 border-l border-slate-200 dark:border-slate-700 pl-3">
+                                                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">Spesifikasi</span>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <LayersIcon size={10} className="text-emerald-500" />
+                                                                        <span className="text-[9px] font-black text-slate-700 dark:text-slate-200 uppercase truncate">
+                                                                            {props.perkerasan || props.jenis_perkerasan || 'Belum Ada'}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+
+                                                            <Button
+                                                                variant="default"
+                                                                size="sm"
+                                                                className="w-full h-10 text-[9px] font-black uppercase tracking-widest rounded-xl bg-slate-900 hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-all shadow-lg shadow-slate-200 dark:shadow-none mt-auto"
+                                                                onClick={() => mapRef.current?.zoomToFeature(feature)}
+                                                            >
+                                                                <MapPin size={12} className="mr-2" /> Fokus Lokasi
+                                                            </Button>
+                                                        </CardContent>
+                                                    </Card>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </TabsContent>
+                        </Tabs>
+
                     </div>
                 </SheetContent>
             </Sheet>
