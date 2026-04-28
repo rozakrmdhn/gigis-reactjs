@@ -10,6 +10,7 @@ import {
     IconHome,
     IconRoute,
     IconChartBar,
+    IconDatabase,
     IconMenu2,
     IconX
 } from "@tabler/icons-react";
@@ -32,6 +33,7 @@ export function PublicNavbar() {
         { name: "Beranda", path: "/", icon: IconHome },
         { name: "Map View", path: "/map-view", icon: IconMap2 },
         { name: "Jalan Desa", path: "/jalan-desa", icon: IconRoute },
+        { name: "Katalog", path: "/katalog-dataset", icon: IconDatabase },
         { name: "Statistik", path: "/statistik", icon: IconChartBar },
     ];
 

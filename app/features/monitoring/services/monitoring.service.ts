@@ -121,6 +121,22 @@ export const monitoringService = {
         return response.result || null;
     },
 
+    /**
+     * Fetch detail ruas jalan dari /monitoring/jalan/:id
+     * Mengembalikan { jalan, segmen: Segmen[] } — segmen adalah array plain object dengan field geom
+     */
+    getMonitoringJalanDetail: async (id: string): Promise<{ jalan: any; segmen: any[] } | null> => {
+        try {
+            const response = await apiClient.get<any>(
+                `${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}`,
+                { showErrorToast: false }
+            );
+            return response.result || null;
+        } catch {
+            return null;
+        }
+    },
+
     createSegment: async (data: any): Promise<any> => {
         return await apiClient.post(
             `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`,
@@ -158,7 +174,8 @@ export const monitoringService = {
     },
 
     getSegmenByKodeRuas: async (kode_ruas: string | number): Promise<any> => {
-        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`, window.location.origin);
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, window.location.origin);
+        url.searchParams.append("format", "geojson");
         if (kode_ruas) {
             url.searchParams.append("kode_ruas", kode_ruas.toString());
         }
@@ -175,11 +192,11 @@ export const monitoringService = {
     },
 
     getAllSegmentsGeoJSON: async (): Promise<any> => {
-        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`);
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?format=geojson`);
     },
 
     getKabupatenSegmentsGeoJSON: async (): Promise<any> => {
-        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten`);
+        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten?format=geojson`);
     },
 
     getKecamatan: async (): Promise<any> => {
@@ -191,7 +208,7 @@ export const monitoringService = {
     },
 
     getNonBaseSegments: async (id_desa?: string | number): Promise<any> => {
-        let url = `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?check_melarosa=Tidak`;
+        let url = `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?check_melarosa=Tidak&format=geojson`;
         if (id_desa) {
             url += `&desa_id=${id_desa}`;
         }

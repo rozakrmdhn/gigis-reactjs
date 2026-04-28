@@ -44,7 +44,7 @@ export const desaService = {
      * @param idKecamatan Optional kecamatan ID to filter villages
      * @returns Promise resolving to a GeoJSON FeatureCollection
      */
-    getGeojsonResa: async (idKecamatan?: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
+    getGeojsonDesa: async (idKecamatan?: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         try {
             const url = idKecamatan
                 ? getUrl(`/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan.toString())}&format=geojson`)
@@ -70,7 +70,7 @@ export const desaService = {
             const response = await apiClient.get<any>(url, {
                 errorMessage: "Gagal mengambil batas wilayah desa"
             }) as any;
-            
+
             if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
             if (response.result?.type === 'FeatureCollection') return response.result;
             return response.result || response.data || null;

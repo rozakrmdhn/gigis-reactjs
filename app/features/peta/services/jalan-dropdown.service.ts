@@ -1,4 +1,4 @@
-import { type Jalan } from '../types';
+import { type Jalan, type JalanResponse } from '../types';
 import { apiClient } from '~/lib/api-client';
 
 export const jalanDropdownService = {
@@ -16,5 +16,17 @@ export const jalanDropdownService = {
         const response = await apiClient.get<any>(url);
         return response.result || null;
     },
-};
 
+    getSegmenByJalanId: async (jalanId: string): Promise<any | null> => {
+        try {
+            const response = await apiClient.get(
+                `${import.meta.env.VITE_API_BASE_URL}/jalan/${jalanId}/segmen?format=geojson`,
+                { showErrorToast: false }
+            );
+            // API wraps GeoJSON FeatureCollection inside { result: ... }
+            return response.result || null;
+        } catch {
+            return null;
+        }
+    },
+};

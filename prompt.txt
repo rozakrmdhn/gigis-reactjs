@@ -1,0 +1,50 @@
+Buatkan issue.md yang berisi perencanaan untuk nanti di implementasikan oleh junior programmer atau AI model yang lebih murah.
+
+Isi dari planning nya adalah sebagai berikut:
+- Buatkan halaman monitoring/jalan-desa
+- Buatkan routing monitoring/jalan-desa
+- Buatkan menu monitoring/jalan-desa di sidebar
+
+Struktur folder di dalam app
+- routes : ini berisi routing react js
+- services : ini berisi service untuk mengambil data dari endpoint
+
+Services : jalan.ts
+Endpoint : GET /jalan
+
+Response Body : {
+    "status": "success",
+    "message": "Berhasil mengambil data",
+    "pagination": {
+        "total": 1183,
+        "page": 1,
+        "limit": 50,
+        "totalPages": 24s
+    },
+    "result": [
+        {
+            "id": "3ce6fad1-011f-4209-b660-9dcad298c5ca",
+            "kode_ruas": 1,
+            "nama_ruas": "Ruas Poros Kanten - Mlaten ( Tuban )",
+            "id_desa": 3522232010,
+            "desa": "Kanten",
+            "id_kecamatan": 352223,
+            "kecamatan": "TRUCUK",
+            "panjang": 2708.286703554977,
+            "lebar": 3,
+            "perkerasan": "Paving; Tanah",
+            "kondisi": "RUSAK SEDANG",
+            "status_awal": "Jalan Poros Antar Desa",
+            "status_eksisting": "",
+            "sumber_data": "Data Kecamatan",
+            "created_at": null,
+            "updated_at": null
+        },
+    ]
+}
+
+Jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimplementasikan adalah junior programmer atau AI model yang lebih murah.
+
+Buatkan issue baru di Github dari issue.md
+
+Implementasikan issue ini 

@@ -201,4 +201,41 @@ body {
   .marker-pulse-end {
     background-color: #ef4444;
   }
+
+  /* Safe area inset utilities for iOS notch / dynamic island */
+  .pt-safe {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .pl-safe {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .pr-safe {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Prevent text size adjustment on orientation change (iOS) */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  /* Improve tap highlight on mobile */
+  button, a, [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent iOS auto zoom-in on focus by ensuring font-size is at least 16px */
+  @media screen and (max-width: 768px) {
+    input, select, textarea, .input-base {
+      font-size: 16px !important;
+    }
+    
+    /* Adjust placeholders if needed */
+    input::placeholder, textarea::placeholder {
+      font-size: 14px;
+    }
+  }
 }

@@ -10,9 +10,10 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat, toLonLat } from 'ol/proj';
-import { Style, Stroke, Fill, Text } from 'ol/style';
 import Overlay from 'ol/Overlay';
 import Feature from 'ol/Feature';
+import Point from 'ol/geom/Point';
+import { Style, Stroke, Fill, Text, Icon } from 'ol/style';
 import { X, ChevronUp, ChevronDown, Layers, MapPin } from 'lucide-react';
 import { cn } from '~/lib/utils';
 import { CORE_LAYER_COLORS } from '~/lib/map-config';
@@ -43,13 +44,16 @@ interface OpenLayersMapProps {
     showJalanUtama?: boolean;
     showSegmenJalan?: boolean;
     basemapUrl?: string | 'osm';
+    markers?: { id: string; lat: number; lon: number; title?: string }[];
 }
 
 export interface OpenLayersMapRef {
-    zoomToFeature: (geojson: any) => void;
     zoomIn: () => void;
     zoomOut: () => void;
     resetRotation: () => void;
+    zoomToCoordinate: (lon: number, lat: number, zoom?: number) => void;
+    fitAllMarkers: () => void;
+    zoomToFeature: (geojson: any) => void;
 }
 
 export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
@@ -62,10 +66,12 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     showJalanUtama = true,
     showSegmenJalan = true,
     basemapUrl = 'osm',
+    markers = [],
 }, ref) => {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<Map | null>(null);
     const vectorSourceRef = useRef<VectorSource>(new VectorSource());
+    const markerSourceRef = useRef<VectorSource>(new VectorSource());
     const highlightSourceRef = useRef<VectorSource>(new VectorSource());
 
     // Layer Refs
@@ -124,6 +130,38 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         },
         resetRotation: () => {
             mapRef.current?.getView().animate({ rotation: 0, duration: 250 });
+        },
+        zoomToCoordinate: (lon: number, lat: number, targetZoom: number = 15) => {
+            if (!mapRef.current) return;
+            mapRef.current.getView().animate({
+                center: fromLonLat([lon, lat]),
+                zoom: targetZoom,
+                duration: 1000
+            });
+        },
+        fitAllMarkers: () => {
+            if (!mapRef.current) return;
+            const extent = markerSourceRef.current.getExtent();
+            // Check if extent is valid and not empty
+            if (extent && extent[0] !== Infinity && extent[0] !== -Infinity) {
+                // If it's a single point, fit might zoom in too much or error depending on OL version
+                // We add a safety check for single points
+                const isSinglePoint = extent[0] === extent[2] && extent[1] === extent[3];
+                
+                if (isSinglePoint) {
+                    mapRef.current.getView().animate({
+                        center: [extent[0], extent[1]],
+                        zoom: 16,
+                        duration: 1000
+                    });
+                } else {
+                    mapRef.current.getView().fit(extent, {
+                        padding: [80, 80, 80, 80],
+                        duration: 1000,
+                        maxZoom: 18
+                    });
+                }
+            }
         }
     }));
 
@@ -223,7 +261,32 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         });
         segmenLayerRef.current = segmenLayer;
 
-        // 5. Highlight Layer
+        // 5. Marker Layer
+        const markerLayer = new VectorLayer({
+            source: markerSourceRef.current,
+            zIndex: 500,
+            style: (feature) => {
+                const title = feature.get('title');
+                return new Style({
+                    image: new Icon({
+                        anchor: [0.5, 1],
+                        src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // Blue pin icon
+                        scale: 0.07,
+                    }),
+                    text: title ? new Text({
+                        text: title.toString().toUpperCase(),
+                        font: 'bold 10px Inter, sans-serif',
+                        fill: new Fill({ color: '#1e40af' }), // dark blue
+                        stroke: new Stroke({ color: '#ffffff', width: 3 }),
+                        offsetY: 8,
+                        placement: 'point',
+                        overflow: true
+                    }) : undefined
+                });
+            }
+        });
+
+        // 6. Highlight Layer
         const highlightLayer = new VectorLayer({
             source: highlightSourceRef.current,
             zIndex: 100,
@@ -272,6 +335,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 batasDesaLayer,
                 utamaLayer,
                 segmenLayer,
+                markerLayer,
                 highlightLayer,
             ],
             overlays: [vectorPopup],
@@ -367,7 +431,9 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
                     if (url) {
                         try {
-                            const response = await fetch(url);
+                            // Proxy domain replacement for CORS
+                            const proxiedUrl = url.replace('https://saggaserv.my.id/geoserver', `${window.location.origin}/proxy/geoserver`);
+                            const response = await fetch(proxiedUrl);
                             const data = await response.json();
                             if (data.features && data.features.length > 0) {
                                 const feat = data.features[0];
@@ -407,7 +473,9 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
                     if (url) {
                         try {
-                            const response = await fetch(url);
+                            // Proxy domain replacement for CORS
+                            const proxiedUrl = url.replace('https://saggaserv.my.id/geoserver', `${window.location.origin}/proxy/geoserver`);
+                            const response = await fetch(proxiedUrl);
                             const data = await response.json();
                             if (data.features && data.features.length > 0) {
                                 const feat = data.features[0];
@@ -662,6 +730,25 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         });
 
     }, [layers]);
+
+    // Marker Management
+    useEffect(() => {
+        if (!mapRef.current) return;
+        
+        markerSourceRef.current.clear();
+        
+        const features = markers.map(m => {
+            const feature = new Feature({
+                geometry: new Point(fromLonLat([m.lon, m.lat])),
+                id: m.id,
+                title: m.title
+            });
+            feature.setId(m.id);
+            return feature;
+        });
+        
+        markerSourceRef.current.addFeatures(features);
+    }, [markers]);
 
     useEffect(() => {
         if (geojsonData && (geojsonData as any).type && mapRef.current) {

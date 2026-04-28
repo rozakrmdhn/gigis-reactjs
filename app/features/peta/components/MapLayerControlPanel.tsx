@@ -86,7 +86,7 @@ function SortableLayerItem({
         setLoadingAttributes(true);
         try {
             // Construct WFS URL from WMS URL
-            const url = new URL(layer.url);
+            const url = new URL(layer.url, window.location.origin);
             url.searchParams.set('service', 'WFS');
             url.searchParams.set('version', '1.0.0');
             url.searchParams.set('request', 'DescribeFeatureType');

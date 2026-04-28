@@ -13,6 +13,8 @@ export interface Jalan {
     status_awal: string;
     status_eksisting: string;
     sumber_data: string;
+    id_desa?: string;
+    id_kecamatan?: number;
     created_at: string | null;
     updated_at: string | null;
 }

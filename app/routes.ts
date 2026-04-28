@@ -7,6 +7,10 @@ export default [
     route("jalan-desa", "routes/jalan-desa.tsx"),
     route("jalan-desa/:slug", "routes/jalan-desa.$slug.tsx"),
     route("statistik", "routes/statistik.tsx"),
+    route("proxy/geonode-datasets", "routes/api/geonode-datasets.ts"),
+    route("proxy/geoserver/*", "routes/api/geoserver.ts"),
+    route("katalog-dataset", "routes/katalog-dataset.tsx"),
+    route("katalog-dataset/:id", "routes/katalog-dataset.$id.tsx"),
     // Admin routes
     route("admin", "routes/sidebar-layout.tsx", [
         index("routes/dashboard/index.tsx"),

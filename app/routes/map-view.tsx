@@ -6,11 +6,10 @@ import {
     Search,
     Map as MapIcon,
     ChevronLeft,
-    PanelLeft,
+    PanelLeftOpen,
     Filter,
     ChevronDown,
     Info,
-    PanelLeftOpen
 } from 'lucide-react';
 import { PublicNavbar } from "~/components/public-navbar";
 import { OpenLayersMap, type OpenLayersMapRef, type MapLayerConfig } from "~/features/peta/components/OpenLayersMap";
@@ -23,6 +22,8 @@ import { type Kecamatan } from "~/services/kecamatan";
 import { desaService, type Desa } from "~/services/desa";
 import { jalanService, type RekapDibangun } from "~/services/jalan";
 import { cn } from '~/lib/utils';
+import { AddressSearch } from "~/features/peta/components/AddressSearch";
+import { CoordinateInput, type Marker } from "~/features/peta/components/CoordinateInput";
 import { Button } from '~/components/ui/button';
 import { useIsMobile } from "~/hooks/use-mobile";
 import {
@@ -40,7 +41,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Activity, BarChart3, CheckCircle2, Ruler, AlertCircle } from "lucide-react";
 import type { MetaFunction } from "react-router";
 
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
+
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { CORE_LAYER_COLORS } from '~/lib/map-config';
 
@@ -81,6 +82,7 @@ export default function MapViewPage() {
 
     // Map Layers State
     const [activeLayers, setActiveLayers] = useState<MapLayerConfig[]>([]);
+    const [markers, setMarkers] = useState<Marker[]>([]);
 
     // Derived layer presence for Legend
     const hasSegments = useMemo(() => activeLayers.some(l => l.id.startsWith('legacy_segments_') && l.visible !== false), [activeLayers]);
@@ -125,6 +127,38 @@ export default function MapViewPage() {
         setActiveLayers(prev => prev.map(l =>
             l.id === id ? { ...l, params: { ...l.params, ...params } } : l
         ));
+    };
+
+    const handleAddMarker = (newMarker: Marker) => {
+        setMarkers(prev => [...prev, newMarker]);
+    };
+
+    const handleRemoveMarker = (id: string) => {
+        setMarkers(prev => prev.filter(m => m.id !== id));
+    };
+
+    const handleUpdateMarker = (updatedMarker: Marker) => {
+        setMarkers(prev => prev.map(m => m.id === updatedMarker.id ? updatedMarker : m));
+    };
+
+    // Auto fit bounds when markers change
+    useEffect(() => {
+        if (markers.length > 0) {
+            const timer = setTimeout(() => {
+                mapRef.current?.fitAllMarkers();
+            }, 100);
+            return () => clearTimeout(timer);
+        }
+    }, [markers.length]);
+
+    const handleSearchSelect = (result: { lat: number, lon: number, display_name: string }) => {
+        const newMarker: Marker = {
+            id: crypto.randomUUID(),
+            lat: result.lat,
+            lon: result.lon,
+            title: result.display_name.split(',')[0]
+        };
+        setMarkers(prev => [...prev, newMarker]);
     };
 
     // Administrative selection handlers
@@ -297,116 +331,187 @@ export default function MapViewPage() {
         }
     };
 
+    // Animated Tab State
+    const TAB_KEYS = ['catalog', 'layers', 'filters'] as const;
+    type TabKey = typeof TAB_KEYS[number];
+    const [activeTab, setActiveTab] = useState<TabKey>('catalog');
+    const [prevTabIndex, setPrevTabIndex] = useState(0);
+    const [isTransitioning, setIsTransitioning] = useState(false);
+
+    const handleTabChange = (tab: TabKey) => {
+        if (tab === activeTab || isTransitioning) return;
+        setPrevTabIndex(TAB_KEYS.indexOf(activeTab));
+        setIsTransitioning(true);
+        // Small delay for exit animation to start, then switch
+        setTimeout(() => {
+            setActiveTab(tab);
+            // Allow enter animation to complete
+            setTimeout(() => setIsTransitioning(false), 300);
+        }, 150);
+    };
+
+    const currentTabIndex = TAB_KEYS.indexOf(activeTab);
+    const slideDirection = currentTabIndex > prevTabIndex ? 1 : -1; // 1 = right, -1 = left
+
     // Sidebar content component/variable for reuse
     const SidebarContent = (
         <div className={cn(
             "flex flex-col h-full",
             isMobile ? "w-full" : "w-[340px]"
         )}>
-            <Tabs defaultValue="catalog" className="w-full h-full flex flex-col gap-3">
+            <div className="w-full h-full flex flex-col gap-3">
                 {/* Navigation Tabs List */}
-                <TabsList className="w-full h-12 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-2xl border border-white dark:border-slate-800 shadow-2xl shrink-0 flex items-center justify-center">
-                    <TabsTrigger value="catalog" className="flex-1 flex items-center gap-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 shadow-none dark:shadow-none transition-all">
-                        <Database size={16} />
-                        <span>Katalog</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="layers" className="flex-1 flex items-center gap-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 shadow-none dark:shadow-none transition-all">
-                        <LayersIcon size={16} />
-                        <span>Layer</span>
-                    </TabsTrigger>
-                    <TabsTrigger value="filters" className="flex-1 flex items-center gap-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-900 data-[state=active]:bg-blue-600 data-[state=active]:text-white dark:data-[state=active]:bg-blue-600 shadow-none dark:shadow-none transition-all relative">
-                        <Filter size={16} />
-                        <span>Filter</span>
-                        {selectedKecamatan && (
-                            <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_5px_rgba(52,211,153,0.8)]" />
-                        )}
-                    </TabsTrigger>
-                </TabsList>
-
-                {/* Panel Content wrapped in TabsContent */}
-                <div className="flex-1 min-h-0">
-                    <TabsContent value="catalog" className="w-full h-full m-0 focus-visible:outline-none">
-                        <GeonodeDatasetPanel
-                            onAddLayer={handleAddLayer}
-                            activeLayerIds={activeLayerIds}
-                        />
-                    </TabsContent>
-                    <TabsContent value="layers" className="w-full h-full m-0 focus-visible:outline-none">
-                        <MapLayerControlPanel
-                            layers={activeLayers}
-                            onReorder={handleReorderLayers}
-                            onToggleVisibility={handleToggleVisibility}
-                            onRemoveLayer={handleRemoveLayer}
-                            onOpacityChange={handleOpacityChange}
-                            onUpdateLayerParams={handleUpdateLayerParams}
-                            onReset={() => setActiveLayers([activeLayers[activeLayers.length - 1]])}
-                        />
-                    </TabsContent>
-                    <TabsContent value="filters" className="w-full h-full m-0 focus-visible:outline-none">
-                        <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-2xl overflow-hidden">
-                            {/* Header */}
-                            <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <div className="p-2 bg-emerald-600 rounded-lg text-white shadow-lg shadow-emerald-200 dark:shadow-none">
-                                        <Filter size={18} />
-                                    </div>
-                                    <div className="text-left">
-                                        <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight uppercase">Eksplorasi Wilayah</h3>
-                                        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Filter Administrasi</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Content */}
-                            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-                                <div className="space-y-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[10px] font-black text-slate-900 dark:text-slate-400 uppercase tracking-widest ml-1">Kecamatan</label>
-                                        <KecamatanDropdown
-                                            className="w-full h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 font-bold"
-                                            selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
-                                            onSelectKecamatan={handleSelectKecamatan}
-                                        />
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-slate-400 ml-1">Desa / Kelurahan</label>
-                                        <DesaDropdown
-                                            className="w-full h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 font-bold"
-                                            idKecamatan={selectedKecamatan?.id}
-                                            selectedDesaName={selectedDesa?.nama_desa}
-                                            onSelectDesa={handleSelectDesa}
-                                        />
-                                    </div>
-                                </div>
-
-                                <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100/50 dark:border-emerald-900/20 rounded-2xl">
-                                    <div className="flex items-start gap-3">
-                                        <div className="mt-0.5 text-emerald-600">
-                                            <MapIcon size={14} />
-                                        </div>
-                                        <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic">
-                                            Pilih wilayah untuk memfokuskan peta dan menampilkan data jalan poros desa yang relevan secara otomatis.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Footer */}
-                            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
-                                <p className="text-[9px] text-center text-slate-400 font-medium italic">
-                                    Gunakan filter untuk navigasi cepat antar wilayah
-                                </p>
-                            </div>
-                        </div>
-                    </TabsContent>
+                <div className="w-full h-12 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-1.5 rounded-2xl border border-white dark:border-slate-800 shadow-2xl shrink-0 flex items-center justify-center">
+                    {TAB_KEYS.map((tab) => (
+                        <button
+                            key={tab}
+                            onClick={() => handleTabChange(tab)}
+                            className={cn(
+                                "flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all duration-300 relative",
+                                activeTab === tab
+                                    ? "bg-blue-600 text-white shadow-lg shadow-blue-200/50 dark:shadow-blue-900/30 scale-[1.02]"
+                                    : "text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-100/80 dark:hover:bg-slate-800/50"
+                            )}
+                        >
+                            {tab === 'catalog' && <Database size={16} className={cn("transition-transform duration-300", activeTab === tab && "scale-110")} />}
+                            {tab === 'layers' && <LayersIcon size={16} className={cn("transition-transform duration-300", activeTab === tab && "scale-110")} />}
+                            {tab === 'filters' && <Filter size={16} className={cn("transition-transform duration-300", activeTab === tab && "scale-110")} />}
+                            <span>{tab === 'catalog' ? 'Katalog' : tab === 'layers' ? 'Layer' : 'Filter'}</span>
+                            {tab === 'filters' && selectedKecamatan && (
+                                <div className="absolute top-1 right-1 w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_5px_rgba(52,211,153,0.8)]" />
+                            )}
+                        </button>
+                    ))}
                 </div>
-            </Tabs>
+
+                {/* Animated Panel Content */}
+                <div className="flex-1 min-h-0 relative overflow-hidden">
+                    {TAB_KEYS.map((tab) => {
+                        const tabIndex = TAB_KEYS.indexOf(tab);
+                        const isActive = activeTab === tab;
+
+                        // Calculate transform for inactive tabs
+                        let translateX = '0%';
+                        if (!isActive) {
+                            if (tabIndex < currentTabIndex) {
+                                translateX = '-30%';
+                            } else {
+                                translateX = '30%';
+                            }
+                        }
+
+                        return (
+                            <div
+                                key={tab}
+                                className="absolute inset-0 transition-all duration-300 ease-[cubic-bezier(0.25,0.46,0.45,0.94)]"
+                                style={{
+                                    transform: `translateX(${translateX})`,
+                                    opacity: isActive ? 1 : 0,
+                                    pointerEvents: isActive ? 'auto' : 'none',
+                                    visibility: isActive ? 'visible' : 'hidden',
+                                }}
+                            >
+                                {tab === 'catalog' && (
+                                    <GeonodeDatasetPanel
+                                        onAddLayer={handleAddLayer}
+                                        activeLayerIds={activeLayerIds}
+                                    />
+                                )}
+                                {tab === 'layers' && (
+                                    <MapLayerControlPanel
+                                        layers={activeLayers}
+                                        onReorder={handleReorderLayers}
+                                        onToggleVisibility={handleToggleVisibility}
+                                        onRemoveLayer={handleRemoveLayer}
+                                        onOpacityChange={handleOpacityChange}
+                                        onUpdateLayerParams={handleUpdateLayerParams}
+                                        onReset={() => setActiveLayers([activeLayers[activeLayers.length - 1]])}
+                                    />
+                                )}
+                                {tab === 'filters' && (
+                                    <div className="flex flex-col h-full bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-2xl overflow-hidden">
+                                        {/* Header */}
+                                        <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="p-2 bg-emerald-600 rounded-lg text-white shadow-lg shadow-emerald-200 dark:shadow-none">
+                                                    <Filter size={18} />
+                                                </div>
+                                                <div className="text-left">
+                                                    <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight uppercase">Eksplorasi Wilayah</h3>
+                                                    <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest">Filter Administrasi</p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Content */}
+                                        <div className="flex-1 overflow-y-auto p-4 pt-0 space-y-4 custom-scrollbar">
+                                            <div className="sticky top-0 z-10 bg-white/95 dark:bg-slate-900/95 pt-2 pb-2 border-b border-slate-50 dark:border-slate-800 -mx-4 px-4 shadow-sm">
+                                                <div className="space-y-1.5">
+                                                    <AddressSearch onSelect={handleSearchSelect} />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[10px] font-black text-slate-900 dark:text-slate-400 uppercase tracking-widest ml-1">Kecamatan</label>
+                                                    <KecamatanDropdown
+                                                        className="w-full h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 font-bold"
+                                                        selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
+                                                        onSelectKecamatan={handleSelectKecamatan}
+                                                    />
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <label className="text-[10px] font-black uppercase tracking-widest text-slate-900 dark:text-slate-400 ml-1">Desa / Kelurahan</label>
+                                                    <DesaDropdown
+                                                        className="w-full h-11 rounded-xl shadow-sm border-slate-200 dark:border-slate-700 font-bold"
+                                                        idKecamatan={selectedKecamatan?.id}
+                                                        selectedDesaName={selectedDesa?.nama_desa}
+                                                        onSelectDesa={handleSelectDesa}
+                                                    />
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                                <CoordinateInput
+                                                    markers={markers}
+                                                    onAdd={handleAddMarker}
+                                                    onRemove={handleRemoveMarker}
+                                                    onUpdate={handleUpdateMarker}
+                                                    onZoomTo={(m) => mapRef.current?.zoomToCoordinate(m.lon, m.lat)}
+                                                />
+                                            </div>
+
+                                            <div className="p-4 bg-emerald-50/50 dark:bg-emerald-900/10 border border-emerald-100/50 dark:border-emerald-900/20 rounded-2xl">
+                                                <div className="flex items-start gap-3">
+                                                    <div className="mt-0.5 text-emerald-600">
+                                                        <MapIcon size={14} />
+                                                    </div>
+                                                    <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium leading-relaxed italic">
+                                                        Pilih wilayah untuk memfokuskan peta dan menampilkan data jalan poros desa yang relevan secara otomatis.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Footer */}
+                                        <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
+                                            <p className="text-[9px] text-center text-slate-400 font-medium italic">
+                                                Gunakan filter untuk navigasi cepat antar wilayah
+                                            </p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
         </div>
     );
 
     return (
-        <div className="flex flex-col h-screen overflow-hidden bg-white">
+        <div className="flex flex-col h-[100dvh] overflow-hidden bg-white">
             <PublicNavbar />
 
             <main className="flex-1 relative flex overflow-hidden">
@@ -425,15 +530,22 @@ export default function MapViewPage() {
                 ) : (
                     <Sheet open={isMobileSidebarOpen} onOpenChange={setIsMobileSidebarOpen}>
                         <SheetTrigger asChild>
-                            <Button variant="outline" size="icon" className="absolute top-6 left-6 z-30 w-10 h-10 rounded-xl shadow-lg">
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                className="absolute top-4 left-4 z-30 w-11 h-11 rounded-2xl shadow-xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border border-white/60 dark:border-slate-700 active:scale-95 transition-all"
+                            >
                                 <PanelLeftOpen size={20} />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-[300px] p-0 border-none bg-white dark:bg-slate-900">
+                        <SheetContent
+                            side="left"
+                            className="w-[85vw] max-w-[340px] p-0 border-none bg-white dark:bg-slate-900 h-[100dvh]"
+                        >
                             <SheetHeader className="sr-only">
                                 <SheetTitle>Peta Panel Kontrol</SheetTitle>
                             </SheetHeader>
-                            <div className="h-full p-4">
+                            <div className="h-full pt-safe pb-safe p-0 overflow-hidden flex flex-col">
                                 {SidebarContent}
                             </div>
                         </SheetContent>
@@ -458,8 +570,10 @@ export default function MapViewPage() {
                     {loading && (
                         <div
                             className={cn(
-                                "absolute z-20 top-6 left-6 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                                isMobile ? "left-20" : (isSidebarOpen ? "translate-x-[352px]" : "translate-x-0")
+                                "absolute z-20 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
+                                isMobile
+                                    ? "top-4 left-[72px]"
+                                    : cn("top-6", isSidebarOpen ? "left-6 translate-x-[352px]" : "left-6")
                             )}
                         >
                             <div className="h-4 w-4 border-[2.5px] border-blue-600 border-t-transparent rounded-full animate-spin" />
@@ -471,28 +585,37 @@ export default function MapViewPage() {
                         ref={mapRef}
                         className="w-full h-full"
                         layers={activeLayers}
+                        markers={markers}
                         basemapUrl={activeBasemap.url}
                     />
 
                     {/* Bottom Right: Basemap Selector */}
-                    <div className="absolute bottom-6 right-6 z-20 flex flex-col items-end pointer-events-auto">
+                    <div className={cn(
+                        "absolute z-20 flex flex-col items-end pointer-events-auto",
+                        isMobile ? "bottom-4 right-4" : "bottom-6 right-6"
+                    )}>
                         {isBasemapPanelOpen && (
-                            <div className="mb-4 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-4 rounded-3xl border border-white dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.3)] grid grid-cols-2 gap-3 animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300 origin-bottom-right">
+                            <div className={cn(
+                                "mb-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 rounded-3xl border border-white dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.3)] grid grid-cols-2 gap-2 animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300 origin-bottom-right max-h-[60vh] overflow-y-auto",
+                                isMobile ? "gap-2" : "gap-3 p-4"
+                            )}>
                                 {BASEMAPS.map((b) => (
                                     <button
                                         key={b.id}
                                         onClick={() => { setActiveBasemap(b); setIsBasemapPanelOpen(false); }}
                                         className={cn(
-                                            "relative w-20 h-20 rounded-xl overflow-hidden shadow-sm border-2 transition-all hover:scale-105 active:scale-95 group",
+                                            "relative overflow-hidden rounded-xl shadow-sm border-2 transition-all active:scale-95 group",
+                                            isMobile ? "w-16 h-16" : "w-20 h-20 hover:scale-105",
                                             activeBasemap.id === b.id ? "border-blue-600 shadow-lg shadow-blue-200 dark:shadow-none bg-blue-50 dark:bg-blue-900/20" : "border-slate-100 dark:border-slate-800 hover:border-blue-400"
                                         )}
                                     >
                                         <img src={b.thumbnail} alt={b.name} className="w-full h-full object-cover" />
                                         <div className={cn(
-                                            "absolute inset-x-0 bottom-0 p-2 transition-colors",
+                                            "absolute inset-x-0 bottom-0 transition-colors",
+                                            isMobile ? "p-1" : "p-2",
                                             activeBasemap.id === b.id ? "bg-blue-600/90 backdrop-blur-sm" : "bg-slate-900/60 backdrop-blur-sm group-hover:bg-blue-600/80"
                                         )}>
-                                            <p className="text-[9px] font-black text-white text-center leading-tight truncate px-1 uppercase tracking-tighter">{b.name}</p>
+                                            <p className="text-[8px] font-black text-white text-center leading-tight truncate px-0.5 uppercase tracking-tighter">{b.name}</p>
                                         </div>
                                     </button>
                                 ))}
@@ -501,32 +624,44 @@ export default function MapViewPage() {
 
                         <button
                             onClick={() => setIsBasemapPanelOpen(!isBasemapPanelOpen)}
-                            className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white dark:border-slate-800 shadow-2xl hover:scale-105 transition-all group relative"
+                            className={cn(
+                                "overflow-hidden rounded-2xl border-2 border-white dark:border-slate-800 shadow-2xl hover:scale-105 active:scale-95 transition-all group relative",
+                                isMobile ? "w-14 h-14" : "w-20 h-20"
+                            )}
                             title="Pilih Basemap"
                         >
                             <img src={activeBasemap.thumbnail} alt="Active Basemap" className="w-full h-full object-cover" />
-                            <div className="absolute inset-x-0 bottom-0 bg-slate-900/60 backdrop-blur-sm p-1.5 flex justify-center group-hover:bg-blue-600/90 transition-colors">
-                                <span className="text-[8px] font-black text-white uppercase tracking-tighter truncate px-1">{activeBasemap.name}</span>
+                            <div className="absolute inset-x-0 bottom-0 bg-slate-900/60 backdrop-blur-sm p-1 flex justify-center group-hover:bg-blue-600/90 transition-colors">
+                                <span className="text-[7px] font-black text-white uppercase tracking-tighter truncate px-0.5">{activeBasemap.name}</span>
                             </div>
                         </button>
                     </div>
 
                     {/* Left Bottom Corner: Legend / Attribution */}
-                    <div className="absolute bottom-6 left-6 z-20 pointer-events-none flex flex-col justify-end items-start gap-2">
+                    <div className={cn(
+                        "absolute z-20 pointer-events-none flex flex-col justify-end items-start gap-2",
+                        isMobile ? "bottom-4 left-4" : "bottom-6 left-6"
+                    )}>
                         {/* Legend Content */}
                         <div className={cn(
                             "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-xl transition-all duration-500 overflow-hidden pointer-events-auto",
-                            isLegendOpen ? "max-h-[400px] opacity-100 w-[260px]" : "max-h-0 opacity-0 w-[260px] border-transparent shadow-none"
+                            isLegendOpen
+                                ? isMobile
+                                    ? "max-h-[300px] opacity-100 w-[min(220px,calc(100vw-112px))]"
+                                    : "max-h-[400px] opacity-100 w-[260px]"
+                                : isMobile
+                                    ? "max-h-0 opacity-0 w-[min(220px,calc(100vw-112px))] border-transparent shadow-none"
+                                    : "max-h-0 opacity-0 w-[260px] border-transparent shadow-none"
                         )}>
-                            <div className="p-4">
-                                <div className="flex items-center gap-2 mb-4">
+                            <div className={cn("p-4", isMobile && "p-3")}>
+                                <div className="flex items-center gap-2 mb-3">
                                     <Info size={14} className="text-blue-600 dark:text-blue-400" />
                                     <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Legenda Peta</span>
                                 </div>
-                                <div className="space-y-3">
+                                <div className="space-y-2.5">
                                     <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasSegments && "opacity-40 grayscale-[0.5]")}>
                                         <div
-                                            className="w-6 h-1.5 rounded-full"
+                                            className="w-6 h-1.5 rounded-full shrink-0"
                                             style={{
                                                 backgroundColor: CORE_LAYER_COLORS.SEGMENTS.hex,
                                                 boxShadow: hasSegments ? `0 0 8px ${CORE_LAYER_COLORS.SEGMENTS.hex}80` : 'none'
@@ -535,11 +670,11 @@ export default function MapViewPage() {
                                         <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Segmen Jalan Desa</span>
                                     </div>
                                     <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasMainRoads && "opacity-40")}>
-                                        <div className="w-6 h-1.5 rounded-full" style={{ backgroundColor: CORE_LAYER_COLORS.GENERAL.hex }} />
+                                        <div className="w-6 h-1.5 rounded-full shrink-0" style={{ backgroundColor: CORE_LAYER_COLORS.GENERAL.hex }} />
                                         <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Jalan Utama / Kab</span>
                                     </div>
                                     <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasAdmin && "opacity-40")}>
-                                        <div className="relative w-6 h-2 flex items-center justify-center">
+                                        <div className="relative w-6 h-2 flex items-center justify-center shrink-0">
                                             <div className="w-full h-0 border-t-2 border-dashed" style={{ borderColor: CORE_LAYER_COLORS.ADMIN.hex }} />
                                             <div className="absolute inset-0 rounded-sm" style={{ backgroundColor: `${CORE_LAYER_COLORS.ADMIN.hex}1a` }} />
                                         </div>
@@ -547,7 +682,7 @@ export default function MapViewPage() {
                                     </div>
                                     <div className={cn("flex items-center gap-3 mt-1 transition-opacity duration-300", !hasCatalog && "opacity-40 grayscale-[0.5]")}>
                                         <div
-                                            className="w-6 h-3 border-2 rounded-sm"
+                                            className="w-6 h-3 border-2 rounded-sm shrink-0"
                                             style={{
                                                 backgroundColor: `${CORE_LAYER_COLORS.CATALOG.hex}33`,
                                                 borderColor: CORE_LAYER_COLORS.CATALOG.hex
@@ -556,7 +691,7 @@ export default function MapViewPage() {
                                         <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter">Wilayah/Poligon Katalog</span>
                                     </div>
                                 </div>
-                                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
                                     <p className="text-[8px] text-slate-400 dark:text-slate-500 font-bold leading-relaxed uppercase tracking-widest">
                                         GIS Melarosa Bojonegoro.
                                     </p>
@@ -568,53 +703,41 @@ export default function MapViewPage() {
                         <button
                             onClick={() => setIsLegendOpen(!isLegendOpen)}
                             className={cn(
-                                "pointer-events-auto h-10 px-4 rounded-xl backdrop-blur-md border shadow-xl transition-all flex items-center gap-2.5 group",
+                                "pointer-events-auto rounded-xl backdrop-blur-md border shadow-xl transition-all flex items-center gap-2 group active:scale-95",
+                                isMobile ? "h-9 px-3" : "h-10 px-4 gap-2.5",
                                 isLegendOpen
                                     ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-700"
                                     : "bg-white/90 dark:bg-slate-900/90 text-slate-600 dark:text-slate-200 border-white dark:border-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800"
                             )}
                         >
-                            {isLegendOpen ? <ChevronDown size={14} className="opacity-70" /> : <MapIcon size={14} className="group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />}
-                            <span className="text-[10px] font-black uppercase tracking-widest">
-                                {isLegendOpen ? "Sembunyikan" : "Legenda Peta"}
+                            {isLegendOpen ? <ChevronDown size={13} className="opacity-70" /> : <MapIcon size={13} className="group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />}
+                            <span className={cn("font-black uppercase tracking-widest", isMobile ? "text-[9px]" : "text-[10px]")}>
+                                {isLegendOpen ? "Tutup" : "Legenda"}
                             </span>
                         </button>
                     </div>
 
                     {/* Right Top Corner: Controls */}
-                    <div className="absolute top-6 right-6 z-10 flex flex-col gap-3">
+                    <div className={cn(
+                        "absolute z-10 flex flex-col gap-2",
+                        isMobile ? "top-4 right-4" : "top-6 right-6 gap-3"
+                    )}>
                         <MapControls
                             onZoomIn={() => mapRef.current?.zoomIn()}
                             onZoomOut={() => mapRef.current?.zoomOut()}
                             onResetBearing={() => mapRef.current?.resetRotation()}
                         />
-                        <TooltipProvider>
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <Button
-                                        variant="secondary"
-                                        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                                        className="w-10 h-10 rounded-xl bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border dark:border-slate-800 shadow-xl p-0 flex items-center justify-center text-slate-600 dark:text-slate-100 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all duration-300"
-                                    >
-                                        <PanelLeft size={20} />
-                                    </Button>
-                                </TooltipTrigger>
-                                <TooltipContent side="left">
-                                    <p className="text-xs font-semibold">{isSidebarOpen ? 'Hide' : 'Show'} Panel</p>
-                                </TooltipContent>
-                            </Tooltip>
-                        </TooltipProvider>
                     </div>
                 </div>
             </main>
 
             {/* Bottom Center: Rekap Toggle */}
             {selectedDesa && rekapData && (
-                <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex justify-center pointer-events-none">
+                <div className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+8px)] left-1/2 -translate-x-1/2 z-20 flex justify-center pointer-events-none">
                     <Button
                         onClick={() => setIsRekapOpen(true)}
                         title="Tampilkan Rekap Pembangunan"
-                        className="pointer-events-auto w-10 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-2xl border border-blue-500 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center backdrop-blur-md group"
+                        className="pointer-events-auto w-11 h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-2xl border border-blue-500 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center backdrop-blur-md group"
                     >
                         <ChevronDown className="w-5 h-5 rotate-180 group-hover:scale-110 transition-transform" />
                     </Button>
@@ -623,7 +746,7 @@ export default function MapViewPage() {
 
             {/* Bottom Sheet for Rekap Data */}
             <Sheet open={isRekapOpen} onOpenChange={setIsRekapOpen}>
-                <SheetContent side="bottom" className="h-[auto] max-h-[85vh] rounded-t-[32px] border-t-0 p-0 overflow-hidden shadow-2xl">
+                <SheetContent side="bottom" className="h-auto max-h-[90dvh] rounded-t-[32px] border-t-0 p-0 overflow-hidden shadow-2xl overflow-y-auto">
                     <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full" />
 
                     <div className="p-6 pt-10 md:px-12 bg-white dark:bg-slate-900">

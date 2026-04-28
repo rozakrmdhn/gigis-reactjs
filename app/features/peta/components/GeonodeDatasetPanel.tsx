@@ -38,10 +38,10 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
         }
         setLoading(true);
         try {
-            const response = await fetch('https://saggaserv.my.id/api/v2/datasets?format=json');
+            const response = await fetch('/proxy/geonode-datasets?format=json' + (force ? '&refresh=true' : ''));
             const data = await response.json();
             cachedDatasets = data.datasets || [];
-            setDatasets(cachedDatasets);
+            setDatasets(cachedDatasets || []);
         } catch (error) {
             console.error('Failed to fetch Geonode datasets:', error);
         } finally {
@@ -55,20 +55,25 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
         }
     }, []);
 
-    const filteredDatasets = datasets.filter((ds) =>
-        ds.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ds.abstract.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    const filteredDatasets = datasets.filter((ds) => {
+        const titleMatch = ds.title ? ds.title.toLowerCase().includes(searchQuery.toLowerCase()) : false;
+        const abstractMatch = ds.abstract ? ds.abstract.toLowerCase().includes(searchQuery.toLowerCase()) : false;
+        return titleMatch || abstractMatch;
+    });
 
     const handleAdd = (ds: GeonodeDataset) => {
+        if (!ds.links || !Array.isArray(ds.links)) return;
         const wmsLink = ds.links.find(l => l.link_type === 'OGC:WMS');
         if (!wmsLink) return;
+
+        // Redirect external Geoserver URL to our local proxy to avoid CORS
+        const proxyUrl = wmsLink.url.replace('https://saggaserv.my.id/geoserver', '/proxy/geoserver');
 
         onAddLayer({
             id: `geonode-${ds.pk}`,
             title: ds.title,
             type: 'wms',
-            url: wmsLink.url,
+            url: proxyUrl,
             params: {
                 'LAYERS': ds.alternate || ds.name,
                 'VERSION': '1.1.1'
@@ -141,7 +146,7 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
                                         <div>
                                             <div className="flex items-start justify-between gap-2 mb-0.5">
                                                 <h4 className="text-[11px] font-extrabold text-slate-900 dark:text-slate-100 line-clamp-1 uppercase tracking-tight">
-                                                    {ds.title}
+                                                    {ds.title || 'Untitled Dataset'}
                                                 </h4>
                                             </div>
                                             <p className="text-[9px] text-slate-400 font-medium line-clamp-1 lowercase tracking-tight italic">
@@ -151,7 +156,7 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
 
                                         <div className="flex items-center justify-between gap-2 mt-1">
                                             <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                                                {ds.alternate.split(':')[0]}
+                                                {ds.alternate ? ds.alternate.split(':')[0] : 'GEONODE'}
                                             </span>
 
                                             <Button
