@@ -10,7 +10,7 @@ export default [
     route("proxy/geonode-datasets", "routes/api/geonode-datasets.ts"),
     route("proxy/geoserver/*", "routes/api/geoserver.ts"),
     route("katalog-dataset", "routes/katalog-dataset.tsx"),
-    route("katalog-dataset/:id", "routes/katalog-dataset.$id.tsx"),
+    route("katalog-dataset/:slug", "routes/katalog-dataset.$slug.tsx"),
     // Admin routes
     route("admin", "routes/sidebar-layout.tsx", [
         index("routes/dashboard/index.tsx"),

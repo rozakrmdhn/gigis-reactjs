@@ -44,7 +44,11 @@ interface DrawSidebarProps {
     onRefresh?: () => void;
     checkedRoadIds?: string[];
     onToggleCheckRoad?: (id: string, checked: boolean) => void;
+    onKecamatanChange?: (id: string) => void;
+    onDesaChange?: (id: string) => void;
+    selectedDesaId?: string | null;
 }
+
 
 // Helper to parse DMS (Degrees, Minutes, Seconds) to Decimal Degrees
 function dmsToDecimal(degrees: number, minutes: number, seconds: number, direction: string): number {
@@ -108,8 +112,13 @@ export function DrawSidebar({
     onCoordinateSearch,
     onRefresh,
     checkedRoadIds,
-    onToggleCheckRoad
+    onToggleCheckRoad,
+    onKecamatanChange,
+    onDesaChange,
+    selectedDesaId
 }: DrawSidebarProps) {
+
+
     const [roads, setRoads] = useState<MonitoringJalanResult[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
@@ -125,9 +134,13 @@ export function DrawSidebar({
 
     const [filters, setFilters] = useState({
         id_kecamatan: "all",
+        id_desa: "all",
         page: 1,
         limit: 50
     });
+
+
+
 
     // Fetch Kecamatan List
     useEffect(() => {
@@ -142,6 +155,16 @@ export function DrawSidebar({
         }
         fetchKecamatanList();
     }, []);
+
+
+
+    // Sync selectedDesaId from props
+    useEffect(() => {
+        if (selectedDesaId && selectedDesaId !== filters.id_desa) {
+            setFilters(prev => ({ ...prev, id_desa: selectedDesaId, page: 1 }));
+        }
+    }, [selectedDesaId]);
+
 
     // Debounce search
     useEffect(() => {
@@ -188,7 +211,12 @@ export function DrawSidebar({
                 params.id_kecamatan = filters.id_kecamatan;
             }
 
+            if (filters.id_desa !== "all") {
+                params.id_desa = filters.id_desa;
+            }
+
             const response = await monitoringService.getMonitoringJalan(params);
+
             if (response.status === "success") {
                 setRoads(response.result);
                 if (response.pagination) {
@@ -243,23 +271,46 @@ export function DrawSidebar({
                             {/* Header Controls */}
                             <div className="p-2 border-b dark:border-slate-800 space-y-2">
                                 <div className="flex items-center gap-3">
-                                    <div className="flex flex-col gap-0.5 min-w-[70px]">
+                                    <div className="flex flex-col gap-0.5 w-28 shrink-0">
                                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Data</span>
-                                        <span className="text-sm font-bold text-primary">{pagination?.total || 0}</span>
+                                        <div className="flex items-center h-6">
+                                            <span className="text-sm font-bold text-primary mr-1.5">{pagination?.total || 0}</span>
+                                            {filters.id_desa !== "all" && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setFilters(prev => ({ ...prev, id_desa: "all", page: 1 }));
+                                                        if (onDesaChange) onDesaChange("all");
+                                                    }}
+                                                    className="h-5 px-2 text-[9px] cursor-pointer font-bold uppercase tracking-tighter text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md flex items-center shrink-0"
+                                                >
+                                                    <X className="h-3 w-3" />
+                                                    Reset
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
+
+
                                     <div className="flex-1 flex gap-2">
                                         <Select
                                             value={filters.id_kecamatan}
-                                            onValueChange={(value) => setFilters(prev => ({ ...prev, id_kecamatan: value, page: 1 }))}
+                                            onValueChange={(value) => {
+                                                setFilters(prev => ({ ...prev, id_kecamatan: value, id_desa: "all", page: 1 }));
+                                                if (onKecamatanChange) onKecamatanChange(value);
+                                            }}
                                         >
-                                            <SelectTrigger className="w-full h-8 text-xs">
+                                            <SelectTrigger className="w-full h-8 text-[10px] font-bold uppercase tracking-tight">
                                                 <SelectValue placeholder="Kecamatan" />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="all">All Kecamatan</SelectItem>
+                                                <SelectItem value="all">Kecamatan</SelectItem>
                                                 {kecamatanOptions}
                                             </SelectContent>
                                         </Select>
+
+
 
                                         <Select
                                             value={filters.limit.toString()}

@@ -147,7 +147,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 // If it's a single point, fit might zoom in too much or error depending on OL version
                 // We add a safety check for single points
                 const isSinglePoint = extent[0] === extent[2] && extent[1] === extent[3];
-                
+
                 if (isSinglePoint) {
                     mapRef.current.getView().animate({
                         center: [extent[0], extent[1]],
@@ -224,19 +224,44 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 const props = feature.getProperties();
                 const layer = props._layer;
                 if (layer === 'jalan_segmen') {
+                    const checkMelarosa = props.check_melarosa;
+                    const statusJalan = props.status_jalan;
+                    const kondisi = (props.kondisi || props.KONDISI || '').toLowerCase();
+
+                    let color = '#22c55e'; // Default Green (Baik)
+                    let lineDash: number[] | undefined = undefined;
+
+                    if (statusJalan === 'Jalan Desa') {
+                        // Category 1 & 2
+                        if (kondisi === 'baik') color = '#22c55e';
+                        else if (kondisi === 'sedang') color = '#f59e0b'; // Orange
+                        else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') color = '#ef4444'; // Merah
+
+                        if (checkMelarosa === 'Tidak') {
+                            lineDash = [6, 6]; // Dashed
+                        }
+                    } else if (statusJalan === 'Jalan Kabupaten') {
+                        // Category 3
+                        if (kondisi === 'baik') {
+                            color = '#2563eb'; // Biru
+                            lineDash = undefined;
+                        } else if (kondisi === 'sedang') {
+                            color = '#60a5fa'; // Biru Muda
+                            lineDash = undefined;
+                        } else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') {
+                            color = '#60a5fa'; // Biru Muda
+                            lineDash = [6, 6]; // Dashed
+                        }
+                    }
+
                     const styles = [
                         new Style({
                             stroke: new Stroke({
-                                color: '#00af54',
-                                width: 10,
+                                color: color,
+                                width: 5,
+                                lineDash: lineDash
                             }),
-                        }),
-                        new Style({
-                            stroke: new Stroke({
-                                color: CORE_LAYER_COLORS.SEGMENTS.hex,
-                                width: 7,
-                            }),
-                        }),
+                        })
                     ];
 
                     const label = props.nama_ruas || props.NM_RUAS;
@@ -246,7 +271,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                 text: label.toString().toUpperCase(),
                                 font: 'bold 10px Inter, sans-serif',
                                 fill: new Fill({ color: '#fff' }),
-                                stroke: new Stroke({ color: '#00af54', width: 3 }),
+                                stroke: new Stroke({ color: color, width: 3 }),
                                 offsetY: -12,
                                 placement: 'line',
                                 repeat: 300,
@@ -630,35 +655,39 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                             if (id.startsWith('legacy_segments_')) {
                                 const checkMelarosa = feature.get('check_melarosa');
                                 const statusJalan = feature.get('status_jalan');
+                                const kondisi = (feature.get('kondisi') || feature.get('KONDISI') || '').toLowerCase();
 
-                                let segmentColor = '#22c55e'; // Default Green
-                                let borderColor = '#22c55e';
+                                let color = '#22c55e'; // Default Green
                                 let lineDash: number[] | undefined = undefined;
 
-                                if (checkMelarosa === 'Ya' && statusJalan === 'Jalan Desa') {
-                                    segmentColor = '#22c55e'; // Green
-                                    borderColor = '#22c55e';
+                                if (statusJalan === 'Jalan Desa') {
+                                    // Category 1 & 2
+                                    if (kondisi === 'baik') color = '#22c55e';
+                                    else if (kondisi === 'sedang') color = '#f59e0b'; // Orange
+                                    else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') color = '#ef4444'; // Merah
+
+                                    if (checkMelarosa === 'Tidak') {
+                                        lineDash = [6, 6]; // Dashed
+                                    }
                                 } else if (statusJalan === 'Jalan Kabupaten') {
-                                    segmentColor = '#2563eb'; // Blue
-                                    borderColor = '#2563eb';
-                                } else if (checkMelarosa === 'Tidak') {
-                                    segmentColor = '#ef4444'; // Red
-                                    borderColor = '#ef4444';
-                                    lineDash = [6, 6];
+                                    // Category 3
+                                    if (kondisi === 'baik') {
+                                        color = '#2563eb'; // Biru
+                                        lineDash = undefined;
+                                    } else if (kondisi === 'sedang') {
+                                        color = '#60a5fa'; // Biru Muda
+                                        lineDash = undefined;
+                                    } else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') {
+                                        color = '#2563eb'; // Biru
+                                        lineDash = [6, 6]; // Dashed
+                                    }
                                 }
 
                                 const styles = [
                                     new Style({
                                         stroke: new Stroke({
-                                            color: borderColor,
+                                            color: color,
                                             width: 5,
-                                            lineDash: lineDash
-                                        })
-                                    }),
-                                    new Style({
-                                        stroke: new Stroke({
-                                            color: segmentColor,
-                                            width: 3,
                                             lineDash: lineDash
                                         })
                                     })
@@ -671,7 +700,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                             text: label.toString().toUpperCase(),
                                             font: 'bold 10px Inter, sans-serif',
                                             fill: new Fill({ color: '#fff' }),
-                                            stroke: new Stroke({ color: borderColor, width: 3 }),
+                                            stroke: new Stroke({ color: color, width: 3 }),
                                             offsetY: -12,
                                             placement: 'line',
                                             repeat: 300,
@@ -734,9 +763,9 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     // Marker Management
     useEffect(() => {
         if (!mapRef.current) return;
-        
+
         markerSourceRef.current.clear();
-        
+
         const features = markers.map(m => {
             const feature = new Feature({
                 geometry: new Point(fromLonLat([m.lon, m.lat])),
@@ -746,7 +775,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             feature.setId(m.id);
             return feature;
         });
-        
+
         markerSourceRef.current.addFeatures(features);
     }, [markers]);
 

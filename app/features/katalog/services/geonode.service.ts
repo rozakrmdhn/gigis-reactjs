@@ -1,5 +1,13 @@
 import { apiClient } from '~/lib/api-client';
 
+export interface GeoNodeLink {
+    extension: string;
+    link_type: string;
+    name: string;
+    mime: string;
+    url: string;
+}
+
 export interface GeoNodeResource {
     id: number;
     pk: number;
@@ -13,6 +21,13 @@ export interface GeoNodeResource {
     resource_type: string;
     bbox_polygon?: any;
     ll_bbox?: number[];
+    links?: GeoNodeLink[];
+    created?: string;
+    srid?: string;
+    category?: {
+        gn_description: string;
+        identifier: string;
+    };
 }
 
 export interface GeoNodeResponse {
@@ -27,11 +42,11 @@ export const geonodeService = {
     /**
      * Fetch datasets from internal proxy (CORS safe)
      */
-    getDatasets: async (params?: { page?: number; page_size?: number; search?: string }): Promise<GeoNodeResponse> => {
+    getDatasets: async (params?: { page?: number; page_size?: number; search?: string; refresh?: boolean }): Promise<GeoNodeResponse> => {
         // Gunakan proxy internal aplikasi
         const url = new URL(`${window.location.origin}/proxy/geonode-datasets`);
         
-        url.searchParams.append('refresh', 'true'); // Paksa refresh untuk memastikan data tampil
+        if (params?.refresh) url.searchParams.append('refresh', 'true');
         if (params?.search) url.searchParams.append('filter{title.icontains}', params.search);
         
         try {
@@ -65,8 +80,13 @@ export const geonodeService = {
             if (found) return found;
         } catch (e) {}
 
-        const response = await fetch(`https://saggaserv.my.id/api/v2/resources/${id}/`);
+        const url = new URL(`${window.location.origin}/proxy/geonode-datasets`);
+        url.searchParams.append('id', id.toString());
+
+        const response = await fetch(url.toString());
         if (!response.ok) throw new Error(`Failed to fetch dataset detail`);
-        return await response.json();
+        
+        const data = await response.json();
+        return data.resource || data;
     }
 };

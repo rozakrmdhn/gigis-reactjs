@@ -3,7 +3,7 @@ import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 
-export type DrawMode = "view" | "draw-point" | "draw-line" | "draw-polygon" | "draw-circle" | "draw-box" | "edit";
+export type DrawMode = "view" | "draw-point" | "draw-line" | "draw-polygon" | "draw-circle" | "draw-box" | "edit" | "draw-automatic";
 
 interface DrawControlsProps {
     mode: DrawMode;

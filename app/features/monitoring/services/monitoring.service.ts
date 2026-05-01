@@ -69,7 +69,14 @@ export interface MonitoringJalanResult {
             kode: number;
             nama: string;
             mantap: string;
+            panjang_belum_mantap: number;
             persentase_mantap: number;
+            persentase_per_kondisi: {
+                baik: number;
+                sedang: number;
+                "rusak ringan": number;
+                "rusak berat": number;
+            };
         };
     };
 }
@@ -98,10 +105,13 @@ export interface MonitoringProgress {
 }
 
 export const monitoringService = {
-    getMonitoringJalan: async (params?: { id_kecamatan?: string; page?: number; limit?: number; search?: string }): Promise<MonitoringJalanResponse> => {
+    getMonitoringJalan: async (params?: { id_kecamatan?: string; id_desa?: string; page?: number; limit?: number; search?: string }): Promise<MonitoringJalanResponse> => {
         const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan`, window.location.origin);
         if (params?.id_kecamatan) {
             url.searchParams.append("id_kecamatan", params.id_kecamatan);
+        }
+        if (params?.id_desa) {
+            url.searchParams.append("id_desa", params.id_desa);
         }
         if (params?.page) {
             url.searchParams.append("page", params.page.toString());
@@ -125,9 +135,9 @@ export const monitoringService = {
      * Fetch detail ruas jalan dari /monitoring/jalan/:id
      * Mengembalikan { jalan, segmen: Segmen[] } — segmen adalah array plain object dengan field geom
      */
-    getMonitoringJalanDetail: async (id: string): Promise<{ jalan: any; segmen: any[] } | null> => {
+    getMonitoringJalanDetail: async (id: string): Promise<MonitoringJalanResult | null> => {
         try {
-            const response = await apiClient.get<any>(
+            const response = await apiClient.get<MonitoringJalanResult>(
                 `${import.meta.env.VITE_API_BASE_URL}/monitoring/jalan/${id}`,
                 { showErrorToast: false }
             );
@@ -180,11 +190,20 @@ export const monitoringService = {
             url.searchParams.append("kode_ruas", kode_ruas.toString());
         }
 
-        return await apiClient.get(url.toString(), { showErrorToast: false });
+        const response = await apiClient.get(url.toString(), { showErrorToast: false });
+        return response.result;
     },
 
-    getSegmenByJalanId: async (id: string): Promise<any> => {
-        return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/${id}/segmen?format=geojson`, { showErrorToast: false });
+    getSegmenByJalanId: async (id: string, filters?: { kondisi?: string; status_kondisi?: string }): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/${id}/segmen`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        if (filters?.kondisi && filters.kondisi !== 'all') {
+            url.searchParams.append("kondisi", filters.kondisi);
+        }
+        if (filters?.status_kondisi && filters.status_kondisi !== 'all') {
+            url.searchParams.append("status_kondisi", filters.status_kondisi);
+        }
+        return await apiClient.get(url.toString(), { showErrorToast: false });
     },
 
     getDesaById: async (id: string | number): Promise<any> => {
@@ -199,6 +218,23 @@ export const monitoringService = {
         return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/segmen/kabupaten?format=geojson`);
     },
 
+    getJalanGeoJSON: async (params?: { id?: string; search?: string; kode_ruas?: string | number; limit?: number }): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        if (params?.id) url.searchParams.append("id", params.id);
+        if (params?.search) url.searchParams.append("search", params.search);
+        if (params?.kode_ruas) url.searchParams.append("kode_ruas", params.kode_ruas.toString());
+        if (params?.limit) url.searchParams.append("limit", params.limit.toString());
+
+        const response = await apiClient.get(url.toString(), { showErrorToast: false });
+        return response.result;
+    },
+
+    getJalanByIdGeoJSON: async (id: string | number): Promise<any> => {
+        const response = await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/jalan/${id}?format=geojson`, { showErrorToast: false });
+        return response.result;
+    },
+
     getKecamatan: async (): Promise<any> => {
         return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/kecamatan`);
     },
@@ -207,10 +243,15 @@ export const monitoringService = {
         return await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}`);
     },
 
+    getDesaGeoJSONByKecamatan: async (id_kecamatan: string | number): Promise<any> => {
+        const response = await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}&format=geojson`, { showErrorToast: false });
+        return response.result;
+    },
+
     getNonBaseSegments: async (id_desa?: string | number): Promise<any> => {
         let url = `${import.meta.env.VITE_API_BASE_URL}/jalan/segmen?check_melarosa=Tidak&format=geojson`;
         if (id_desa) {
-            url += `&desa_id=${id_desa}`;
+            url += `&id_desa=${id_desa}`;
         }
         return await apiClient.get(url);
     },
@@ -251,6 +292,32 @@ export const monitoringService = {
             {
                 successMessage: "Data monitoring berhasil dihapus!",
                 errorMessage: "Gagal menghapus data monitoring"
+            }
+        );
+    },
+
+    getSegmenGeoJSONByKodeRuas: async (kode_ruas: string | number): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen/geojson`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        if (kode_ruas) {
+            url.searchParams.append("kode_ruas", kode_ruas.toString());
+        }
+
+        const response = await apiClient.get(url.toString(), { showErrorToast: false });
+        return response.result;
+    },
+
+    extractSegment: async (data: {
+        point1: { lng: number; lat: number };
+        point2: { lng: number; lat: number };
+        kode_ruas?: string | number
+    }): Promise<any> => {
+        return await apiClient.post(
+            `${import.meta.env.VITE_API_BASE_URL}/analisis/jalan/extract-segmen`,
+            data,
+            {
+                successMessage: "Berhasil mengekstraksi segmen jalan!",
+                errorMessage: "Gagal mengekstraksi segmen jalan"
             }
         );
     }

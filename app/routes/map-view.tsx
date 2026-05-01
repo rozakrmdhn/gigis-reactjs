@@ -437,7 +437,7 @@ export default function MapViewPage() {
     );
 
     return (
-        <div className="flex flex-col h-[100dvh] overflow-hidden bg-white">
+        <div className="flex flex-col h-[100dvh] pt-16 overflow-hidden bg-white dark:bg-slate-950">
             <PublicNavbar />
 
             <main className="flex-1 relative flex overflow-hidden">

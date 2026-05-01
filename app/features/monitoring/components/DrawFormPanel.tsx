@@ -170,36 +170,6 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                     {/* Basic Info Readonly/Disabled */}
                     <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
                         <div className="space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Desa</Label>
-                            {selectedRoad ? (
-                                <div className="font-bold text-xs text-slate-700 dark:text-slate-300">{formData.desa}</div>
-                            ) : (
-                                <Select
-                                    value={formData.desa_id}
-                                    onValueChange={(v) => {
-                                        const selectedDesa = desas.find(d => d.id.toString() === v);
-                                        setFormData({
-                                            ...formData,
-                                            desa_id: v,
-                                            desa: selectedDesa?.nama_desa || ""
-                                        });
-                                    }}
-                                    disabled={!formData.kecamatan_id || isLoadingLocations}
-                                >
-                                    <SelectTrigger className="h-8 text-xs font-bold">
-                                        <SelectValue placeholder={isLoadingLocations ? "Loading..." : "Pilih Desa"} />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {desas.map((d) => (
-                                            <SelectItem key={d.id} value={d.id.toString()}>
-                                                {d.nama_desa}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        </div>
-                        <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Kecamatan</Label>
                             {selectedRoad ? (
                                 <div className="font-bold text-xs text-slate-700 dark:text-slate-300">{formData.kecamatan}</div>
@@ -224,6 +194,36 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                         {kecamatans.map((k) => (
                                             <SelectItem key={k.id} value={k.id.toString()}>
                                                 {k.nama_kecamatan}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            )}
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Desa</Label>
+                            {selectedRoad ? (
+                                <div className="font-bold text-xs text-slate-700 dark:text-slate-300">{formData.desa}</div>
+                            ) : (
+                                <Select
+                                    value={formData.desa_id}
+                                    onValueChange={(v) => {
+                                        const selectedDesa = desas.find(d => d.id.toString() === v);
+                                        setFormData({
+                                            ...formData,
+                                            desa_id: v,
+                                            desa: selectedDesa?.nama_desa || ""
+                                        });
+                                    }}
+                                    disabled={!formData.kecamatan_id || isLoadingLocations}
+                                >
+                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                        <SelectValue placeholder={isLoadingLocations ? "Loading..." : "Pilih Desa"} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {desas.map((d) => (
+                                            <SelectItem key={d.id} value={d.id.toString()}>
+                                                {d.nama_desa}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
@@ -263,9 +263,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Jalan Kabupaten">Jalan Kabupaten</SelectItem>
-                                    <SelectItem value="Jalan Poros Antar Desa">Jalan Poros Antar Desa</SelectItem>
-                                    <SelectItem value="Jalan Poros Desa">Jalan Poros Desa</SelectItem>
-                                    <SelectItem value="Jalan Lingkungan">Jalan Lingkungan</SelectItem>
+                                    <SelectItem value="Jalan Desa">Jalan Desa</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

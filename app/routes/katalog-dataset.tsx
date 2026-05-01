@@ -11,7 +11,10 @@ import {
     Info,
     LayoutGrid,
     List,
-    ExternalLink
+    ExternalLink,
+    FileText,
+    RefreshCw,
+    X
 } from "lucide-react";
 import { Input } from "~/components/ui/input";
 import { Button } from "~/components/ui/button";
@@ -24,6 +27,17 @@ export const meta: MetaFunction = () => {
         { name: "description", content: "Katalog data spasial dan dataset infrastruktur." },
     ];
 };
+
+export function generateSlug(id: number | string, title: string) {
+    if (!title) return String(id);
+    const formattedTitle = title
+        .toLowerCase()
+        .replace(/_/g, '-')
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    return `${id}-${formattedTitle}`;
+}
 
 function DatasetCard({ resource }: { resource: GeoNodeResource }) {
     return (
@@ -60,19 +74,20 @@ function DatasetCard({ resource }: { resource: GeoNodeResource }) {
                 </p>
 
                 <div className="pt-2 flex items-center gap-2">
-                    <Link to={`/katalog-dataset/${resource.pk}`} className="flex-1">
+                    <Link to={`/katalog-dataset/${generateSlug(resource.pk, resource.title)}`} className="flex-[2]">
                         <Button className="w-full h-9 rounded-xl text-[11px] font-black uppercase tracking-widest gap-2 bg-blue-600 hover:bg-blue-700 shadow-lg shadow-blue-200 dark:shadow-none">
                             <MapIcon size={14} /> Preview Peta
                         </Button>
                     </Link>
-                    <a
-                        href={`https://saggaserv.my.id${resource.detail_url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-2 rounded-xl bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
-                    >
-                        <ExternalLink size={16} />
-                    </a>
+                    {resource.links?.find(l => l.name === 'ISO' && l.extension === 'xml') && (
+                        <Button
+                            variant="outline"
+                            className="flex-1 h-9 rounded-xl text-[10px] font-black uppercase tracking-widest gap-1 border-slate-200 dark:border-slate-800 hover:border-emerald-500 hover:text-emerald-600 dark:hover:text-emerald-400 px-2 transition-all"
+                            onClick={() => window.open(resource.links?.find(l => l.name === 'ISO' && l.extension === 'xml')?.url, '_blank')}
+                        >
+                            <FileText size={12} /> Metadata
+                        </Button>
+                    )}
                 </div>
             </div>
         </div>
@@ -102,13 +117,18 @@ export default function KatalogDatasetPage() {
     const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState("");
     const [activeSearch, setActiveSearch] = useState("");
+    const [isRefreshing, setIsRefreshing] = useState(false);
 
-    const fetchData = useCallback(async () => {
+    const fetchData = useCallback(async (forceRefresh = false) => {
         setIsLoading(true);
         setError(null);
+        if (forceRefresh) setIsRefreshing(true);
         try {
-            console.log("Fetching datasets with search:", activeSearch);
-            const data = await geonodeService.getDatasets({ search: activeSearch });
+            console.log("Fetching datasets. Search:", activeSearch, "Refresh:", forceRefresh);
+            const data = await geonodeService.getDatasets({ 
+                search: activeSearch,
+                refresh: forceRefresh 
+            });
             console.log("Datasets received:", data);
 
             if (data && (data.results || data.resources)) {
@@ -123,6 +143,7 @@ export default function KatalogDatasetPage() {
             setError(error.message || "Gagal memuat data dari server GeoNode.");
         } finally {
             setIsLoading(false);
+            setIsRefreshing(false);
         }
     }, [activeSearch]);
 
@@ -131,67 +152,131 @@ export default function KatalogDatasetPage() {
     }, [fetchData]);
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col font-sans selection:bg-blue-100 dark:selection:bg-blue-900/30">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col pt-16 font-sans selection:bg-blue-100 dark:selection:bg-blue-900/30">
             <PublicNavbar />
 
-            {/* Header Section */}
-            <div className="relative pt-14 pb-14 overflow-hidden">
-                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-full opacity-30 dark:opacity-20 pointer-events-none">
-                    <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[60%] bg-blue-400 blur-[120px] rounded-full mix-blend-multiply dark:mix-blend-overlay animate-pulse" />
-                    <div className="absolute bottom-[10%] right-[-10%] w-[35%] h-[50%] bg-indigo-400 blur-[120px] rounded-full mix-blend-multiply dark:mix-blend-overlay animate-pulse delay-700" />
+            {/* ─── Hero Header ─────────────────────────────── */}
+            <div className="relative bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 transition-colors duration-500 overflow-hidden">
+                {/* Decorative background */}
+                <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                    <div className="absolute -top-20 -right-20 w-72 h-72 bg-blue-50 dark:bg-blue-950/30 rounded-full blur-3xl opacity-60" />
+                    <div className="absolute -bottom-10 -left-10 w-48 h-48 bg-slate-100 dark:bg-slate-800/50 rounded-full blur-2xl" />
                 </div>
 
-                <div className="container max-w-7xl mx-auto px-6 relative z-10">
-                    <div className="max-w-3xl space-y-6">
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800/50">
-                            <Database size={12} className="text-blue-600 dark:text-blue-400" />
-                            <span className="text-[10px] font-black text-blue-700 dark:text-blue-300 uppercase tracking-widest">Dataset Geonode</span>
-                        </div>
-                        <div className="space-y-2">
-                            <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1]">
+                <div className="relative container mx-auto px-4 sm:px-6 py-6 md:py-8">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-8">
+                        {/* Title */}
+                        <div className="space-y-3">
+                            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-100 dark:border-blue-900/50">
+                                <Database size={14} className="text-blue-600 dark:text-blue-400" />
+                                <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-[0.2em]">Dataset Geonode</span>
+                            </div>
+                            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tighter text-slate-900 dark:text-white leading-none">
                                 Katalog <span className="text-blue-600">Data Spasial</span>
                             </h1>
-                            <p className="text-lg text-slate-500 dark:text-slate-400 font-medium max-w-2xl leading-relaxed">
-                                Jelajahi kumpulan data spasial, infrastruktur, dan pembangunan daerah yang terintegrasi dengan server GeoNode.
+                            <p className="text-slate-500 dark:text-slate-400 text-base font-medium max-w-md">
+                                Jelajahi kumpulan data spasial, infrastruktur, dan pembangunan daerah yang terintegrasi.
                             </p>
                         </div>
 
-                        {/* Search Bar */}
-                        <div className="flex items-center gap-3 max-w-xl bg-white dark:bg-slate-900 p-2 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none focus-within:border-blue-400 transition-all duration-300">
-                            <div className="pl-3 text-slate-400">
-                                <Search size={20} />
+                        {/* Stats summary */}
+                        {!isLoading && datasets.length > 0 && (
+                            <div className="flex items-center gap-4 shrink-0">
+                                <div className="text-right">
+                                    <p className="text-3xl font-black text-slate-900 dark:text-white tabular-nums">{datasets.length}</p>
+                                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total Dataset</p>
+                                </div>
                             </div>
-                            <Input
-                                placeholder="Cari judul dataset..."
-                                className="border-none focus-visible:ring-0 text-sm font-semibold h-11 bg-transparent"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && setActiveSearch(searchTerm)}
-                            />
-                            <Button
-                                onClick={() => setActiveSearch(searchTerm)}
-                                className="rounded-xl h-11 px-6 bg-slate-900 hover:bg-black dark:bg-blue-600 dark:hover:bg-blue-700 font-bold uppercase tracking-widest text-[11px]"
-                            >
-                                Cari
-                            </Button>
-                        </div>
+                        )}
                     </div>
                 </div>
             </div>
 
-            {/* Content Section */}
-            <main className="flex-1 container max-w-7xl mx-auto px-6 pb-24">
-                <div className="flex items-center justify-between mb-8">
-                    <div className="flex items-center gap-2">
-                        <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Koleksi Data</h2>
-                        {!isLoading && !error && (
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-black text-slate-500">{datasets.length} Item</span>
+            {/* ─── Sticky Search Bar ─────────────────────────────── */}
+            <div className="sticky top-16 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 py-3 shadow-sm">
+                <div className="container mx-auto px-4 sm:px-6">
+                    <form 
+                        onSubmit={(e) => { e.preventDefault(); setActiveSearch(searchTerm); }} 
+                        className="max-w-2xl bg-white dark:bg-slate-900 p-1 rounded-[20px] border border-slate-200 dark:border-slate-800 shadow-sm transition-all duration-300"
+                    >
+                        <div className="relative flex items-center gap-2">
+                            <div className="relative flex-1 group">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={16} />
+                                <Input
+                                    placeholder="Cari judul dataset..."
+                                    className="pl-11 pr-10 h-11 bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold shadow-sm focus-visible:ring-4 focus-visible:ring-blue-500/10 focus-visible:border-blue-500 transition-all"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                                {searchTerm && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { setSearchTerm(""); setActiveSearch(""); }}
+                                        className="absolute right-4 top-1/2 -translate-y-1/2 p-1 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-400 hover:text-red-500 transition-all"
+                                    >
+                                        <X className="w-3.5 h-3.5" />
+                                    </button>
+                                )}
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => fetchData(true)}
+                                className="h-11 w-11 rounded-xl border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 shrink-0 transition-all active:scale-90 p-0"
+                                disabled={isLoading || isRefreshing}
+                                title="Refresh data"
+                            >
+                                <RefreshCw size={16} className={cn("text-slate-500", isRefreshing && "animate-spin text-blue-500")} />
+                            </Button>
+                            <Button
+                                type="submit"
+                                className="h-11 px-6 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] bg-slate-900 hover:bg-blue-600 text-white shadow-lg shadow-slate-200 dark:shadow-none shrink-0 gap-2 transition-all active:scale-95"
+                                disabled={isLoading}
+                            >
+                                {isLoading ? <RefreshCw size={16} className="animate-spin" /> : <Search size={16} />}
+                                <span className="hidden sm:inline">Telusuri</span>
+                            </Button>
+                        </div>
+                        {activeSearch && (
+                            <p className="mt-2.5 ml-2 text-[11px] font-bold text-slate-500 flex items-center gap-1.5">
+                                <Database size={11} />
+                                Hasil pencarian untuk: <span className="text-blue-600 dark:text-blue-400">"{activeSearch}"</span>
+                                <button type="button" onClick={() => { setSearchTerm(""); setActiveSearch(""); }} className="ml-1 text-slate-400 hover:text-red-500 transition-colors">
+                                    <X className="w-2.5 h-2.5" />
+                                </button>
+                            </p>
                         )}
+                    </form>
+                </div>
+            </div>
+
+
+            {/* Content Section */}
+            <main className="flex-1 container mx-auto px-4 sm:px-6 pb-24">
+                <div className="flex items-center justify-between mb-8">
+                    <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-black text-slate-900 dark:text-white uppercase tracking-tight">Koleksi Data</h2>
+                            {!isLoading && !error && (
+                                <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[11px] font-black text-slate-500">{datasets.length} Item</span>
+                            )}
+                        </div>
+                        
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => fetchData(true)}
+                            disabled={isLoading || isRefreshing}
+                            className="h-8 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 gap-2 px-2 transition-all"
+                        >
+                            <RefreshCw size={14} className={cn(isRefreshing && "animate-spin")} />
+                            <span className="text-[10px] font-bold uppercase tracking-widest hidden sm:inline">Refresh Data</span>
+                        </Button>
                     </div>
                 </div>
 
                 {isLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         {Array.from({ length: 6 }).map((_, i) => (
                             <SkeletonCard key={i} />
                         ))}
@@ -213,7 +298,7 @@ export default function KatalogDatasetPage() {
                         </Button>
                     </div>
                 ) : datasets.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
                         {datasets.map((resource) => (
                             <DatasetCard key={resource.pk} resource={resource} />
                         ))}

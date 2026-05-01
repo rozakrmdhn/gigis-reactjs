@@ -42,7 +42,7 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
     const totalSelisih = rekapData.reduce((acc, item) => acc + (item.selisih || 0), 0);
     const totalSisaIntervensi = rekapData.reduce((acc, item) => acc + (item.sisa_intervensi || 0), 0);
 
-    const percentDibangun = totalAset > 0 ? (totalDibangun / totalAset) * 100 : 0;
+    const percentDibangun = totalSisaIntervensi > 0 ? (totalDibangun / totalSisaIntervensi) * 100 : 0;
 
     const formatNumber = (num: number) => num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -58,9 +58,9 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
             textColor: "text-blue-700 dark:text-blue-300"
         },
         {
-            title: "Panjang Jalan Desa",
+            title: "Pemetaan Jalan Desa",
             value: `${formatNumber(totalAset)} m`,
-            description: "Total panjang Aset Jalan Desa",
+            description: "Hasil Pemetaan Jalan Desa Tahun 2021",
             icon: Route,
             gradient: "from-sky-500/10 via-sky-500/5 to-transparent",
             borderColor: "border-sky-500/20",
@@ -68,9 +68,9 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
             textColor: "text-sky-700 dark:text-sky-300"
         },
         {
-            title: "Sisa Intervensi",
+            title: "Aset Jalan Desa",
             value: `${formatNumber(totalSisaIntervensi)} m`,
-            description: "Peralihan status ke Jalan Kabupaten",
+            description: "Jalan Desa Saat Ini",
             icon: ShieldCheck,
             gradient: "from-indigo-500/10 via-indigo-500/5 to-transparent",
             borderColor: "border-indigo-500/20",
@@ -80,7 +80,7 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
         {
             title: "Jalan Desa Dibangun",
             value: `${formatNumber(totalDibangun)} m`,
-            description: "Sudah dibangun sesuai aset",
+            description: "Sudah dibangun sesuai aset Desa",
             icon: Construction,
             gradient: "from-emerald-500/10 via-emerald-500/5 to-transparent",
             borderColor: "border-emerald-500/20",
@@ -92,7 +92,7 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
         {
             title: "Peningkatan Status",
             value: `${formatNumber(totalPuk)} m`,
-            description: "Total peningkatan (PUK)",
+            description: "Jalan Desa yang dialihkan status menjadi jalan kabupaten",
             icon: ArrowUpCircle,
             gradient: "from-teal-500/10 via-teal-500/5 to-transparent",
             borderColor: "border-teal-500/20",
@@ -100,9 +100,9 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
             textColor: "text-teal-700 dark:text-teal-300"
         },
         {
-            title: "Total Selisih",
+            title: "Jalan Desa Belum Dibangun",
             value: `${formatNumber(totalSelisih)} m`,
-            description: "Sisa jalan belum dibangun",
+            description: "Jalan Desa yang belum dibangun",
             icon: AlertCircle,
             gradient: "from-orange-500/10 via-orange-500/5 to-transparent",
             borderColor: "border-orange-500/20",
@@ -135,7 +135,11 @@ export function LaporanStatsCards({ rekapData, isLoading }: LaporanStatsCardsPro
                                     <span className="text-muted-foreground">Progres Pembangunan</span>
                                     <span className={stat.iconColor}>{formatNumber(stat.progress)}%</span>
                                 </div>
-                                <Progress value={stat.progress} className="h-1.5 bg-slate-100 dark:bg-slate-800" indicatorClassName={stat.gradient.split(' ')[0].replace('/10', '')} />
+                                <Progress
+                                    value={stat.progress}
+                                    className="h-1.5 bg-slate-100 dark:bg-slate-800"
+                                    indicatorClassName={stat.gradient.split(' ')[0].replace('/10', '').replace('from-', 'bg-')}
+                                />
                             </div>
                         )}
                     </CardContent>

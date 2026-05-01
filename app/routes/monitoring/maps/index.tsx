@@ -162,16 +162,22 @@ export default function MonitoringPage() {
             }
         }
 
-        const result = await monitoringService.getMonitoringJalanById(id);
+        const [jalanRes, segmenRes] = await Promise.all([
+            monitoringService.getJalanByIdGeoJSON(id),
+            monitoringService.getSegmenByJalanId(id)
+        ]);
 
-        if (result) {
-            setJalanFeatures(result.jalan);
-            setSegmenFeatures(result.segmen);
-            setSegmenKabFeatures(result.segmenkab);
-            setIsPanelVisible(true);
-            if (isMobile) {
-                setIsSidebarOpen(false);
-            }
+        if (jalanRes) {
+            setJalanFeatures(jalanRes);
+        }
+        if (segmenRes.status === "success" && segmenRes.result) {
+            setSegmenFeatures(segmenRes.result);
+        }
+        // Remove segmenKabFeatures as it's not provided by the new endpoint strategy
+        setSegmenKabFeatures(null);
+        setIsPanelVisible(true);
+        if (isMobile) {
+            setIsSidebarOpen(false);
         }
         setFetchingGeojson(false);
     }, [monitoringData, isMobile]);

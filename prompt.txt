@@ -47,4 +47,6 @@ Jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur in
 
 Buatkan issue baru di Github dari issue.md
 
+Buatkan commit baru 
+
 Implementasikan issue ini 

@@ -300,9 +300,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                                 <SelectTrigger><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Jalan Kabupaten">Jalan Kabupaten</SelectItem>
-                                    <SelectItem value="Jalan Poros Antar Desa">Jalan Poros Antar Desa</SelectItem>
-                                    <SelectItem value="Jalan Poros Desa">Jalan Poros Desa</SelectItem>
-                                    <SelectItem value="Jalan Lingkungan">Jalan Lingkungan</SelectItem>
+                                    <SelectItem value="Jalan Desa">Jalan Desa</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

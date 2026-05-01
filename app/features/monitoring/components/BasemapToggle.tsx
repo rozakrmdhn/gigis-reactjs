@@ -1,13 +1,11 @@
-import { Map as MapIcon, RotateCw } from "lucide-react";
-import { Button } from "~/components/ui/button";
-import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import { useState } from "react";
 import { cn } from "~/lib/utils";
+import { useIsMobile } from "~/hooks/use-mobile";
 
 interface BasemapItem {
     id: string;
-    label: string;
-    color: string;
-    url: string;
+    name: string;
+    thumbnail: string;
 }
 
 interface BasemapToggleProps {
@@ -16,62 +14,68 @@ interface BasemapToggleProps {
     className?: string;
 }
 
-const BASEMAP_DATA: BasemapItem[] = [
-    { id: 'osm', label: 'Standard', color: '#93c5fd', url: 'https://geoportal.bojonegorokab.go.id/main/static/media/rbi.494852622726ecff0319.png' },
-    { id: 'satellite', label: 'Satellite', color: '#1e293b', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}' },
-    { id: 'hybrid', label: 'Hybrid', color: '#475569', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}' },
-    { id: 'terrain', label: 'Terrain', color: '#94a3b8', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/{z}/{y}/{x}' },
+export const BASEMAP_LIST: BasemapItem[] = [
+    { id: 'osm', name: 'OpenStreetMap', thumbnail: 'https://tile.openstreetmap.org/14/13283/8518.png' },
+    { id: 'google-road', name: 'Google Maps', thumbnail: 'https://mt1.google.com/vt/lyrs=m&x=13283&y=8518&z=14' },
+    { id: 'google-sat', name: 'Google Satellite', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
+    { id: 'carto-light', name: 'Positron Light', thumbnail: 'https://a.basemaps.cartocdn.com/light_all/14/13283/8518.png' },
+    { id: 'carto-dark', name: 'Dark Matter', thumbnail: 'https://a.basemaps.cartocdn.com/dark_all/14/13283/8518.png' },
+    { id: 'satellite', name: 'Esri Satellite', thumbnail: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/14/8518/13283' },
 ];
 
 export function BasemapToggle({ activeBasemap, onBasemapChange, className }: BasemapToggleProps) {
-    return (
-        <Popover>
-            <PopoverTrigger asChild>
-                <Button
-                    variant="outline"
-                    size="icon"
-                    className={cn(
-                        "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl h-10 w-10 cursor-pointer",
-                        className
-                    )}
-                >
-                    <MapIcon className="h-5 w-5 text-slate-600 dark:text-slate-400" />
-                </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-64 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md z-50">
-                <div className="space-y-3">
-                    <div className="flex items-center gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
-                        <div className="w-3.5 h-3.5 rounded-full border-2 border-blue-600 flex items-center justify-center">
-                            <div className="w-1 h-1 bg-blue-600 rounded-full" />
-                        </div>
-                        <h3 className="text-[10px] font-black text-slate-800 dark:text-slate-100 tracking-wider uppercase">Basemap</h3>
-                    </div>
+    const isMobile = useIsMobile();
+    const [isOpen, setIsOpen] = useState(false);
+    
+    const activeItem = BASEMAP_LIST.find(b => b.id === activeBasemap) || BASEMAP_LIST[0];
 
-                    <div className="grid grid-cols-2 gap-2">
-                        {BASEMAP_DATA.map((map) => (
-                            <button
-                                key={map.id}
-                                onClick={() => onBasemapChange(map.id)}
-                                className={cn(
-                                    "flex flex-col items-center gap-2 p-2 rounded-xl border transition-all cursor-pointer",
-                                    activeBasemap === map.id
-                                        ? "bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-700 text-blue-700 dark:text-blue-400 shadow-sm"
-                                        : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-200 dark:hover:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800"
-                                )}
-                            >
-                                <div
-                                    className={cn(
-                                        "w-full h-8 rounded-lg border",
-                                        activeBasemap === map.id ? "border-blue-400 dark:border-blue-500" : "border-slate-200 dark:border-slate-700"
-                                    )}
-                                    style={{ backgroundImage: `url(${map.url})`, backgroundSize: 'cover', backgroundPosition: 'center' }}
-                                />
-                                <span className="text-[9px] font-bold uppercase tracking-tighter">{map.label}</span>
-                            </button>
-                        ))}
-                    </div>
+    return (
+        <div className={cn("flex flex-col items-end pointer-events-auto", className)}>
+            {isOpen && (
+                <div className={cn(
+                    "mb-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 rounded-3xl border border-white dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.3)] grid grid-cols-2 gap-2 animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300 origin-bottom-right max-h-[60vh] overflow-y-auto z-50",
+                    isMobile ? "gap-2" : "gap-3 p-4"
+                )}>
+                    {BASEMAP_LIST.map((b) => (
+                        <button
+                            key={b.id}
+                            onClick={() => { 
+                                onBasemapChange(b.id); 
+                                setIsOpen(false); 
+                            }}
+                            className={cn(
+                                "relative overflow-hidden rounded-xl shadow-sm border-2 transition-all active:scale-95 group h-16 w-16 md:w-20 md:h-20",
+                                activeBasemap === b.id 
+                                    ? "border-blue-600 shadow-lg shadow-blue-200 dark:shadow-none bg-blue-50 dark:bg-blue-900/20" 
+                                    : "border-slate-100 dark:border-slate-800 hover:border-blue-400"
+                            )}
+                        >
+                            <img src={b.thumbnail} alt={b.name} className="w-full h-full object-cover" />
+                            <div className={cn(
+                                "absolute inset-x-0 bottom-0 transition-colors p-1 md:p-2",
+                                activeBasemap === b.id ? "bg-blue-600/90 backdrop-blur-sm" : "bg-slate-900/60 backdrop-blur-sm group-hover:bg-blue-600/80"
+                            )}>
+                                <p className="text-[8px] font-black text-white text-center leading-tight truncate px-0.5 uppercase tracking-tighter">{b.name}</p>
+                            </div>
+                        </button>
+                    ))}
                 </div>
-            </PopoverContent>
-        </Popover>
+            )}
+
+            <button
+                onClick={() => setIsOpen(!isOpen)}
+                className={cn(
+                    "overflow-hidden rounded-2xl border-2 border-white dark:border-slate-800 shadow-2xl hover:scale-105 active:scale-95 transition-all group relative",
+                    isMobile ? "w-14 h-14" : "w-16 h-16"
+                )}
+                title="Pilih Basemap"
+            >
+                <img src={activeItem.thumbnail} alt="Active Basemap" className="w-full h-full object-cover" />
+                <div className="absolute inset-x-0 bottom-0 bg-slate-900/60 backdrop-blur-sm p-1 flex justify-center group-hover:bg-blue-600/90 transition-colors">
+                    <span className="text-[7px] font-black text-white uppercase tracking-tighter truncate px-0.5">{activeItem.name}</span>
+                </div>
+            </button>
+        </div>
     );
 }
+

@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
-import { useParams, Link, useNavigate } from "react-router";
+import { useParams, Link, useNavigate, useLocation } from "react-router";
 import { PublicNavbar } from "~/components/public-navbar";
 import { monitoringService } from "~/features/monitoring/services/monitoring.service";
-import type { Jalan } from "~/features/monitoring/services/monitoring.service";
+import type { Jalan, MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
 import {
     ArrowLeft,
     MapPin,
@@ -19,6 +19,9 @@ import {
     ExternalLink,
     GitBranch,
     AlertCircle,
+    CheckCircle2,
+    PieChart,
+    BarChart3
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Skeleton } from "~/components/ui/skeleton";
@@ -82,13 +85,13 @@ function getConditionCfg(condition: string) {
         key
             ? CONDITION_CONFIG[key]
             : {
-                  label: condition,
-                  text: "text-slate-700",
-                  bg: "bg-slate-50 dark:bg-slate-800",
-                  border: "border-slate-200 dark:border-slate-700",
-                  bar: "bg-slate-400",
-                  badge: "bg-slate-100 text-slate-700 border-slate-200",
-              }
+                label: condition,
+                text: "text-slate-700",
+                bg: "bg-slate-50 dark:bg-slate-800",
+                border: "border-slate-200 dark:border-slate-700",
+                bar: "bg-slate-400",
+                badge: "bg-slate-100 text-slate-700 border-slate-200",
+            }
     );
 }
 
@@ -240,24 +243,52 @@ function SegmentCard({ feature, index }: { feature: any; index: number }) {
 export default function JalanDesaDetailPage() {
     const { slug } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
+    const backSearch = location.state?.from || "";
+    const lastId = location.state?.lastId;
+
+    // Construct return URL with highlight if available
+    const backUrl = lastId
+        ? `/jalan-desa${backSearch}${backSearch.includes('?') ? '&' : '?'}highlight=${lastId}`
+        : `/jalan-desa${backSearch}`;
     const [jalan, setJalan] = useState<Jalan | null>(null);
+    const [summary, setSummary] = useState<MonitoringJalanResult['summary'] | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [segmenGeoJSON, setSegmenGeoJSON] = useState<any | null>(null);
     const [isLoadingSegmen, setIsLoadingSegmen] = useState(false);
     const [segmenError, setSegmenError] = useState(false);
+
+    // Related roads in the same village
+    const [relatedRoads, setRelatedRoads] = useState<MonitoringJalanResult[]>([]);
+    const [isLoadingRelated, setIsLoadingRelated] = useState(false);
 
     const fetchDetail = useCallback(async () => {
         if (!slug) return;
         setIsLoading(true);
         setIsLoadingSegmen(true);
         try {
-            // Fetch dari /monitoring/jalan/:id — mengembalikan { jalan, segmen: Segmen[] }
+            // Fetch dari /monitoring/jalan/:id — mengembalikan { jalan, segmen: Segmen[], summary }
             const data = await monitoringService.getMonitoringJalanDetail(slug);
             if (data) {
-                setJalan(data.jalan as Jalan);
+                setJalan(data.jalan);
+                setSummary(data.summary);
 
-                // Konversi segmen[] ke GeoJSON FeatureCollection menggunakan field geom
-                const segmenArray: any[] = data.segmen || [];
+                // Fetch GeoJSON segments separately for geometry if needed
+                try {
+                    const geojsonRes = await monitoringService.getSegmenGeoJSONByKodeRuas(slug);
+                    if (geojsonRes && geojsonRes.type === 'FeatureCollection' && geojsonRes.features?.length > 0) {
+                        setSegmenGeoJSON(geojsonRes);
+                        setIsLoadingSegmen(false);
+                        return;
+                    }
+                } catch (err) {
+                    console.warn("Failed to fetch segments GeoJSON:", err);
+                }
+
+                // Fallback: Konversi segmen[] ke GeoJSON FeatureCollection menggunakan field geom
+                const segmenArray: any[] = Array.isArray(data.segmen) 
+                    ? data.segmen 
+                    : [...(data.segmen?.desa || []), ...(data.segmen?.kabupaten || [])];
                 const features = segmenArray
                     .filter((s) => s.geom && typeof s.geom === 'object' && Object.keys(s.geom).length > 0)
                     .map((s) => ({
@@ -292,10 +323,32 @@ export default function JalanDesaDetailPage() {
         fetchSegmen();
     }, [fetchDetail, fetchSegmen]);
 
+    // Fetch related roads when id_desa is available
+    useEffect(() => {
+        if (jalan?.id_desa) {
+            const fetchRelated = async () => {
+                setIsLoadingRelated(true);
+                try {
+                    const res = await monitoringService.getMonitoringJalan({
+                        id_desa: jalan.id_desa,
+                        limit: 10
+                    });
+                    // Filter out current road
+                    setRelatedRoads((res.result || []).filter(r => r.jalan.id !== jalan.id));
+                } catch (e) {
+                    console.warn("Failed to fetch related roads", e);
+                } finally {
+                    setIsLoadingRelated(false);
+                }
+            };
+            fetchRelated();
+        }
+    }, [jalan?.id_desa, jalan?.id]);
+
     /* ── Not found state ─────────────────────────────────────── */
     if (!isLoading && !jalan) {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col">
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex flex-col pt-16">
                 <PublicNavbar />
                 <div className="flex-1 flex items-center justify-center p-8 text-center">
                     <div className="space-y-5">
@@ -309,7 +362,7 @@ export default function JalanDesaDetailPage() {
                             <p className="text-slate-500 font-medium">Ruas jalan yang diminta tidak tersedia.</p>
                         </div>
                         <Button
-                            onClick={() => navigate("/jalan-desa")}
+                            onClick={() => navigate(backUrl)}
                             className="rounded-2xl px-8 font-black uppercase tracking-widest text-[10px] bg-blue-600 hover:bg-blue-700 h-12"
                         >
                             Kembali ke Daftar
@@ -320,32 +373,69 @@ export default function JalanDesaDetailPage() {
         );
     }
 
-    const cfg = jalan ? getConditionCfg(jalan.kondisi) : null;
+    const roadCondition = summary?.kondisi_jalan?.nama || jalan?.kondisi;
+    const cfg = roadCondition ? getConditionCfg(roadCondition) : null;
+
+    // Calculate average width and pavement types from segments
+    let displayLebar = jalan?.lebar?.toString();
+    let displayPerkerasan = jalan?.perkerasan || "-";
+
+    if (segmenGeoJSON?.features?.length) {
+        const widths = segmenGeoJSON.features
+            .map((f: any) => parseFloat(f.properties?.lebar))
+            .filter((w: number) => !isNaN(w) && w > 0);
+        
+        if (widths.length > 0) {
+            const avgWidth = widths.reduce((sum: number, w: number) => sum + w, 0) / widths.length;
+            displayLebar = (Math.round(avgWidth * 10) / 10).toString();
+        }
+
+        const perkerasans = segmenGeoJSON.features
+            .map((f: any) => f.properties?.jenis_perkerasan || f.properties?.perkerasan)
+            .filter((p: any) => p && typeof p === 'string' && p.trim() !== '');
+        
+        if (perkerasans.length > 0) {
+            // Use Set to get unique values, capitalize words, and join
+            const uniquePerkerasans = [...new Set<string>(perkerasans)];
+            displayPerkerasan = uniquePerkerasans.join(', ');
+        }
+    }
+
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pt-16">
             <PublicNavbar />
 
             <main>
                 {/* ─── Hero Header ─────────────────────────────── */}
                 <div className={cn(
-                    "relative border-b overflow-hidden transition-colors duration-500",
+                    "relative border-b transition-colors duration-500",
                     cfg
                         ? cn(cfg.bg, cfg.border)
                         : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800"
                 )}>
                     {/* Decorative circle */}
-                    <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/40 dark:bg-white/5 blur-3xl pointer-events-none" />
-                    <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-black/3 dark:bg-white/3 blur-2xl pointer-events-none" />
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                        <div className="absolute -top-16 -right-16 w-64 h-64 rounded-full bg-white/40 dark:bg-white/5 blur-3xl pointer-events-none" />
+                        <div className="absolute -bottom-8 -left-8 w-48 h-48 rounded-full bg-black/3 dark:bg-white/3 blur-2xl pointer-events-none" />
+                    </div>
 
-                    <div className="relative container mx-auto px-4 sm:px-6 py-8 md:py-12">
-                        {/* Back link */}
+                </div>
+
+                {/* ─── Sticky Back Navigation ─────────────────────────── */}
+                <div className="sticky top-16 z-40 bg-slate-50/80 dark:bg-slate-950/80 backdrop-blur-xl border-b border-slate-200/50 dark:border-slate-800/50 py-2 shadow-sm">
+                    <div className="container mx-auto px-4 sm:px-6">
                         <Link
-                            to="/jalan-desa"
-                            className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors mb-6"
+                            to={backUrl}
+                            className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white/60 dark:bg-slate-900/60 backdrop-blur-md px-2.5 py-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60 shadow-sm"
                         >
-                            <ArrowLeft size={14} /> Daftar Ruas Jalan
+                            <ArrowLeft size={12} /> Daftar Ruas Jalan
                         </Link>
+                    </div>
+                </div>
+
+                <div className="relative container mx-auto px-4 sm:px-6 py-8">
+
 
                         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
                             <div className="space-y-3 flex-1">
@@ -367,7 +457,7 @@ export default function JalanDesaDetailPage() {
                                     </div>
                                 ) : (
                                     <div>
-                                        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black tracking-tighter text-slate-900 dark:text-white leading-none uppercase italic">
+                                        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-slate-900 dark:text-white leading-tight">
                                             {jalan?.nama_ruas}
                                         </h1>
                                         <div className="flex items-center gap-2 mt-3 text-slate-600 dark:text-slate-300">
@@ -392,7 +482,7 @@ export default function JalanDesaDetailPage() {
                             )}
                         </div>
                     </div>
-                </div>
+
 
                 {/* ─── Body Content ─────────────────────────────── */}
                 <div className="container mx-auto px-4 sm:px-6 py-8 md:py-10">
@@ -418,16 +508,142 @@ export default function JalanDesaDetailPage() {
                                         <StatCard
                                             icon={Ruler}
                                             label="Panjang Ruas"
-                                            value={Math.round(jalan?.panjang || 0).toLocaleString("id-ID")}
+                                            value={Math.round(summary?.total_panjang_jalan || jalan?.panjang || 0).toLocaleString("id-ID")}
                                             unit="meter"
                                             accent
                                         />
-                                        <StatCard icon={Layers} label="Lebar Ruas" value={jalan?.lebar} unit="meter" />
-                                        <StatCard icon={HardHat} label="Perkerasan" value={jalan?.perkerasan} />
-                                        <StatCard icon={Activity} label="Status Eksisting" value={jalan?.status_eksisting} />
+                                        <StatCard icon={Layers} label="Lebar Ruas" value={displayLebar} unit="meter" />
+                                        <StatCard icon={HardHat} label="Perkerasan" value={displayPerkerasan} />
+                                        <StatCard icon={Activity} label="Status Awal" value={jalan?.status_awal} />
                                     </>
                                 )}
                             </div>
+
+                            {/* Advanced Summary Widgets */}
+                            {!isLoading && summary && (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Condition Analysis Widget */}
+                                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm overflow-hidden relative group">
+                                        <div className="absolute -right-8 -top-8 w-24 h-24 bg-blue-50 dark:bg-blue-900/10 rounded-full blur-2xl group-hover:bg-blue-100 dark:group-hover:bg-blue-900/20 transition-colors" />
+
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="p-2 bg-blue-50 dark:bg-blue-950/50 rounded-xl text-blue-600 dark:text-blue-400">
+                                                    <PieChart size={18} />
+                                                </div>
+                                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Analisis Kondisi</h3>
+                                            </div>
+                                            <div className="px-3 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-900/50 text-[10px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest">
+                                                {summary.kondisi_jalan.mantap}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div className="flex items-end justify-between">
+                                                <div>
+                                                    <p className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">
+                                                        {summary.kondisi_jalan.persentase_mantap}%
+                                                    </p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Tingkat Kemantapan Jalan</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <div className="h-2.5 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden flex">
+                                                    <div style={{ width: `${summary.kondisi_jalan.persentase_per_kondisi.baik}%` }} className="h-full bg-emerald-500" />
+                                                    <div style={{ width: `${summary.kondisi_jalan.persentase_per_kondisi.sedang}%` }} className="h-full bg-amber-500" />
+                                                    <div style={{ width: `${summary.kondisi_jalan.persentase_per_kondisi["rusak ringan"]}%` }} className="h-full bg-orange-500" />
+                                                    <div style={{ width: `${summary.kondisi_jalan.persentase_per_kondisi["rusak berat"]}%` }} className="h-full bg-red-500" />
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-y-3 gap-x-4">
+                                                    {[
+                                                        { label: 'Baik', val: summary.kondisi_jalan.persentase_per_kondisi.baik, color: 'bg-emerald-500' },
+                                                        { label: 'Sedang', val: summary.kondisi_jalan.persentase_per_kondisi.sedang, color: 'bg-amber-500' },
+                                                        { label: 'Rusak Ringan', val: summary.kondisi_jalan.persentase_per_kondisi["rusak ringan"], color: 'bg-orange-500' },
+                                                        { label: 'Rusak Berat', val: summary.kondisi_jalan.persentase_per_kondisi["rusak berat"], color: 'bg-red-500' }
+                                                    ].map(c => (
+                                                        <div key={c.label} className="flex items-center justify-between">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <div className={cn("w-1.5 h-1.5 rounded-full", c.color)} />
+                                                                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tight">{c.label}</span>
+                                                            </div>
+                                                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-300">{c.val}%</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                                <div className="pt-3 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <AlertCircle size={14} className="text-orange-500" />
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sisa Belum Mantap</span>
+                                                    </div>
+                                                    <span className="text-xs font-black text-orange-600">{(summary.kondisi_jalan.panjang_belum_mantap ?? 0).toLocaleString('id-ID')} m</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Physical Progress Widget */}
+                                    <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 shadow-sm overflow-hidden relative group">
+                                        <div className="absolute -right-8 -top-8 w-24 h-24 bg-emerald-50 dark:bg-emerald-900/10 rounded-full blur-2xl group-hover:bg-emerald-100 dark:group-hover:bg-emerald-900/20 transition-colors" />
+
+                                        <div className="flex items-center justify-between mb-6">
+                                            <div className="flex items-center gap-2.5">
+                                                <div className="p-2 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl text-emerald-600 dark:text-emerald-400">
+                                                    <BarChart3 size={18} />
+                                                </div>
+                                                <h3 className="text-xs font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Kemajuan Fisik</h3>
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div className="flex items-end justify-between">
+                                                <div>
+                                                    <p className="text-3xl font-black text-slate-900 dark:text-white leading-none tracking-tighter">
+                                                        {Math.round((summary.fisik.total / summary.total_panjang_jalan) * 100)}%
+                                                    </p>
+                                                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Tertangani Total</p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xs font-black text-emerald-600 dark:text-emerald-400">{Math.round(summary.fisik.total ?? 0).toLocaleString('id-ID')} m</p>
+                                                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Sudah Ditangani</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="space-y-4">
+                                                <div className="space-y-3">
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                                            <span>Pemerintah Desa</span>
+                                                            <span className="text-slate-700 dark:text-slate-200">{Math.round(summary.fisik.desa ?? 0).toLocaleString('id-ID')} m</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                            <div style={{ width: `${(summary.fisik.desa / summary.total_panjang_jalan) * 100}%` }} className="h-full bg-blue-500" />
+                                                        </div>
+                                                    </div>
+                                                    <div className="space-y-1.5">
+                                                        <div className="flex justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                                                            <span>Pemerintah Kabupaten</span>
+                                                            <span className="text-slate-700 dark:text-slate-200">{Math.round(summary.fisik.kabupaten ?? 0).toLocaleString('id-ID')} m</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-slate-50 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                            <div style={{ width: `${(summary.fisik.kabupaten / summary.total_panjang_jalan) * 100}%` }} className="h-full bg-emerald-500" />
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="pt-3 border-t border-slate-50 dark:border-slate-800 flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <AlertCircle size={14} className="text-orange-500" />
+                                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Sisa Belum Ditangani</span>
+                                                    </div>
+                                                    <span className="text-xs font-black text-orange-600">{Math.round(summary.panjang_belum_tertangani ?? 0).toLocaleString('id-ID')} m</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Segments section */}
                             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 md:p-8 shadow-sm">
@@ -475,7 +691,7 @@ export default function JalanDesaDetailPage() {
                                 )}
                             </div>
 
-                        {/* Attribute table */}
+                            {/* Attribute table */}
                             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 md:p-8 shadow-sm">
                                 <div className="flex items-center gap-3 mb-6">
                                     <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl">
@@ -486,15 +702,15 @@ export default function JalanDesaDetailPage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10">
                                     <div>
                                         <AttrRow label="Nama Ruas" value={jalan?.nama_ruas} />
-                                        <AttrRow label="Kode Ruas" value={jalan?.kode_ruas} mono />
+                                        <AttrRow label="Kode Ruas" value={jalan?.kode_ruas} />
                                         <AttrRow label="Desa" value={jalan?.desa} />
                                         <AttrRow label="Kecamatan" value={jalan?.kecamatan} />
                                     </div>
                                     <div>
                                         <AttrRow label="Status Awal" value={jalan?.status_awal} />
                                         <AttrRow label="Sumber Data" value={jalan?.sumber_data} />
-                                        <AttrRow label="ID Desa" value={jalan?.id_desa ?? jalan?.id?.split("-")[0]} mono />
-                                        <AttrRow label="Kondisi Jalan" value={jalan?.kondisi} />
+                                        <AttrRow label="ID Desa" value={jalan?.id_desa ?? jalan?.id?.split("-")[0]} />
+                                        <AttrRow label="Kondisi Jalan" value={roadCondition} />
                                     </div>
                                 </div>
                             </div>
@@ -508,8 +724,6 @@ export default function JalanDesaDetailPage() {
                                 {/* Glow decoration */}
                                 <div className="absolute -top-10 -right-10 w-40 h-40 bg-blue-600/20 rounded-full blur-3xl pointer-events-none" />
 
-                                <h3 className="relative text-base font-black uppercase italic tracking-tight mb-4">Status & Pemantauan</h3>
-
                                 <div className="relative space-y-4">
                                     <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-white/5 border border-white/10">
                                         <div className="p-2 bg-blue-500/20 rounded-xl">
@@ -521,12 +735,12 @@ export default function JalanDesaDetailPage() {
                                                 {isLoading
                                                     ? "—"
                                                     : jalan?.updated_at
-                                                    ? new Date(jalan.updated_at).toLocaleDateString("id-ID", {
-                                                          day: "numeric",
-                                                          month: "long",
-                                                          year: "numeric",
-                                                      })
-                                                    : "—"}
+                                                        ? new Date(jalan.updated_at).toLocaleDateString("id-ID", {
+                                                            day: "numeric",
+                                                            month: "long",
+                                                            year: "numeric",
+                                                        })
+                                                        : "—"}
                                             </p>
                                         </div>
                                     </div>
@@ -536,7 +750,7 @@ export default function JalanDesaDetailPage() {
                                             <Navigation size={16} className="text-emerald-400" />
                                         </div>
                                         <div>
-                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Wilayah Pantau</p>
+                                            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Wilayah Kecamatan</p>
                                             <p className="text-xs font-bold uppercase">{isLoading ? "—" : jalan?.kecamatan}</p>
                                         </div>
                                     </div>
@@ -544,9 +758,16 @@ export default function JalanDesaDetailPage() {
                                     {cfg && (
                                         <div className={cn("flex items-center gap-3 p-3.5 rounded-2xl border", cfg.bg, cfg.border)}>
                                             <div className={cn("w-2 h-10 rounded-full shrink-0", cfg.bar)} />
-                                            <div>
+                                            <div className="flex-1">
                                                 <p className="text-[9px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest">Kondisi Jalan</p>
-                                                <p className={cn("text-sm font-black uppercase", cfg.text)}>{cfg.label}</p>
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <p className={cn("text-sm font-black uppercase", cfg.text)}>{cfg.label}</p>
+                                                    {summary && (
+                                                        <span className="text-[9px] font-black px-2 py-0.5 rounded-full bg-white/50 dark:bg-black/20 border border-current opacity-70">
+                                                            {summary.kondisi_jalan.mantap}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
                                         </div>
                                     )}
@@ -571,6 +792,64 @@ export default function JalanDesaDetailPage() {
                                 <ExternalLink size={14} />
                                 Lihat Statistik Keseluruhan
                             </Button>
+
+                            {/* Related Roads Card */}
+                            {(isLoadingRelated || relatedRoads.length > 0) && (
+                                <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm">
+                                    <div className="flex items-center gap-3 mb-5">
+                                        <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-xl">
+                                            <Route size={16} className="text-slate-400" />
+                                        </div>
+                                        <h3 className="text-[11px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Ruas Lainnya di Desa Ini</h3>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {isLoadingRelated ? (
+                                            Array.from({ length: 3 }).map((_, i) => (
+                                                <div key={i} className="flex gap-3 animate-pulse">
+                                                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800" />
+                                                    <div className="flex-1 space-y-2">
+                                                        <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded w-full" />
+                                                        <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded w-1/2" />
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            relatedRoads.map((related) => {
+                                                const relatedCfg = getConditionCfg(related.jalan.kondisi);
+                                                return (
+                                                    <Link
+                                                        key={related.jalan.id}
+                                                        to={`/jalan-desa/${related.jalan.id}`}
+                                                        state={{ from: backSearch }}
+                                                        className="group flex items-start gap-3 p-3 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-all border border-transparent hover:border-slate-100 dark:hover:border-slate-700"
+                                                    >
+                                                        <div className={cn(
+                                                            "w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform group-hover:scale-110",
+                                                            relatedCfg.bg.replace('/20', '/10')
+                                                        )}>
+                                                            <div className={cn("w-2 h-2 rounded-full", relatedCfg.bar)} />
+                                                        </div>
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-xs font-bold text-slate-800 dark:text-slate-200 line-clamp-1 group-hover:text-blue-600 transition-colors">
+                                                                {related.jalan.nama_ruas}
+                                                            </p>
+                                                            <div className="flex items-center gap-2 mt-0.5">
+                                                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Ruas {related.jalan.kode_ruas}</span>
+                                                                <span className="w-1 h-1 rounded-full bg-slate-300 dark:bg-slate-700" />
+                                                                <span className={cn("text-[9px] font-black uppercase tracking-widest", relatedCfg.text)}>
+                                                                    {relatedCfg.label}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <ChevronRight size={14} className="mt-2 text-slate-300 group-hover:text-blue-500 group-hover:translate-x-0.5 transition-all" />
+                                                    </Link>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

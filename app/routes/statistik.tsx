@@ -69,7 +69,7 @@ export default function StatistikPage() {
     }, []);
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
+        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pt-16">
             <PublicNavbar />
             
             <main className="container mx-auto px-4 py-8">
