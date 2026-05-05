@@ -11,7 +11,6 @@ import {
     Minimize,
     Database,
     Share2,
-    Download,
     ChevronLeft,
     ChevronRight,
     Globe,
@@ -120,9 +119,9 @@ export default function DatasetPreviewPage() {
     }, [dataset]);
 
     return (
-        <div className="h-screen w-screen flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+        <div className="h-[100dvh] w-full flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden fixed inset-0">
             {/* Header / Top Bar */}
-            <div className="h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-40 shrink-0">
+            <div className="h-16 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-3 md:px-6 z-40 shrink-0">
                 <div className="flex items-center gap-4">
                     <Button
                         variant="ghost"
@@ -134,7 +133,7 @@ export default function DatasetPreviewPage() {
                     </Button>
                     <div className="h-8 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
                     <div className="flex flex-col">
-                        <h1 className="text-sm font-black text-slate-900 dark:text-white truncate max-w-[200px] md:max-w-md">
+                        <h1 className="text-xs md:text-sm font-black text-slate-900 dark:text-white truncate max-w-[150px] sm:max-w-[200px] md:max-w-md">
                             {isLoading ? "Memuat..." : dataset?.title}
                         </h1>
                         <p className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest flex items-center gap-1.5">
@@ -149,7 +148,7 @@ export default function DatasetPreviewPage() {
                         size="sm"
                         onClick={handleCopyLink}
                         className={cn(
-                            "hidden md:flex rounded-xl font-bold uppercase tracking-widest text-[10px] gap-2 transition-all duration-300",
+                            "flex rounded-xl font-bold uppercase tracking-widest text-[10px] gap-2 transition-all duration-300",
                             isCopied ? "border-green-500 text-green-600 bg-green-50 dark:bg-green-900/20" : "hover:border-blue-500 hover:text-blue-600"
                         )}
                     >
@@ -164,9 +163,7 @@ export default function DatasetPreviewPage() {
                             </>
                         )}
                     </Button>
-                    <Button className="rounded-xl bg-blue-600 hover:bg-blue-700 font-bold uppercase tracking-widest text-[10px] gap-2 shadow-lg shadow-blue-200 dark:shadow-none">
-                        <Download size={14} /> Download
-                    </Button>
+
                 </div>
             </div>
 
@@ -175,7 +172,7 @@ export default function DatasetPreviewPage() {
                 <MonitoringSidebar
                     isOpen={isSidebarOpen}
                     onToggle={setIsSidebarOpen}
-                    widthClass="w-[360px]"
+                    widthClass="w-[280px] sm:w-[360px]"
                     className="bg-white/95 dark:bg-slate-900/95 shadow-2xl border-r border-slate-200 dark:border-slate-800 backdrop-blur-md"
                 >
                     {/* Sidebar Content */}

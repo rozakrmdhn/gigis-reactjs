@@ -38,7 +38,7 @@ export function MonitoringSidebar({
                 className
             )}
         >
-            <div className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-1 overflow-hidden flex flex-col min-h-0">
                 {children}
             </div>
 
