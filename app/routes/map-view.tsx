@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { PublicNavbar } from "~/components/public-navbar";
 import { OpenLayersMap, type OpenLayersMapRef, type MapLayerConfig } from "~/features/peta/components/OpenLayersMap";
+import { MapLegend, type LegendItem } from "~/features/peta/components/MapLegend";
 // Removed Input import as it's no longer needed in this file
 import { GeonodeDatasetPanel } from "~/features/peta/components/GeonodeDatasetPanel";
 import { MapLayerControlPanel } from "~/features/peta/components/MapLayerControlPanel";
@@ -90,7 +91,6 @@ export default function MapViewPage() {
     // Basemap & Legend State
     const [activeBasemap, setActiveBasemap] = useState(BASEMAPS[3]);
     const [isBasemapPanelOpen, setIsBasemapPanelOpen] = useState(false);
-    const [isLegendOpen, setIsLegendOpen] = useState(false);
     const [rekapData, setRekapData] = useState<RekapDibangun | null>(null);
     const [segmentsData, setSegmentsData] = useState<any>(null);
 
@@ -114,6 +114,57 @@ export default function MapViewPage() {
 
     // Derived info for the panels
     const activeLayerIds = useMemo(() => activeLayers.map(l => l.id), [activeLayers]);
+
+    // Derived Legend Items (Dynamic based on activeLayers)
+    const legendItems = useMemo<LegendItem[]>(() => {
+        const itemsMap = new Map<string, LegendItem>();
+
+        // 1. Add Core Jalan Utama
+        if (hasMainRoads) {
+            itemsMap.set('Jalan Utama / Kab', { 
+                label: 'Jalan Utama / Kab', 
+                color: CORE_LAYER_COLORS.GENERAL.hex, 
+                active: true 
+            });
+        }
+
+        // 2. Add Dynamic Layers from activeLayers
+        activeLayers.forEach(layer => {
+            if (layer.visible === false) return;
+
+            if (layer.id.startsWith('legacy_segments_')) {
+                itemsMap.set('Segmen Jalan Desa', { 
+                    label: 'Segmen Jalan Desa', 
+                    color: CORE_LAYER_COLORS.SEGMENTS.hex, 
+                    active: true 
+                });
+            } else if (layer.id.startsWith('batas_kecamatan_') || layer.id.startsWith('legacy_desa_')) {
+                const label = layer.title.replace('KECAMATAN: ', '').replace('Wilayah: ', 'Batas ');
+                itemsMap.set(label, { 
+                    label, 
+                    color: CORE_LAYER_COLORS.ADMIN.hex, 
+                    type: 'dashed', 
+                    active: true 
+                });
+            } else if (layer.type === 'vector' && !layer.id.startsWith('legacy_')) {
+                itemsMap.set(layer.title, {
+                    label: layer.title,
+                    color: layer.style?.stroke || layer.style?.fill || '#666',
+                    type: layer.style?.fill ? 'polygon' : 'line',
+                    active: true
+                });
+            }
+        });
+
+        return Array.from(itemsMap.values());
+    }, [activeLayers, hasMainRoads]);
+
+    // Find all catalog layers with legend URLs
+    const catalogLegendUrls = useMemo(() => {
+        return activeLayers
+            .filter(l => l.id.startsWith('geonode-') && l.visible !== false && l.legendUrl)
+            .map(l => l.legendUrl!);
+    }, [activeLayers]);
 
     // Handlers
     const handleAddLayer = (newLayer: MapLayerConfig) => {
@@ -524,86 +575,19 @@ export default function MapViewPage() {
                         </button>
                     </div>
 
-                    {/* Top Left Corner (Beside Sidebar): Legend */}
-                    <div className={cn(
-                        "absolute z-20 pointer-events-none flex flex-col items-start gap-2 transition-all duration-500 ease-in-out",
-                        isMobile ? "top-4" : "top-6",
-                        isSidebarOpen
-                            ? (isMobile ? "left-4" : "left-[360px]")
-                            : (isMobile ? "left-4" : "left-6")
-                    )}>
-                        {/* Toggle Button (Now at the top) */}
-                        <button
-                            onClick={() => setIsLegendOpen(!isLegendOpen)}
-                            className={cn(
-                                "pointer-events-auto rounded-xl backdrop-blur-md border shadow-xl transition-all flex items-center gap-2 group active:scale-95",
-                                isMobile ? "h-9 px-3" : "h-10 px-4 gap-2.5",
-                                isLegendOpen
-                                    ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-700"
-                                    : "bg-white/90 dark:bg-slate-900/90 text-slate-600 dark:text-slate-200 border-white dark:border-slate-800 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 hover:border-emerald-200 dark:hover:border-emerald-800"
-                            )}
-                        >
-                            {isLegendOpen ? <ChevronDown size={13} className="opacity-70 rotate-180" /> : <MapIcon size={13} className="group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors" />}
-                            <span className={cn("font-black uppercase tracking-widest", isMobile ? "text-[9px]" : "text-[10px]")}>
-                                {isLegendOpen ? "Tutup Legenda" : "Legenda"}
-                            </span>
-                        </button>
-
-                        {/* Legend Content (Expands downwards) */}
-                        <div className={cn(
-                            "bg-white/90 dark:bg-slate-900/90 backdrop-blur-md rounded-2xl border border-white dark:border-slate-800 shadow-xl transition-all duration-500 overflow-hidden pointer-events-auto origin-top",
-                            isLegendOpen
-                                ? isMobile
-                                    ? "max-h-[300px] opacity-100 w-[min(220px,calc(100vw-112px))]"
-                                    : "max-h-[400px] opacity-100 w-[260px]"
-                                : "max-h-0 opacity-0 w-[260px] border-transparent shadow-none"
-                        )}>
-                            <div className={cn("p-4", isMobile && "p-3")}>
-                                <div className="flex items-center gap-2 mb-3">
-                                    <Info size={14} className="text-blue-600 dark:text-blue-400" />
-                                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Legenda Peta</span>
-                                </div>
-                                <div className="space-y-2.5">
-                                    <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasSegments && "opacity-40 grayscale-[0.5]")}>
-                                        <div
-                                            className="w-6 h-1.5 rounded-full shrink-0"
-                                            style={{
-                                                backgroundColor: CORE_LAYER_COLORS.SEGMENTS.hex,
-                                                boxShadow: hasSegments ? `0 0 8px ${CORE_LAYER_COLORS.SEGMENTS.hex}80` : 'none'
-                                            }}
-                                        />
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Segmen Jalan Desa</span>
-                                    </div>
-                                    <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasMainRoads && "opacity-40")}>
-                                        <div className="w-6 h-1.5 rounded-full shrink-0" style={{ backgroundColor: CORE_LAYER_COLORS.GENERAL.hex }} />
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Jalan Utama / Kab</span>
-                                    </div>
-                                    <div className={cn("flex items-center gap-3 transition-opacity duration-300", !hasAdmin && "opacity-40")}>
-                                        <div className="relative w-6 h-2 flex items-center justify-center shrink-0">
-                                            <div className="w-full h-0 border-t-2 border-dashed" style={{ borderColor: CORE_LAYER_COLORS.ADMIN.hex }} />
-                                            <div className="absolute inset-0 rounded-sm" style={{ backgroundColor: `${CORE_LAYER_COLORS.ADMIN.hex}1a` }} />
-                                        </div>
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Batas Wilayah Desa</span>
-                                    </div>
-                                    <div className={cn("flex items-center gap-3 mt-1 transition-opacity duration-300", !hasCatalog && "opacity-40 grayscale-[0.5]")}>
-                                        <div
-                                            className="w-6 h-3 border-2 rounded-sm shrink-0"
-                                            style={{
-                                                backgroundColor: `${CORE_LAYER_COLORS.CATALOG.hex}33`,
-                                                borderColor: CORE_LAYER_COLORS.CATALOG.hex
-                                            }}
-                                        />
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left">Wilayah/Poligon Katalog</span>
-                                    </div>
-                                </div>
-                                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
-                                    <p className="text-[8px] text-slate-400 dark:text-slate-500 font-bold leading-relaxed uppercase tracking-widest text-left">
-                                        GIS Melarosa Bojonegoro.
-                                    </p>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                    {/* Map Legend (Using Component) */}
+                    <MapLegend
+                        items={legendItems}
+                        legendUrls={catalogLegendUrls}
+                        footer="GIS Melarosa Bojonegoro."
+                        className={cn(
+                            "z-20 transition-all duration-500",
+                            isMobile ? "top-4 left-4" : "top-6",
+                            isSidebarOpen 
+                                ? (isMobile ? "left-4" : "left-[352px]") 
+                                : (isMobile ? "left-4" : "left-6")
+                        )}
+                    />
 
                     {/* Map Controls (Bottom Left like Draw) */}
                     <MapViewMapControls

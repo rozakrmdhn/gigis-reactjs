@@ -329,9 +329,29 @@ export function RoadSegmentsPanel({
         }
     };
 
-    // Split segments into categories
+    // Split and Filter segments into categories
+    const filterFn = (s: any) => {
+        const props = s.getProperties ? s.getProperties() : s;
+        
+        // Apply Filters
+        if (filters.status_kondisi !== 'all') {
+            if (props.status_kondisi !== filters.status_kondisi) return false;
+        }
+        
+        if (filters.kondisi !== 'all') {
+            const currentKondisi = (props.kondisi || "").toLowerCase().replace(/_/g, ' ');
+            const targetKondisi = filters.kondisi.toLowerCase().replace(/_/g, ' ');
+            if (!currentKondisi.includes(targetKondisi)) return false;
+        }
+        
+        return true;
+    };
+
     const ruasSegments = segments.filter(s => {
         const props = s.getProperties ? s.getProperties() : s;
+        const isMatch = filterFn(s);
+        if (!isMatch) return false;
+
         if (props.check_melarosa === "Ya") return true;
         if (props.check_melarosa === "Tidak") return false;
         return !props.is_lingkungan_segment;
@@ -339,6 +359,9 @@ export function RoadSegmentsPanel({
 
     const nonMelarosaSegments = segments.filter(s => {
         const props = s.getProperties ? s.getProperties() : s;
+        const isMatch = filterFn(s);
+        if (!isMatch) return false;
+
         if (props.check_melarosa === "Tidak") return true;
         if (props.check_melarosa === "Ya") return false;
         return props.is_lingkungan_segment === true;

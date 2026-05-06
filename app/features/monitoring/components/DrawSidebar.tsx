@@ -47,6 +47,7 @@ interface DrawSidebarProps {
     onKecamatanChange?: (id: string) => void;
     onDesaChange?: (id: string) => void;
     selectedDesaId?: string | null;
+    selectedKecamatanId?: string | null;
 }
 
 
@@ -115,7 +116,8 @@ export function DrawSidebar({
     onToggleCheckRoad,
     onKecamatanChange,
     onDesaChange,
-    selectedDesaId
+    selectedDesaId,
+    selectedKecamatanId
 }: DrawSidebarProps) {
 
 
@@ -164,6 +166,13 @@ export function DrawSidebar({
             setFilters(prev => ({ ...prev, id_desa: selectedDesaId, page: 1 }));
         }
     }, [selectedDesaId]);
+
+    // Sync selectedKecamatanId from props
+    useEffect(() => {
+        if (selectedKecamatanId && selectedKecamatanId !== filters.id_kecamatan) {
+            setFilters(prev => ({ ...prev, id_kecamatan: selectedKecamatanId, id_desa: "all", page: 1 }));
+        }
+    }, [selectedKecamatanId]);
 
 
     // Debounce search

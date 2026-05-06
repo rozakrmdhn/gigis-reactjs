@@ -60,7 +60,6 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
         const abstractMatch = ds.abstract ? ds.abstract.toLowerCase().includes(searchQuery.toLowerCase()) : false;
         return titleMatch || abstractMatch;
     });
-
     const handleAdd = (ds: GeonodeDataset) => {
         if (!ds.links || !Array.isArray(ds.links)) return;
         const wmsLink = ds.links.find(l => l.link_type === 'OGC:WMS');
@@ -68,6 +67,11 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
 
         // Redirect external Geoserver URL to our local proxy to avoid CORS
         const proxyUrl = wmsLink.url.replace('https://saggaserv.my.id/geoserver', '/proxy/geoserver');
+
+        const legendLink = ds.links.find(l =>
+            l.link_type?.toLowerCase() === 'legend' ||
+            (l as any).name?.toLowerCase().includes('legend')
+        );
 
         onAddLayer({
             id: `geonode-${ds.pk}`,
@@ -78,6 +82,7 @@ export function GeonodeDatasetPanel({ onAddLayer, activeLayerIds }: GeonodeDatas
                 'LAYERS': ds.alternate || ds.name,
                 'VERSION': '1.1.1'
             },
+            legendUrl: legendLink?.url,
             visible: true,
             opacity: 1,
             zIndex: 50

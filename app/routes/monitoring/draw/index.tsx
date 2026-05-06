@@ -74,6 +74,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/comp
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/use-mobile";
 import { monitoringService, type MonitoringJalanResult } from "~/features/monitoring/services/monitoring.service";
+import { kecamatanService } from "~/services/kecamatan";
 import { DrawEditFormPanel } from "~/features/monitoring/components/DrawEditFormPanel";
 import { LayerToggle } from "~/features/monitoring/components/LayerToggle";
 import { LayerTogglePanel } from "~/features/monitoring/components/LayerTogglePanel";
@@ -160,6 +161,88 @@ const getConditionColor = (kondisi: string = "baik") => {
     return "#22c55e"; // emerald 500
 };
 
+// Optimization: Style Cache to prevent creating thousands of style objects
+const vectorStyleCache: Record<string, any> = {};
+
+const getOptimizedSegmentStyle = (feature: any, resolution: number, selectedDesaId: string | null = null, filters: any = null, selectedRoad: any = null) => {
+    const props = feature.getProperties();
+
+    // Optimization: Filter out features that don't match selected desa
+    if (selectedDesaId && selectedDesaId !== "all") {
+        const fDesaId = getFeatureDesaId(feature);
+        // If the feature has a village ID and it doesn't match, hide it
+        if (fDesaId && fDesaId.toString() !== selectedDesaId) {
+            return null;
+        }
+    }
+
+    // New: Filter out features that don't match selected road if one is selected
+    if (selectedRoad && selectedRoad.jalan) {
+        const fKodeRuas = props.kode_ruas || props.KODE_RUAS;
+        const targetKodeRuas = selectedRoad.jalan.kode_ruas;
+        
+        // Only hide if it has a kode_ruas and it doesn't match
+        // (Don't hide village boundaries here as they are handled by desaLayer)
+        if (fKodeRuas && targetKodeRuas && fKodeRuas.toString() !== targetKodeRuas.toString()) {
+            return null;
+        }
+    }
+
+    // Filter by segment filters
+    if (filters && !props.is_base_jalan) {
+        // Only apply filters if the feature is a segment (has status_kondisi or kondisi)
+        // or if it's explicitly marked as a segment
+        const hasStatus = props.status_kondisi !== undefined;
+        const hasKondisi = (props.kondisi || props.KONDISI) !== undefined;
+
+        if (filters.status_kondisi !== 'all' && hasStatus) {
+            if (props.status_kondisi !== filters.status_kondisi) return null;
+        }
+        
+        if (filters.kondisi !== 'all' && hasKondisi) {
+            const currentKondisi = (props.kondisi || props.KONDISI || "").toLowerCase().replace(/_/g, ' ');
+            const targetKondisi = filters.kondisi.toLowerCase().replace(/_/g, ' ');
+            if (!currentKondisi.includes(targetKondisi)) return null;
+        }
+    }
+    
+    // Always clear cache when filters are active to ensure fresh state
+    const filtersKey = filters ? `${filters.kondisi}-${filters.status_kondisi}` : 'no-filter';
+
+    const { color, lineDash } = getSegmentStyleProps(feature);
+    const label = feature.get("tahun_pembangunan") || feature.get("status_jalan") || "";
+    const cacheKey = `${color}-${lineDash?.join(',')}-${resolution < 10 ? label : 'no-label'}-${selectedDesaId || 'no-filter'}-${filtersKey}`;
+
+    if (vectorStyleCache[cacheKey]) return vectorStyleCache[cacheKey];
+
+    const styles = [
+        new Style({
+            stroke: new Stroke({ 
+                color, 
+                width: resolution < 5 ? 6 : (resolution < 20 ? 4 : 2), // Adaptive width
+                lineDash, 
+                lineJoin: 'round', 
+                lineCap: 'round' 
+            }),
+        })
+    ];
+
+    if (resolution < 10 && label) {
+        styles.push(new Style({
+            text: new Text({
+                text: label.toString(),
+                font: "bold 10px sans-serif",
+                fill: new Fill({ color: "#fff" }),
+                stroke: new Stroke({ color: color, width: 2 }),
+                offsetY: -10
+            })
+        }));
+    }
+
+    vectorStyleCache[cacheKey] = styles;
+    return styles;
+};
+
 const getSegmentStyleProps = (feature: any) => {
     const props = feature.getProperties();
     const checkMelarosa = props.check_melarosa;
@@ -204,6 +287,11 @@ const getSegmentStyleProps = (feature: any) => {
     return { color, lineDash };
 };
 
+const getFeatureDesaId = (f: any) => {
+    const props = f.getProperties();
+    return props.id_desa || props.ID_DESA || props.desa_id || props.DESA_ID || props.id_desa_2 || props.kode_desa || props.KODE_DESA;
+};
+
 export default function DrawPage() {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<OLMap | null>(null);
@@ -212,6 +300,9 @@ export default function DrawPage() {
     const ruasUtamaSourceRef = useRef<VectorSource | null>(null);
     const segmenDesaSourceRef = useRef<VectorSource | null>(null);
     const jalanKabupatenSourceRef = useRef<VectorSource | null>(null);
+    const hoverSourceRef = useRef<VectorSource | null>(null);
+    const hoverLayerRef = useRef<VectorLayer | null>(null);
+    const lastHoveredFeatureId = useRef<string | number | null>(null);
     const desaSourceRef = useRef<VectorSource | null>(null);
     const staSourceRef = useRef<VectorSource | null>(null);
 
@@ -237,12 +328,21 @@ export default function DrawPage() {
     const [isMounted, setIsMounted] = useState(false);
     const [mode, setMode] = useState<DrawMode>("view");
     const [selectedRoad, setSelectedRoad] = useState<MonitoringJalanResult | null>(null);
+    const selectedRoadRef = useRef(selectedRoad);
+    useEffect(() => {
+        selectedRoadRef.current = selectedRoad;
+    }, [selectedRoad]);
     const [rightClickedFeature, setRightClickedFeature] = useState<Feature | null>(null);
     const [isContinuing, setIsContinuing] = useState(false);
     const [isPanelVisible, setIsPanelVisible] = useState(false);
     const [segmentPanelVisible, setSegmentPanelVisible] = useState(false);
     const [featuresList, setFeaturesList] = useState<any[]>([]);
     const [segmentFilters, setSegmentFilters] = useState({ kondisi: 'all', status_kondisi: 'all' });
+    const segmentFiltersRef = useRef(segmentFilters);
+
+    useEffect(() => {
+        segmentFiltersRef.current = segmentFilters;
+    }, [segmentFilters]);
     const [drawnGeoJSON, setDrawnGeoJSON] = useState<string | null>(null);
     const [drawnLength, setDrawnLength] = useState<number>(0);
     const [isFetchingDetail, setIsFetchingDetail] = useState(false);
@@ -266,6 +366,8 @@ export default function DrawPage() {
         { id: "sta-markers", label: "Marker STA", visible: true, color: "#ef4444", category: "Lainnya" },
     ]);
     const [selectedDesaId, setSelectedDesaId] = useState<string | null>(null);
+    const [selectedKecamatanId, setSelectedKecamatanId] = useState<string | null>("all");
+    const [activeKecamatanName, setActiveKecamatanName] = useState<string | null>(null);
 
     useEffect(() => {
         if (!isMounted || !desaSourceRef.current || !highlightSourceRef.current) return;
@@ -307,6 +409,15 @@ export default function DrawPage() {
     const [isPopupClosing, setIsPopupClosing] = useState(false);
     const [highlightedKey, setHighlightedKey] = useState<string | null>(null);
     const [isRoadInfoMinimized, setIsRoadInfoMinimized] = useState(false);
+    const selectedDesaIdRef = useRef<string | null>(selectedDesaId);
+
+    useEffect(() => {
+        selectedDesaIdRef.current = selectedDesaId;
+        // Trigger style re-calculation for all vector layers
+        [ruasUtamaLayerRef, segmenDesaLayerRef, jalanKabupatenLayerRef, nonBaseLayerRef].forEach(ref => {
+            ref.current?.changed();
+        });
+    }, [selectedDesaId, selectedRoad]);
     const [activeBasemap, setActiveBasemap] = useState<BasemapId>("carto-light");
     const [isCatalogOpen, setIsCatalogOpen] = useState(false);
     const [activeCatalogLayers, setActiveCatalogLayers] = useState<any[]>([]);
@@ -374,6 +485,53 @@ export default function DrawPage() {
             toast.success(`Layer ${layerConfig.title} berhasil ditambahkan`);
         }
     }, []);
+
+    const syncSegmentListFromMap = useCallback((options?: { desaId?: string | null, kodeRuas?: string | number | null }) => {
+        const segments: any[] = [];
+        const sources = [
+            segmenDesaSourceRef.current,
+            jalanKabupatenSourceRef.current,
+            ruasUtamaSourceRef.current,
+            nonBaseSourceRef.current
+        ];
+
+        sources.forEach(source => {
+            if (source) {
+                const features = source.getFeatures();
+                features.forEach(f => {
+                    // Only include actual segments, not markers, boundaries, or base road lines
+                    if (!f.get("is_village_boundary") && !f.get("sta_label") && !f.get("is_base_jalan")) {
+                        let match = true;
+                        if (options?.desaId && options.desaId !== "all") {
+                            const fDesaId = f.get("id_desa") || f.get("desa_id") || f.get("id_desa_2");
+                            if (fDesaId?.toString() !== options.desaId) match = false;
+                        }
+                        
+                        if (match && options?.kodeRuas) {
+                            const fKodeRuas = f.get("kode_ruas") || f.get("KODE_RUAS") || f.get("kode_ruas_layer");
+                            if (fKodeRuas?.toString() !== options.kodeRuas.toString()) match = false;
+                        }
+
+                        if (match) {
+                            segments.push(f);
+                        }
+                    }
+                });
+            }
+        });
+
+        setFeaturesList(segments);
+        if (segments.length > 0) {
+            setSegmentPanelVisible(true);
+            setIsSegmentPanelOpen(true);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (isMounted) {
+            syncSegmentListFromMap({ desaId: selectedDesaId });
+        }
+    }, [selectedDesaId, isMounted, syncSegmentListFromMap]);
 
     const handleRemoveLayer = useCallback((layerId: string) => {
         if (!mapRef.current) return;
@@ -492,73 +650,72 @@ export default function DrawPage() {
         // Individual Layers for Stacking
         const ruasUtamaLayer = new VectorLayer({
             source: ruasUtamaSourceRef.current ?? undefined,
+            renderMode: 'image', // Performance optimization: renders as a single image
+            style: (feature, resolution) => getOptimizedSegmentStyle(feature, resolution, selectedDesaIdRef.current, segmentFiltersRef.current, null)
+        });
+        ruasUtamaLayerRef.current = ruasUtamaLayer;
+
+        const segmenDesaLayer = new VectorLayer({
+            source: segmenDesaSourceRef.current ?? undefined,
+            updateWhileAnimating: false,
+            updateWhileInteracting: false,
+            style: (feature, resolution) => getOptimizedSegmentStyle(feature, resolution, selectedDesaIdRef.current, segmentFiltersRef.current, selectedRoadRef.current)
+        });
+        segmenDesaLayerRef.current = segmenDesaLayer;
+        
+        const jalanKabupatenLayer = new VectorLayer({
+            source: jalanKabupatenSourceRef.current ?? undefined,
+            updateWhileAnimating: false,
+            updateWhileInteracting: false,
+            style: (feature, resolution) => getOptimizedSegmentStyle(feature, resolution, selectedDesaIdRef.current, segmentFiltersRef.current, selectedRoadRef.current)
+        });
+        jalanKabupatenLayerRef.current = jalanKabupatenLayer;
+
+        const hoverSource = new VectorSource();
+        hoverSourceRef.current = hoverSource;
+        const hoverLayer = new VectorLayer({
+            source: hoverSource,
+            zIndex: 100, // Topmost
             style: (feature) => {
-                const geometry = feature.getGeometry();
+                const props = feature.getProperties();
+                const isBase = props.is_base_jalan;
+                
                 return [
                     new Style({
                         stroke: new Stroke({
-                            color: "rgba(255, 176, 72, 0.5)", // orange 400 light
-                            width: 8,
+                            color: isBase ? "rgba(255, 255, 255, 0.6)" : "rgba(255, 255, 255, 0.8)",
+                            width: isBase ? 10 : 8,
                             lineCap: 'round'
                         })
                     })
                 ];
             }
         });
-        ruasUtamaLayerRef.current = ruasUtamaLayer;
+        hoverLayerRef.current = hoverLayer;
 
-        const segmenDesaLayer = new VectorLayer({
-            source: segmenDesaSourceRef.current ?? undefined,
-            style: (feature) => {
-                const { color, lineDash } = getSegmentStyleProps(feature);
-                return new Style({
-                    stroke: new Stroke({ color, width: 6, lineDash, lineJoin: 'round', lineCap: 'round' }),
-                    text: new Text({
-                        text: (feature.get("tahun_pembangunan") || "").toString(),
-                        font: "bold 10px sans-serif",
-                        fill: new Fill({ color: "#fff" }),
-                        stroke: new Stroke({ color: color, width: 2 }),
-                        offsetY: -10
-                    })
-                });
-            }
+        const desaSource = new VectorSource({
+            overlaps: false // Performance hint
         });
-        segmenDesaLayerRef.current = segmenDesaLayer;
-
-        const jalanKabupatenLayer = new VectorLayer({
-            source: jalanKabupatenSourceRef.current ?? undefined,
-            style: (feature) => {
-                const { color, lineDash } = getSegmentStyleProps(feature);
-                return new Style({
-                    stroke: new Stroke({ color, width: 6, lineDash, lineJoin: 'round', lineCap: 'round' }),
-                    text: new Text({
-                        text: "Jalan Kabupaten",
-                        font: "bold 10px sans-serif",
-                        fill: new Fill({ color: "#fff" }),
-                        stroke: new Stroke({ color: color, width: 2 }),
-                        offsetY: -10
-                    })
-                });
-            }
-        });
-        jalanKabupatenLayerRef.current = jalanKabupatenLayer;
-
-        const desaSource = new VectorSource();
         desaSourceRef.current = desaSource;
         const desaLayer = new VectorLayer({
             source: desaSource,
+            renderMode: 'image', // Render village boundaries as image for performance
             style: (feature) => {
-                return new Style({
+                const villageName = feature.get("nama_desa") || feature.get("DESA") || feature.get("NAMA_DESA") || feature.get("name") || "";
+                const cacheKey = `desa-boundary-${villageName}`;
+                if (vectorStyleCache[cacheKey]) return vectorStyleCache[cacheKey];
+                
+                const style = new Style({
                     stroke: new Stroke({
-                        color: "rgba(124, 58, 237, 0.8)", // Violet 600
-                        width: 2,
-                        lineDash: [4, 8],
+                        color: "rgba(71, 85, 105, 0.5)", // slate 600
+                        width: 1,
+                        lineDash: [4, 4]
                     }),
                     fill: new Fill({
-                        color: "rgba(124, 58, 237, 0.05)",
+                        color: "rgba(248, 250, 252, 0.1)" // slate 50 very transparent
                     }),
                     text: new Text({
-                        text: feature.get("nama_desa") || "",
+                        text: villageName,
                         font: "bold 12px sans-serif",
                         fill: new Fill({ color: "#7c3aed" }),
                         stroke: new Stroke({ color: "#fff", width: 3 }),
@@ -566,15 +723,51 @@ export default function DrawPage() {
                         overflow: true
                     })
                 });
+                vectorStyleCache[cacheKey] = style;
+                return style;
             },
             zIndex: 1,
         });
 
         desaLayerRef.current = desaLayer;
 
+        const nonBaseLayer = new VectorLayer({
+            source: nonBaseSourceRef.current ?? undefined,
+            visible: visibleLayers.find(l => l.id === "non-base")?.visible,
+            style: (feature) => {
+                // Filter by village if selected
+                if (selectedDesaIdRef.current && selectedDesaIdRef.current !== "all") {
+                    const fDesaId = getFeatureDesaId(feature);
+                    if (fDesaId && fDesaId.toString() !== selectedDesaIdRef.current) {
+                        return null;
+                    }
+                }
+
+                const { color, lineDash } = getSegmentStyleProps(feature);
+
+                return new Style({
+                    stroke: new Stroke({
+                        color: color,
+                        width: 3,
+                        lineDash: lineDash || [6, 6],
+                        lineCap: 'round'
+                    })
+                });
+            }
+        });
+        nonBaseLayerRef.current = nonBaseLayer;
+
         const existingLayer = new VectorLayer({
             source: existingSourceRef.current ?? undefined,
             style: (feature) => {
+                // Filter by village if selected
+                if (selectedDesaIdRef.current && selectedDesaIdRef.current !== "all") {
+                    const fDesaId = getFeatureDesaId(feature);
+                    if (fDesaId && fDesaId.toString() !== selectedDesaIdRef.current) {
+                        return null;
+                    }
+                }
+
                 const isBase = feature.get("is_base_jalan");
                 const isKabupaten = feature.get("is_kabupaten_jalan");
                 const isVillageSegmen = !isBase && !isKabupaten && feature.get("hidden_from_panel");
@@ -627,24 +820,6 @@ export default function DrawPage() {
             }
         });
         existingLayerRef.current = existingLayer;
-
-        const nonBaseLayer = new VectorLayer({
-            source: nonBaseSourceRef.current ?? undefined,
-            visible: visibleLayers.find(l => l.id === "non-base")?.visible,
-            style: (feature) => {
-                const { color, lineDash } = getSegmentStyleProps(feature);
-
-                return new Style({
-                    stroke: new Stroke({
-                        color: color,
-                        width: 3,
-                        lineDash: lineDash || [6, 6],
-                        lineCap: 'round'
-                    })
-                });
-            }
-        });
-        nonBaseLayerRef.current = nonBaseLayer;
 
         const staLayer = new VectorLayer({
             source: staSourceRef.current ?? undefined,
@@ -706,26 +881,40 @@ export default function DrawPage() {
 
         const highlightLayer = new VectorLayer({
             source: highlightSourceRef.current ?? undefined,
-            style: [
-                new Style({
-                    stroke: new Stroke({
-                        color: "rgba(34, 211, 238, 0.4)",
-                        width: 12,
+            style: (feature) => {
+                if (feature.get("is_village_highlight")) {
+                    return new Style({
+                        stroke: new Stroke({
+                            color: "#4f46e5", // Indigo 600 (Warna tegas)
+                            width: 4,
+                            lineDash: [8, 8],
+                            lineCap: 'round'
+                        })
+                    });
+                }
+                
+                // Default Segment/Road Highlight (Cyan Glow)
+                return [
+                    new Style({
+                        stroke: new Stroke({
+                            color: "rgba(34, 211, 238, 0.4)",
+                            width: 12,
+                        }),
                     }),
-                }),
-                new Style({
-                    stroke: new Stroke({
-                        color: "rgba(34, 211, 238, 0.6)",
-                        width: 8,
+                    new Style({
+                        stroke: new Stroke({
+                            color: "rgba(34, 211, 238, 0.6)",
+                            width: 8,
+                        }),
                     }),
-                }),
-                new Style({
-                    stroke: new Stroke({
-                        color: "#22d3ee", // cyan 400
-                        width: 4,
+                    new Style({
+                        stroke: new Stroke({
+                            color: "#22d3ee", // cyan 400
+                            width: 4,
+                        }),
                     }),
-                }),
-            ],
+                ];
+            },
             zIndex: 500
         });
         highlightLayerRef.current = highlightLayer;
@@ -749,6 +938,7 @@ export default function DrawPage() {
                 searchLayer,
                 vectorLayer,
                 highlightLayer,
+                hoverLayer,
             ],
             controls: defaultControls({
                 zoom: false,
@@ -759,6 +949,57 @@ export default function DrawPage() {
                 center: fromLonLat([111.8328268, -7.2288555]), // Bojonegoro
                 zoom: 11,
             }),
+        });
+
+        map.on('pointermove', (evt) => {
+            if (evt.dragging) return;
+            
+            const pixel = map.getEventPixel(evt.originalEvent);
+            const hitFeatures = map.getFeaturesAtPixel(pixel, {
+                layerFilter: (layer) => {
+                    return layer === ruasUtamaLayer || layer === segmenDesaLayer || layer === jalanKabupatenLayer;
+                },
+                hitTolerance: 3
+            });
+
+            let currentFeature: Feature | null = null;
+
+            if (hitFeatures && hitFeatures.length > 0) {
+                for (const feature of hitFeatures) {
+                    if (feature instanceof Feature) {
+                        const props = feature.getProperties();
+                        const isBase = props.is_base_jalan;
+                        
+                        const isVisible = getOptimizedSegmentStyle(
+                            feature, 
+                            map.getView().getResolution() || 0, 
+                            selectedDesaIdRef.current, 
+                            segmentFiltersRef.current, 
+                            isBase ? null : selectedRoadRef.current
+                        ) !== null;
+
+                        if (isVisible) {
+                            currentFeature = feature;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            const currentId = currentFeature ? (currentFeature.getId() || currentFeature.get('id') || currentFeature.get('kode_ruas') || currentFeature.get('fid')) : null;
+
+            if (currentId !== lastHoveredFeatureId.current) {
+                lastHoveredFeatureId.current = currentId;
+                hoverSource.clear();
+                
+                if (currentFeature) {
+                    const hoverFeature = currentFeature.clone();
+                    hoverSource.addFeature(hoverFeature);
+                    map.getTargetElement().style.cursor = 'pointer';
+                } else {
+                    map.getTargetElement().style.cursor = '';
+                }
+            }
         });
 
         mapRef.current = map;
@@ -879,17 +1120,23 @@ export default function DrawPage() {
 
                         if (data.features && data.features.length > 0) {
                             const feat = data.features[0];
-                            const layerId = layer.get('id');
-
+                            const props = feat.properties;
+                            const roadId = props.id || props.ID || props.id_jalan;
+                            
                             setIsPopupClosing(false);
                             setHighlightedKey(null);
-                            setSelectedVectorId(feat.id ?? layerId);
+                            setSelectedVectorId(feat.id ?? roadId);
                             setSelectedVectorInfo({
-                                properties: feat.properties,
+                                properties: props,
                                 coordinate: evt.coordinate,
                                 id: feat.id
                             });
                             vectorPopupRef.current?.setPosition(evt.coordinate);
+
+                            // Load segments for this road
+                            if (roadId) {
+                                refreshSegmentData(roadId.toString());
+                            }
 
                             if (feat.geometry) {
                                 try {
@@ -913,14 +1160,7 @@ export default function DrawPage() {
 
                                     if (featuresArr.length > 0) {
                                         highlightSourceRef.current?.addFeatures(featuresArr);
-                                        const extent = highlightSourceRef.current?.getExtent();
-                                        if (extent && !isEmptyExtent(extent)) {
-                                            mapRef.current?.getView().fit(extent, {
-                                                padding: [120, 120, 120, 120],
-                                                duration: 1000,
-                                                maxZoom: 18
-                                            });
-                                        }
+                                        // Redundant zoom removed to avoid conflict with refreshSegmentData
                                     }
                                 } catch (parseErr) {
                                     console.error("Error parsing GeoJSON from WMS:", parseErr);
@@ -976,19 +1216,50 @@ export default function DrawPage() {
                     id: featureId
                 });
                 vectorPopupRef.current?.setPosition(evt.coordinate);
-
                 if (feature instanceof Feature) {
                     const highlightFeature = feature.clone();
+                    highlightSourceRef.current?.clear(); // Clear old highlight
                     highlightSourceRef.current?.addFeature(highlightFeature);
-                    const geometry = feature.getGeometry();
-                    if (geometry) {
-                        const extent = geometry.getExtent();
-                        mapRef.current?.getView().fit(extent, {
-                            padding: getMapPadding(80),
-                            duration: 500,
-                            maxZoom: 18
-                        });
+                    
+                    // Only fit bounds if it's a segment, not the main road base line
+                    if (!properties.is_base_jalan) {
+                        const geometry = feature.getGeometry();
+                        if (geometry) {
+                            const extent = geometry.getExtent();
+                            mapRef.current?.getView().fit(extent, {
+                                padding: [100, 100, 100, 100],
+                                duration: 500,
+                                maxZoom: 18
+                            });
+                        }
                     }
+                }
+                
+                // If it's a base road (jalan poros/desa), select it like in the sidebar
+                if (properties.is_base_jalan) {
+                    const roadId = properties.id || properties.ID || properties.id_jalan || properties.kode_ruas_layer;
+                    if (roadId) {
+                        const roadObj: any = {
+                            jalan: {
+                                id: roadId.toString(),
+                                kode_ruas: properties.kode_ruas || properties.KODE_RUAS,
+                                nama_ruas: properties.nama_ruas || properties.NM_RUAS || properties.NAME || 'Nama tidak tersedia',
+                                panjang: properties.panjang || properties.PANJANG || 0,
+                                lebar: properties.lebar || properties.LEBAR || 0,
+                                id_desa: properties.id_desa || properties.desa_id
+                            },
+                            stats: properties.stats || {}
+                        };
+                        setSelectedRoad(roadObj);
+                        setSegmentPanelVisible(true);
+                        setIsSegmentPanelOpen(!isMobile);
+                    }
+                }
+
+                // Sync segment list for this road
+                const kodeRuas = properties.kode_ruas || properties.KODE_RUAS;
+                if (kodeRuas) {
+                    syncSegmentListFromMap({ kodeRuas });
                 }
                 return;
             }
@@ -1002,7 +1273,16 @@ export default function DrawPage() {
                 const feature = villageFeature;
                 const vId = feature.get("id") || feature.getId();
                 const villageId = vId?.toString();
+                
+                // Clear previous village data before loading new one
+                ruasUtamaSourceRef.current?.clear();
+                segmenDesaSourceRef.current?.clear();
+                jalanKabupatenSourceRef.current?.clear();
+
                 setSelectedDesaId(villageId || null);
+                setSelectedRoad(null); // Clear road selection to show all village roads/segments
+                setSegmentPanelVisible(true);
+                setIsSegmentPanelOpen(!isMobile);
                 
                 if (feature.get("nama_desa")) {
                     toast.info(`Filtering Desa: ${feature.get("nama_desa")}`);
@@ -1010,6 +1290,7 @@ export default function DrawPage() {
 
                 highlightSourceRef.current?.clear();
                 const highlightFeature = feature.clone();
+                highlightFeature.set("is_village_highlight", true);
                 highlightSourceRef.current?.addFeature(highlightFeature);
 
                 const extent = feature.getGeometry()?.getExtent();
@@ -1020,6 +1301,21 @@ export default function DrawPage() {
                         maxZoom: 17
                     });
                 }
+
+                // Apply CQL filter to WMS layers if present
+                const cql = villageId ? `id_desa = '${villageId}'` : undefined;
+                [roadDesaWmsLayerRef, jalanKabupatenWmsLayerRef].forEach(ref => {
+                    if (ref.current) {
+                        const source = ref.current.getSource();
+                        if (source instanceof TileWMS) {
+                            source.updateParams({ 'CQL_FILTER': cql });
+                        }
+                    }
+                });
+
+                if (villageId) {
+                    loadVillageGeoJSON(villageId);
+                }
                 return;
             }
 
@@ -1028,6 +1324,22 @@ export default function DrawPage() {
             setSelectedVectorInfo(null);
             vectorPopupRef.current?.setPosition(undefined);
             highlightSourceRef.current?.clear();
+            // Do not clear selections on empty space click as per user request
+            // setSelectedDesaId(null);
+            // setSelectedRoad(null);
+
+            // Clear CQL filters
+            [roadDesaWmsLayerRef, jalanKabupatenWmsLayerRef].forEach(ref => {
+                if (ref.current) {
+                    const source = ref.current.getSource();
+                    if (source instanceof TileWMS) {
+                        source.updateParams({ 'CQL_FILTER': undefined });
+                    }
+                }
+            });
+
+            // Show all segments again
+            syncSegmentListFromMap();
 
 
             // 2. Original Coordinate Copy Logic (Mobile only)
@@ -1649,7 +1961,7 @@ export default function DrawPage() {
             const panelFeatures: any[] = [];
 
             // CLEAR SOURCES ONLY AFTER SUCCESSFUL FETCH to prevent blank map/flicker
-            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, nonBaseSourceRef, desaSourceRef, staSourceRef].forEach(sourceRef => {
+            [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, nonBaseSourceRef, staSourceRef].forEach(sourceRef => {
                 const source = sourceRef.current;
                 if (source) {
                     const features = source.getFeatures();
@@ -1764,7 +2076,8 @@ export default function DrawPage() {
                 const combinedExtent = createEmptyExtent();
                 let hasAnyFeatures = false;
 
-                [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef, desaSourceRef].forEach(sourceRef => {
+                // Zoom to the road and its segments only (exclude the large kecamatan/village boundaries)
+                [ruasUtamaSourceRef, segmenDesaSourceRef, jalanKabupatenSourceRef].forEach(sourceRef => {
                     if (sourceRef.current && sourceRef.current.getFeatures().length > 0) {
                         extendExtent(combinedExtent, sourceRef.current.getExtent());
                         hasAnyFeatures = true;
@@ -1773,7 +2086,7 @@ export default function DrawPage() {
 
                 if (hasAnyFeatures) {
                     mapRef.current?.getView().fit(combinedExtent, {
-                        padding: getMapPadding(20),
+                        padding: [100, 100, 100, 100], // Use fixed padding
                         duration: 1000,
                         maxZoom: 18
                     });
@@ -1786,7 +2099,10 @@ export default function DrawPage() {
             console.error("Error fetching detail:", error);
             toast.error("Gagal mengambil data segmen jalan");
         } finally {
-            setIsFetchingDetail(false);
+            // Add a small delay before hiding loading state to allow map animation to start smoothly
+            setTimeout(() => {
+                setIsFetchingDetail(false);
+            }, 300);
         }
     };
 
@@ -2362,28 +2678,104 @@ export default function DrawPage() {
         toast.success(`Berhasil menemukan ${allFeatures.length} lokasi`);
     };
 
-    const handleKecamatanChange = async (idKecamatan: string) => {
-        setSelectedDesaId(null);
-        if (idKecamatan === "all") {
-            desaSourceRef.current?.clear();
-            highlightSourceRef.current?.clear();
-            return;
-        }
-
+    const loadVillageGeoJSON = async (villageId: string) => {
+        if (!villageId) return;
+        
+        toast.info("Memuat data spasial desa...");
         try {
-            const result = await monitoringService.getDesaGeoJSONByKecamatan(idKecamatan);
-            if (result && result.features) {
-                const format = new GeoJSON();
-                const features = format.readFeatures(result, {
+            const [roadsRes, segmentsRes] = await Promise.all([
+                monitoringService.getJalanByDesaGeoJSON(villageId),
+                monitoringService.getSegmenByDesaGeoJSON(villageId)
+            ]);
+
+            const format = new GeoJSON();
+
+            // 1. Village Roads (Base Roads)
+            if (roadsRes && roadsRes.features) {
+                const features = format.readFeatures(roadsRes, {
                     dataProjection: "EPSG:4326",
                     featureProjection: "EPSG:3857",
                 });
-                
                 features.forEach(f => {
-                    f.set("is_village_boundary", true);
+                    f.set("is_base_jalan", true);
+                    f.set("kode_ruas_layer", `d-${villageId}`);
+                    // IMPORTANT: Set id_desa so the style filter doesn't hide it
+                    f.set("id_desa", villageId);
                 });
+                ruasUtamaSourceRef.current?.addFeatures(features);
+            }
 
-                desaSourceRef.current?.clear();
+            // 2. Road Segments
+            if (segmentsRes && segmentsRes.features) {
+                const features = format.readFeatures(segmentsRes, {
+                    dataProjection: "EPSG:4326",
+                    featureProjection: "EPSG:3857",
+                });
+                features.forEach(f => {
+                    f.set("kode_ruas_layer", `d-${villageId}`);
+                    // IMPORTANT: Set id_desa so the style filter doesn't hide it
+                    f.set("id_desa", villageId);
+                    const statusJalan = f.get("status_jalan");
+                    if (statusJalan === "Jalan Kabupaten") {
+                        jalanKabupatenSourceRef.current?.addFeature(f);
+                    } else {
+                        segmenDesaSourceRef.current?.addFeature(f);
+                    }
+                });
+            }
+
+            toast.success("Data desa berhasil dimuat");
+            syncSegmentListFromMap({ desaId: villageId });
+        } catch (error) {
+            console.error("Error loading village geojson:", error);
+            toast.error("Gagal memuat data spasial desa");
+        }
+    };
+
+    const handleKecamatanChange = async (idKecamatan: string) => {
+        setSelectedDesaId(null);
+        setSelectedKecamatanId(idKecamatan);
+        setActiveKecamatanName(null);
+        
+        // Clear all dynamic data layers
+        desaSourceRef.current?.clear();
+        highlightSourceRef.current?.clear();
+        ruasUtamaSourceRef.current?.clear();
+        segmenDesaSourceRef.current?.clear();
+        jalanKabupatenSourceRef.current?.clear();
+        staSourceRef.current?.clear();
+        
+        // Clear CQL filters on WMS layers
+        [roadDesaWmsLayerRef, jalanKabupatenWmsLayerRef].forEach(ref => {
+            if (ref.current) {
+                const source = ref.current.getSource();
+                if (source instanceof TileWMS) {
+                    source.updateParams({ 'CQL_FILTER': undefined });
+                }
+            }
+        });
+
+        if (idKecamatan === "all") return;
+
+        toast.info("Memuat batas desa...");
+        try {
+            // Get kecamatan name
+            const kecamatanList = await kecamatanService.getKecamatan();
+            const currentKec = kecamatanList.find((k: any) => k.id.toString() === idKecamatan);
+            if (currentKec) setActiveKecamatanName(currentKec.nama_kecamatan);
+
+            // ONLY load village boundaries initially
+            const boundaryRes = await monitoringService.getDesaGeoJSONByKecamatan(idKecamatan);
+
+            const format = new GeoJSON();
+
+            // 1. Village Boundaries
+            if (boundaryRes && boundaryRes.features) {
+                const features = format.readFeatures(boundaryRes, {
+                    dataProjection: "EPSG:4326",
+                    featureProjection: "EPSG:3857",
+                });
+                features.forEach(f => f.set("is_village_boundary", true));
                 desaSourceRef.current?.addFeatures(features);
                 
                 const extent = desaSourceRef.current?.getExtent();
@@ -2395,8 +2787,13 @@ export default function DrawPage() {
                     });
                 }
             }
+
+            toast.success("Batas desa berhasil dimuat");
+            // Clear the list since no roads are loaded yet
+            setFeaturesList([]);
         } catch (error) {
-            console.error("Error loading village boundaries:", error);
+            console.error("Error loading kecamatan data:", error);
+            toast.error("Gagal memuat batas wilayah");
         }
     };
 
@@ -2477,6 +2874,9 @@ export default function DrawPage() {
 
                     // Add STA markers
                     updateSTAMarkers(id, response);
+                    
+                    // Sync segment list
+                    syncSegmentListFromMap();
                 }
             } catch (error) {
                 console.error("Error checking road:", error);
@@ -2495,6 +2895,9 @@ export default function DrawPage() {
                     featuresToRemove.forEach(f => source.removeFeature(f));
                 }
             });
+
+            // Sync segment list after removal
+            syncSegmentListFromMap();
         }
     };
 
@@ -2585,6 +2988,11 @@ export default function DrawPage() {
         if (road) {
             setSegmentPanelVisible(true);
             setIsSegmentPanelOpen(!isMobile);
+            // Sync list for this road
+            syncSegmentListFromMap({ kodeRuas: road.jalan.kode_ruas });
+        } else {
+            // If cleared, sync from all features on map
+            syncSegmentListFromMap();
         }
         if (isMobile && road) {
             setIsSidebarOpen(false);
@@ -2615,6 +3023,7 @@ export default function DrawPage() {
                     onKecamatanChange={handleKecamatanChange}
                     onDesaChange={setSelectedDesaId}
                     selectedDesaId={selectedDesaId}
+                    selectedKecamatanId={selectedKecamatanId}
                 />
 
 
@@ -2893,7 +3302,23 @@ export default function DrawPage() {
                             </div>
                         )}
 
-                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none transition-all duration-500">
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none transition-all duration-500">
+                            {activeKecamatanName && (
+                                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 pointer-events-auto">
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest leading-none mb-1">Filter Kecamatan</span>
+                                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">{activeKecamatanName}</span>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleKecamatanChange("all")}
+                                        className="h-7 w-7 rounded-full hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-colors"
+                                    >
+                                        <X className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            )}
                         </div>
 
                         <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10">
@@ -3083,6 +3508,16 @@ export default function DrawPage() {
                     onOpenChange={setIsSegmentPanelOpen}
                     onClose={() => setSegmentPanelVisible(false)}
                     segments={featuresList}
+                    filters={segmentFilters}
+                    onFilterChange={(newFilters) => {
+                        setSegmentFilters(newFilters);
+                        // No need to call syncSegmentListFromMap as the filtering is done inside the panel
+                        // but if we want to filter the map features too, we would call .changed() on layers
+                        ruasUtamaLayerRef.current?.changed();
+                        segmenDesaLayerRef.current?.changed();
+                        jalanKabupatenLayerRef.current?.changed();
+                        nonBaseLayerRef.current?.changed();
+                    }}
                     onZoom={handleZoomToSegment}
                     onEdit={handleEditSegment}
                     onDelete={handleDeleteSegment}

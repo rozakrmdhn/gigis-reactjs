@@ -6,6 +6,9 @@ import tsconfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   plugins: [tailwindcss(), reactRouter(), tsconfigPaths()],
   server: {
+    allowedHosts: [
+      "dev-melarosa.saggaserv.my.id"
+    ],
     proxy: {
       "/api": {
         target: "http://localhost:3000",

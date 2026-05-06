@@ -145,7 +145,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     return (
         <div
             className={cn(
-                "absolute inset-y-0 right-0 z-50 w-full sm:w-[450px] bg-white dark:bg-slate-900 border-l dark:border-slate-800 shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
+                "absolute inset-y-0 right-0 z-50 w-full sm:w-80 bg-white dark:bg-slate-900 border-l dark:border-slate-800 shadow-2xl transition-transform duration-500 ease-in-out transform flex flex-col",
                 isVisible ? "translate-x-0" : "translate-x-full"
             )}
         >

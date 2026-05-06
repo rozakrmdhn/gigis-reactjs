@@ -30,6 +30,7 @@ export interface MapLayerConfig {
     opacity?: number;
     zIndex?: number;
     style?: any;
+    legendUrl?: string;
 }
 
 interface OpenLayersMapProps {
@@ -45,6 +46,8 @@ interface OpenLayersMapProps {
     showSegmenJalan?: boolean;
     basemapUrl?: string | 'osm';
     markers?: { id: string; lat: number; lon: number; title?: string }[];
+    onFeatureSelect?: (properties: any) => void;
+    disablePopup?: boolean;
 }
 
 export interface OpenLayersMapRef {
@@ -54,6 +57,7 @@ export interface OpenLayersMapRef {
     zoomToCoordinate: (lon: number, lat: number, zoom?: number) => void;
     fitAllMarkers: () => void;
     zoomToFeature: (geojson: any) => void;
+    getMap: () => Map | null;
 }
 
 export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
@@ -67,6 +71,8 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     showSegmenJalan = true,
     basemapUrl = 'osm',
     markers = [],
+    onFeatureSelect,
+    disablePopup = false,
 }, ref) => {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<Map | null>(null);
@@ -93,6 +99,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     const [isPopupClosing, setIsPopupClosing] = useState(false);
 
     useImperativeHandle(ref, () => ({
+        getMap: () => mapRef.current,
         zoomToFeature: (geojson: any) => {
             if (!mapRef.current) return;
 
@@ -432,6 +439,10 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 });
                 vectorPopup.setPosition(evt.coordinate);
 
+                if (onFeatureSelect) {
+                    onFeatureSelect(props);
+                }
+
                 // Highlight selected feature
                 const highlightFeature = feature.clone();
                 highlightSourceRef.current.addFeature(highlightFeature);
@@ -469,6 +480,10 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                     id: feat.id
                                 });
                                 vectorPopup.setPosition(evt.coordinate);
+
+                                if (onFeatureSelect) {
+                                    onFeatureSelect(feat.properties);
+                                }
 
                                 if (feat.geometry) {
                                     const format = new GeoJSON();
@@ -511,6 +526,10 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                     id: feat.id
                                 });
                                 vectorPopup.setPosition(evt.coordinate);
+
+                                if (onFeatureSelect) {
+                                    onFeatureSelect(feat.properties);
+                                }
 
                                 // Try to highlight WMS feature if geometry is returned
                                 if (feat.geometry) {
@@ -809,7 +828,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
     return (
         <div ref={mapElement} className={className}>
-            {selectedVectorInfo && vectorPopupElementRef.current && createPortal(
+            {!disablePopup && selectedVectorInfo && vectorPopupElementRef.current && createPortal(
                 <div className={cn(
                     "bg-white/95 backdrop-blur-md rounded-2xl border border-blue-50 shadow-2xl w-64 flex flex-col pointer-events-auto relative mb-4 transition-all duration-300",
                     isPopupMinimized ? "p-2 h-auto" : "p-4 max-h-[350px]",

@@ -148,40 +148,40 @@ export function GeolocationControl({ map, className }: GeolocationControlProps) 
 
     return (
         <TooltipProvider>
-            <div className={cn("flex flex-col items-start gap-1", className)}>
+            <div className={cn("relative flex items-center justify-center", className)}>
                 {isTracking && accuracy !== null && (
-                    <div className="bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-2 py-0.5 rounded-full border border-blue-200 dark:border-blue-900/50 shadow-sm text-[10px] font-bold text-blue-600 dark:text-blue-400 animate-in fade-in zoom-in duration-300">
-                        Accuracy: {accuracy.toFixed(1)}m
+                    <div className="absolute right-full mr-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-2.5 py-1 rounded-lg border border-white/50 dark:border-slate-700/50 shadow-xl text-[10px] font-bold text-blue-600 dark:text-blue-400 animate-in slide-in-from-right-2 fade-in duration-300 whitespace-nowrap">
+                        Akurasi: {accuracy.toFixed(1)}m
                     </div>
                 )}
 
                 <Tooltip>
                     <TooltipTrigger asChild>
                         <Button
-                            variant="outline"
+                            variant="ghost"
                             size="icon"
                             className={cn(
-                                "h-10 w-10 rounded-xl shadow-xl transition-all duration-300 cursor-pointer overflow-hidden relative",
+                                "h-9 w-9 rounded-xl transition-all duration-300 relative",
                                 isTracking
-                                    ? "bg-blue-600 text-white border-blue-500 hover:bg-blue-700"
-                                    : "bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                    ? "text-blue-600 bg-blue-50 dark:bg-blue-900/30"
+                                    : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                             )}
                             onClick={handleToggleTracking}
                             disabled={isLoading}
                         >
                             {isLoading ? (
-                                <Loader2 className="h-5 w-5 animate-spin" />
+                                <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
-                                <Navigation className={cn("h-5 w-5", isTracking && "fill-current")} />
+                                <Navigation className={cn("h-4 w-4", isTracking && "fill-current")} />
                             )}
                             {isTracking && !isLoading && (
-                                <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full border border-white animate-pulse" />
+                                <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-emerald-400 rounded-full border border-white dark:border-slate-900 animate-pulse" />
                             )}
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="right">
-                        <p className="text-xs font-semibold">
-                            {isTracking ? "Disable Location" : "Show My Location"}
+                    <TooltipContent side="left" className="bg-slate-900 text-white border-slate-800">
+                        <p className="text-[10px] font-bold uppercase tracking-wider">
+                            {isTracking ? "Matikan GPS" : "Lokasi Saya"}
                         </p>
                     </TooltipContent>
                 </Tooltip>

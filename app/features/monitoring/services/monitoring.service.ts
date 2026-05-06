@@ -244,8 +244,9 @@ export const monitoringService = {
     },
 
     getDesaGeoJSONByKecamatan: async (id_kecamatan: string | number): Promise<any> => {
-        const response = await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}&format=geojson`, { showErrorToast: false });
-        return response.result;
+        const response = await apiClient.get(`${import.meta.env.VITE_API_BASE_URL}/desa?id_kecamatan=${id_kecamatan}&format=geojson`, { showErrorToast: false }) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
     },
 
     getNonBaseSegments: async (id_desa?: string | number): Promise<any> => {
@@ -253,7 +254,9 @@ export const monitoringService = {
         if (id_desa) {
             url += `&id_desa=${id_desa}`;
         }
-        return await apiClient.get(url);
+        const response = await apiClient.get(url) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
     },
 
     getMonitoringProgress: async (id_segmen: string): Promise<MonitoringProgress[]> => {
@@ -303,8 +306,9 @@ export const monitoringService = {
             url.searchParams.append("kode_ruas", kode_ruas.toString());
         }
 
-        const response = await apiClient.get(url.toString(), { showErrorToast: false });
-        return response.result;
+        const response = await apiClient.get(url.toString(), { showErrorToast: false }) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
     },
 
     extractSegment: async (data: {
@@ -320,6 +324,50 @@ export const monitoringService = {
                 errorMessage: "Gagal mengekstraksi segmen jalan"
             }
         );
+    },
+    
+    getJalanByKecamatanGeoJSON: async (id_kecamatan: string | number): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        url.searchParams.append("kecamatan_id", id_kecamatan.toString());
+        url.searchParams.append("limit", "1000");
+
+        const response = await apiClient.get(url.toString(), { showErrorToast: false }) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
+    },
+
+    getSegmenByKecamatanGeoJSON: async (id_kecamatan: string | number): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        url.searchParams.append("kecamatan_id", id_kecamatan.toString());
+        url.searchParams.append("limit", "2000");
+
+        const response = await apiClient.get(url.toString(), { showErrorToast: false }) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
+    },
+
+    getJalanByDesaGeoJSON: async (id_desa: string | number): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        url.searchParams.append("id_desa", id_desa.toString());
+        url.searchParams.append("limit", "1000");
+
+        const response = await apiClient.get(url.toString(), { showErrorToast: false }) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
+    },
+
+    getSegmenByDesaGeoJSON: async (id_desa: string | number): Promise<any> => {
+        const url = new URL(`${import.meta.env.VITE_API_BASE_URL}/jalan/segmen`, window.location.origin);
+        url.searchParams.append("format", "geojson");
+        url.searchParams.append("id_desa", id_desa.toString());
+        url.searchParams.append("limit", "2000");
+
+        const response = await apiClient.get(url.toString(), { showErrorToast: false }) as any;
+        if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
+        return response.result || response.data || null;
     }
 };
 
