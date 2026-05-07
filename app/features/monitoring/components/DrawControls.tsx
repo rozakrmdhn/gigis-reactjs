@@ -110,8 +110,14 @@ export function DrawControls({
         },
     ];
 
-    // Show alwaysShow tools OR tools that are explicitly shown (and not disabled if we only want active ones)
-    const visibleTools = allTools.filter(t => t.alwaysShow || t.show);
+    // Show alwaysShow tools OR tools that are explicitly shown
+    // Prioritize "save" button to be on the left when active
+    const saveTool = allTools.find(t => t.id === "save");
+    const otherTools = allTools.filter(t => t.id !== "save");
+    const visibleTools = [
+        ...(saveTool && (saveTool.alwaysShow || saveTool.show) ? [saveTool] : []),
+        ...otherTools.filter(t => t.alwaysShow || t.show)
+    ];
 
     const checkScroll = () => {
         if (scrollContainerRef.current) {

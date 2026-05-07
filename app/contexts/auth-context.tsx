@@ -40,6 +40,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         // Global watchdog check every 1 second
         const interval = setInterval(() => {
+            const expiry = authService.getExpiry();
+            const now = Date.now();
+
+            if (expiry && user) {
+                const remainingMs = expiry - now;
+
+                // Peringatan 2 menit sebelum expired
+                if (remainingMs > 0 && remainingMs <= 2 * 60 * 1000) {
+                    window.dispatchEvent(new CustomEvent("auth-session-warning", {
+                        detail: { remainingMs }
+                    }));
+                }
+            }
+
             authService.checkSession();
         }, 1000);
 
@@ -47,7 +61,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             window.removeEventListener("auth-session-expired", handleSessionExpired);
             clearInterval(interval);
         };
-    }, []);
+    }, [user]);
 
     const signin = async (email: string, password: string) => {
         const response = await authService.signin(email, password);

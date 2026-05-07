@@ -264,7 +264,7 @@ const getSegmentStyleProps = (feature: any) => {
     let lineDash: number[] | undefined = undefined;
 
     if (isBase) {
-        color = '#FFA500'; // Orange for Ruas Utama
+        color = 'rgba(255, 165, 0, 0.3)'; // Orange for Ruas Utama (Semi-transparent)
     } else if (statusJalan === 'Jalan Desa') {
         // Category 1 & 2
         if (kondisi === 'baik') color = '#22c55e';
@@ -3387,25 +3387,6 @@ export default function DrawPage() {
                                 </div>
                             </div>
                         )}
-
-                        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-2 pointer-events-none transition-all duration-500">
-                            {activeKecamatanName && (
-                                <div className="bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-4 py-2 rounded-2xl border border-blue-100 dark:border-blue-900/50 shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-4 pointer-events-auto">
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest leading-none mb-1">Filter Kecamatan</span>
-                                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100 uppercase tracking-tight">{activeKecamatanName}</span>
-                                    </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => handleKecamatanChange("all")}
-                                        className="h-7 w-7 rounded-full hover:bg-rose-50 dark:hover:bg-rose-900/20 text-slate-400 hover:text-rose-500 transition-colors"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </Button>
-                                </div>
-                            )}
-                        </div>
 
                         <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-10">
                             {!selectedRoad && mode !== "view" ? (

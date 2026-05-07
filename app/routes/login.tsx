@@ -82,7 +82,7 @@ export default function Login() {
                     className="absolute inset-0 w-full h-full object-cover opacity-60 scale-105 animate-pulse-slow"
                     style={{ animationDuration: '10s' }}
                 />
-                
+
                 {/* Overlay Gradients */}
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-900/90 via-slate-900/80 to-transparent" />
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.3),transparent_50%)]" />
@@ -139,7 +139,7 @@ export default function Login() {
                             <IconShieldCheck className="w-7 h-7 text-white stroke-[2.5]" />
                         </div>
                         <div className="space-y-1">
-                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight uppercase">Admin Login</h1>
+                            <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">Authentication</h1>
                             <p className="text-slate-500 dark:text-slate-400 font-medium text-sm">Masuk untuk mengelola Dashboard GIGIS.</p>
                         </div>
                     </div>

@@ -284,23 +284,8 @@ export function DrawSidebar({
                                         <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Data</span>
                                         <div className="flex items-center h-6">
                                             <span className="text-sm font-bold text-primary mr-1.5">{pagination?.total || 0}</span>
-                                            {filters.id_desa !== "all" && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setFilters(prev => ({ ...prev, id_desa: "all", page: 1 }));
-                                                        if (onDesaChange) onDesaChange("all");
-                                                    }}
-                                                    className="h-5 px-2 text-[9px] cursor-pointer font-bold uppercase tracking-tighter text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-md flex items-center shrink-0"
-                                                >
-                                                    <X className="h-3 w-3" />
-                                                    Reset
-                                                </Button>
-                                            )}
                                         </div>
                                     </div>
-
 
                                     <div className="flex-1 flex gap-2">
                                         <Select
@@ -318,8 +303,6 @@ export function DrawSidebar({
                                                 {kecamatanOptions}
                                             </SelectContent>
                                         </Select>
-
-
 
                                         <Select
                                             value={filters.limit.toString()}
@@ -339,25 +322,42 @@ export function DrawSidebar({
                                 </div>
                             </div>
 
-                            {/* Search */}
-                            <div className="p-2 relative">
-                                <Search className={cn(
-                                    "absolute left-4 top-1/2 -translate-y-1/2 h-3.5 w-3.5 transition-colors",
-                                    loading ? "text-emerald-500 animate-pulse" : "text-slate-400"
-                                )} />
-                                <Input
-                                    placeholder="Cari ruas jalan..."
-                                    className="pl-8 h-9 text-base md:text-xs bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-950 transition-all rounded-lg pr-8 dark:text-slate-100"
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                />
-                                {search && (
-                                    <button
-                                        onClick={() => setSearch("")}
-                                        className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-slate-100 transition-colors"
+                            {/* Search & Clear Filter Indicator */}
+                            <div className="p-2 flex gap-2">
+                                <div className="relative flex-1">
+                                    <Search className={cn(
+                                        "absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 transition-colors",
+                                        loading ? "text-emerald-500 animate-pulse" : "text-slate-400"
+                                    )} />
+                                    <Input
+                                        placeholder="Cari ruas jalan..."
+                                        className="pl-8 h-8 text-base md:text-[10px] bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-950 transition-all rounded-lg pr-7 dark:text-slate-100"
+                                        value={search}
+                                        onChange={(e) => setSearch(e.target.value)}
+                                    />
+                                    {search && (
+                                        <button
+                                            onClick={() => setSearch("")}
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-slate-100 transition-colors"
+                                        >
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    )}
+                                </div>
+                                {(filters.id_kecamatan !== "all" || filters.id_desa !== "all") && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => {
+                                            setFilters(prev => ({ ...prev, id_kecamatan: "all", id_desa: "all", page: 1 }));
+                                            if (onKecamatanChange) onKecamatanChange("all");
+                                            if (onDesaChange) onDesaChange("all");
+                                        }}
+                                        className="h-8 px-2 text-[9px] cursor-pointer font-bold uppercase tracking-tighter text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg flex items-center shrink-0 border border-rose-200/50 dark:border-rose-900/30"
                                     >
-                                        <X className="h-3 w-3" />
-                                    </button>
+                                        <X className="h-3 w-3 mr-1" />
+                                        Clear Filter
+                                    </Button>
                                 )}
                             </div>
                         </div>

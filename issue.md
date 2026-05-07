@@ -1,243 +1,476 @@
-# Issue: DrawControl Panel — Responsive UI/UX (Mobile & Desktop)
+# Issue: Perbaikan Autentikasi API & Notifikasi Sesi Expired Proaktif
 
-**Route:** `/admin/monitoring/draw`  
 **Prioritas:** High  
 **Estimasi:** 2–3 jam  
-**Label:** `enhancement`, `ui/ux`, `responsive`
+**Label:** `enhancement`, `bug`
 
 ---
 
 ## Ringkasan
 
-Perbaikan UI/UX komponen `DrawControls` agar **responsive** untuk mobile dan desktop, dengan penyesuaian:
-- **Mobile:** Hanya tampilkan ikon (tanpa teks label)
-- **Desktop:** Tampilkan ikon + teks label di bawahnya
-- Panel tetap di bagian **bawah tengah (bottom center)** secara horizontal
-- Jika tombol terlalu banyak, gunakan **scroll horizontal** agar tidak overflow
-- Ikon menggunakan `lucide-react`
-- Teks menggunakan **First Capital** (contoh: "Select", "Draw Line", "Clear All")
+Saat ini terdapat dua masalah utama pada manajemen sesi dan autentikasi:
+
+1. **API Endpoint GET** harus bebas diakses tanpa auth token (public). API Endpoint selain GET (POST, PUT, DELETE) tetap memerlukan auth token dari login.
+2. **Notifikasi sesi habis** saat ini hanya muncul **setelah** pengguna gagal melakukan operasi CRUD. Seharusnya pengguna diberitahu **sebelum** mereka mencoba melakukan aksi tersebut, agar tidak kehilangan data yang sudah diisi.
+
+---
+
+## Kondisi Saat Ini
+
+### File-file yang terlibat:
+
+| # | File | Deskripsi |
+|---|------|-----------|
+| 1 | `app/lib/api-client.ts` | API client wrapper — menangani semua request HTTP |
+| 2 | `app/services/auth.service.ts` | Service autentikasi — token, session check, headers |
+| 3 | `app/contexts/auth-context.tsx` | React context — state user, session watchdog |
+| 4 | `app/features/auth/components/SessionExpiredAlert.tsx` | Dialog alert saat sesi expired |
+| 5 | `app/routes/sidebar-layout.tsx` | Layout admin — auth guard untuk route `/admin/*` |
+
+### Yang sudah berfungsi:
+- ✅ `checkSession()` di `auth.service.ts` sudah dispatch event `auth-session-expired` saat token expired
+- ✅ `SessionExpiredAlert.tsx` sudah listen event tersebut dan menampilkan dialog
+- ✅ `auth-context.tsx` sudah punya watchdog interval setiap 1 detik (`setInterval`)
+- ✅ `api-client.ts` sudah membedakan GET dan non-GET saat session tidak valid (baris 48)
+
+### Yang BERMASALAH:
+- ❌ **GET request tetap mengirim auth header** — jika token expired, GET request bisa gagal 401/403 padahal seharusnya bebas diakses
+- ❌ **Watchdog di `auth-context.tsx` hanya memanggil `checkSession()`** — ini membersihkan token dan dispatch event, tapi **tidak ada notifikasi visual proaktif sebelum user melakukan aksi**
+- ❌ **Tidak ada countdown/peringatan** sebelum sesi benar-benar habis, sehingga pengguna kaget saat tiba-tiba muncul dialog "Sesi Berakhir" ketika menekan tombol simpan
+
+---
+
+## Tahapan Implementasi
+
+### Tahap 1: GET Request Tanpa Auth Header
+
+**File:** `app/lib/api-client.ts`
+
+GET request harus bisa diakses tanpa auth. Ubah logika pengiriman header agar GET **tidak memerlukan auth header**.
+
+**SEBELUM (baris 43–60):**
+```typescript
+try {
+    // Trigger session check (dispatches event if expired)
+    const isSessionValid = authService.checkSession();
+
+    // Only block the request if it's NOT a GET request and session is invalid
+    if (!isSessionValid && fetchOptions.method !== "GET" && fetchOptions.method !== undefined) {
+        // If we had a session but it just became invalid, block the write operation
+        throw new Error("Unauthorized");
+    }
+
+
+    let response = await fetch(url, {
+        ...fetchOptions,
+        headers: {
+            ...authService.getAuthHeaders(),
+            ...fetchOptions.headers,
+        },
+    });
+```
+
+**SESUDAH:**
+```typescript
+try {
+    const isGetRequest = !fetchOptions.method || fetchOptions.method === "GET";
+
+    // Untuk non-GET request, cek session terlebih dahulu
+    if (!isGetRequest) {
+        const isSessionValid = authService.checkSession();
+        if (!isSessionValid) {
+            throw new Error("Unauthorized");
+        }
+    }
+
+    // Siapkan headers — GET request tidak perlu auth header
+    const headers: HeadersInit = isGetRequest
+        ? {
+            'Content-Type': 'application/json',
+            ...fetchOptions.headers,
+          }
+        : {
+            ...authService.getAuthHeaders(),
+            ...fetchOptions.headers,
+          };
+
+    let response = await fetch(url, {
+        ...fetchOptions,
+        headers,
+    });
+```
+
+**Penjelasan:**
+- GET request **tidak lagi mengirim `Authorization` header**, sehingga tidak akan terkena 401/403
+- Non-GET request (POST, PUT, DELETE) **tetap memerlukan auth** dan dicek session-nya sebelum dikirim
+- Jika token ada dan valid, GET request tetap bisa mengirim auth header secara opsional jika diperlukan di masa depan
+
+---
+
+### Tahap 2: Peringatan Proaktif Sebelum Sesi Habis
+
+**File:** `app/contexts/auth-context.tsx`
+
+Tambahkan logika untuk mendeteksi **sesi hampir habis** (misalnya 2 menit sebelum expired) dan dispatch event baru.
+
+**SEBELUM (baris 32–49):**
+```typescript
+// Listen for session expiry event
+useEffect(() => {
+    const handleSessionExpired = () => {
+        console.log("Session expired");
+        setUser(null);
+    };
+
+    window.addEventListener("auth-session-expired", handleSessionExpired);
+
+    // Global watchdog check every 1 second
+    const interval = setInterval(() => {
+        authService.checkSession();
+    }, 1000);
+
+    return () => {
+        window.removeEventListener("auth-session-expired", handleSessionExpired);
+        clearInterval(interval);
+    };
+}, []);
+```
+
+**SESUDAH:**
+```typescript
+// Listen for session expiry event
+useEffect(() => {
+    const handleSessionExpired = () => {
+        console.log("Session expired");
+        setUser(null);
+    };
+
+    window.addEventListener("auth-session-expired", handleSessionExpired);
+
+    // Global watchdog check every 1 second
+    const interval = setInterval(() => {
+        const expiry = authService.getExpiry();
+        const now = Date.now();
+
+        if (expiry && user) {
+            const remainingMs = expiry - now;
+
+            // Peringatan 2 menit sebelum expired
+            if (remainingMs > 0 && remainingMs <= 2 * 60 * 1000) {
+                window.dispatchEvent(new CustomEvent("auth-session-warning", {
+                    detail: { remainingMs }
+                }));
+            }
+        }
+
+        authService.checkSession();
+    }, 1000);
+
+    return () => {
+        window.removeEventListener("auth-session-expired", handleSessionExpired);
+        clearInterval(interval);
+    };
+}, [user]);
+```
+
+**Penjelasan:**
+- Menambahkan pengecekan sisa waktu sesi pada interval watchdog yang sudah ada
+- Jika sisa waktu ≤ 2 menit, dispatch event baru `auth-session-warning` dengan informasi `remainingMs`
+- Dependency array diubah ke `[user]` agar interval ter-reset saat state user berubah
+
+---
+
+### Tahap 3: Buat Komponen Peringatan Sesi Hampir Habis
+
+**File:** `app/features/auth/components/SessionExpiredAlert.tsx` — **MODIFY**
+
+Tambahkan fitur **countdown warning** di komponen yang sudah ada sebelum dialog "Sesi Berakhir" muncul.
+
+**SEBELUM (seluruh file):**
+```tsx
+export function SessionExpiredAlert() {
+    const [isOpen, setIsOpen] = useState(false);
+    const navigate = useNavigate();
+    // ... hanya handle "auth-session-expired"
+}
+```
+
+**SESUDAH — Tambahkan state dan listener baru:**
+```tsx
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "~/components/ui/alert-dialog";
+import { LogOut, Clock, RefreshCw } from "lucide-react";
+import { authService } from "~/services/auth.service";
+import { toast } from "sonner";
+
+export function SessionExpiredAlert() {
+    const [isOpen, setIsOpen] = useState(false);
+    const [isWarning, setIsWarning] = useState(false);
+    const [remainingSeconds, setRemainingSeconds] = useState(0);
+    const navigate = useNavigate();
+
+    useEffect(() => {
+        const handleSessionExpired = () => {
+            setIsWarning(false); // Tutup warning jika ada
+            setIsOpen(true);
+        };
+
+        const handleSessionWarning = (event: CustomEvent) => {
+            const { remainingMs } = event.detail;
+            setRemainingSeconds(Math.ceil(remainingMs / 1000));
+
+            // Tampilkan warning dialog hanya sekali
+            if (!isWarning && !isOpen) {
+                setIsWarning(true);
+            }
+        };
+
+        window.addEventListener("auth-session-expired", handleSessionExpired);
+        window.addEventListener("auth-session-warning", handleSessionWarning as EventListener);
+
+        return () => {
+            window.removeEventListener("auth-session-expired", handleSessionExpired);
+            window.removeEventListener("auth-session-warning", handleSessionWarning as EventListener);
+        };
+    }, [isWarning, isOpen]);
+
+    // Update countdown setiap detik
+    useEffect(() => {
+        if (!isWarning) return;
+
+        const interval = setInterval(() => {
+            setRemainingSeconds(prev => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+
+        return () => clearInterval(interval);
+    }, [isWarning]);
+
+    const handleLoginRedirect = () => {
+        setIsOpen(false);
+        setIsWarning(false);
+        navigate("/login");
+    };
+
+    const handleDismissWarning = () => {
+        setIsWarning(false);
+    };
+
+    // Format detik ke "M:SS"
+    const formatTime = (seconds: number) => {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        return `${m}:${s.toString().padStart(2, "0")}`;
+    };
+
+    return (
+        <>
+            {/* Warning Dialog — Sesi Hampir Habis */}
+            <AlertDialog open={isWarning} onOpenChange={setIsWarning}>
+                <AlertDialogContent className="sm:max-w-[425px]">
+                    <AlertDialogHeader className="flex flex-col items-center gap-4 text-center">
+                        <div className="p-3 bg-amber-100 rounded-full text-amber-600">
+                            <Clock className="w-8 h-8" />
+                        </div>
+                        <div className="space-y-2">
+                            <AlertDialogTitle className="text-2xl font-bold text-slate-900">
+                                Sesi Hampir Habis
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-500 font-medium">
+                                Sesi Anda akan berakhir dalam{" "}
+                                <span className="font-bold text-amber-600 text-lg">
+                                    {formatTime(remainingSeconds)}
+                                </span>
+                                . Silakan simpan pekerjaan Anda atau login kembali untuk memperpanjang sesi.
+                            </AlertDialogDescription>
+                        </div>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="sm:flex-col gap-2 mt-4">
+                        <AlertDialogAction
+                            onClick={handleLoginRedirect}
+                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-11"
+                        >
+                            <RefreshCw className="w-4 h-4 mr-2" />
+                            Login Ulang Sekarang
+                        </AlertDialogAction>
+                        <AlertDialogCancel
+                            onClick={handleDismissWarning}
+                            className="w-full font-bold h-11"
+                        >
+                            Lanjutkan Bekerja
+                        </AlertDialogCancel>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Expired Dialog — Sesi Sudah Habis */}
+            <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
+                <AlertDialogContent className="sm:max-w-[425px]">
+                    <AlertDialogHeader className="flex flex-col items-center gap-4 text-center">
+                        <div className="p-3 bg-red-100 rounded-full text-red-600">
+                            <LogOut className="w-8 h-8" />
+                        </div>
+                        <div className="space-y-2">
+                            <AlertDialogTitle className="text-2xl font-bold text-slate-900">
+                                Sesi Berakhir
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-slate-500 font-medium">
+                                Sesi Anda telah berakhir atau tidak valid. Silakan masuk kembali untuk melanjutkan akses ke aplikasi.
+                            </AlertDialogDescription>
+                        </div>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="sm:flex-col gap-2 mt-4">
+                        <AlertDialogAction
+                            onClick={handleLoginRedirect}
+                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-11"
+                        >
+                            Masuk Kembali
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+        </>
+    );
+}
+```
+
+**Penjelasan:**
+- Komponen sekarang menangani **dua event**: `auth-session-warning` (peringatan) dan `auth-session-expired` (sudah habis)
+- Warning dialog menampilkan **countdown timer** dalam format `M:SS`
+- Pengguna punya dua opsi: **"Login Ulang Sekarang"** atau **"Lanjutkan Bekerja"**
+- Jika pengguna memilih "Lanjutkan Bekerja", dialog ditutup, tapi akan muncul lagi di detik berikutnya (karena watchdog masih aktif) — ATAU bisa ditambahkan cooldown agar tidak spam
+
+---
+
+### Tahap 4: (Opsional) Tambahkan Cooldown pada Warning
+
+Jika warning dialog terlalu sering muncul (setiap detik selama 2 menit terakhir), tambahkan cooldown di `auth-context.tsx`:
+
+```typescript
+// Di dalam interval watchdog
+const WARNING_THRESHOLD = 2 * 60 * 1000; // 2 menit
+let warningDispatched = false;
+
+const interval = setInterval(() => {
+    const expiry = authService.getExpiry();
+    const now = Date.now();
+
+    if (expiry && user) {
+        const remainingMs = expiry - now;
+
+        if (remainingMs > WARNING_THRESHOLD) {
+            warningDispatched = false; // Reset flag saat masih jauh dari expired
+        }
+
+        // Dispatch warning hanya SEKALI
+        if (remainingMs > 0 && remainingMs <= WARNING_THRESHOLD && !warningDispatched) {
+            warningDispatched = true;
+            window.dispatchEvent(new CustomEvent("auth-session-warning", {
+                detail: { remainingMs }
+            }));
+        }
+    }
+
+    authService.checkSession();
+}, 1000);
+```
+
+**Penjelasan:**
+- Dengan flag `warningDispatched`, event `auth-session-warning` hanya di-dispatch **satu kali**
+- Setelah user dismiss dialog, dia tidak akan diganggu lagi sampai sesi benar-benar expired
+- Countdown tetap berjalan di dalam komponen `SessionExpiredAlert` secara internal
+
+---
+
+## Alur UX Setelah Implementasi
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    ALUR SESI PENGGUNA                       │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  [Login] ──→ [Bekerja di /admin] ──→ [Sesi hampir habis]   │
+│                                          │                  │
+│                                          ▼                  │
+│                                   ┌──────────────┐          │
+│                                   │  ⚠️ Warning   │          │
+│                                   │  "Sesi Hampir │          │
+│                                   │   Habis 1:30" │          │
+│                                   │              │          │
+│                                   │ [Login Ulang] │          │
+│                                   │ [Lanjutkan]  │          │
+│                                   └──────┬───────┘          │
+│                                          │                  │
+│                            ┌─────────────┴──────────┐       │
+│                            ▼                        ▼       │
+│                     [Login Ulang]           [Lanjutkan]      │
+│                     → /login               → Bekerja        │
+│                                            → Sesi habis     │
+│                                                   │         │
+│                                                   ▼         │
+│                                            ┌────────────┐   │
+│                                            │ 🔴 Expired  │   │
+│                                            │ "Sesi      │   │
+│                                            │  Berakhir" │   │
+│                                            │            │   │
+│                                            │ [Masuk     │   │
+│                                            │  Kembali]  │   │
+│                                            └────────────┘   │
+│                                                             │
+│  [GET Request] ──→ Langsung berhasil (tanpa auth header)    │
+│  [POST/PUT/DELETE] ──→ Cek session dulu → kirim dengan auth │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## File yang Perlu Diubah
 
 | # | File | Aksi | Keterangan |
-|---|------|------|-----------|
-| 1 | `app/features/monitoring/components/DrawControls.tsx` | **MODIFY** | Responsive layout + horizontal scroll + first capital text |
-
----
-
-## Kondisi Saat Ini
-
-File `DrawControls.tsx` saat ini sudah memiliki:
-- Layout horizontal (`flex-row`) — ✅
-- Posisi bottom center — ✅ (diatur dari parent `index.tsx`)
-- Icon dari `lucide-react` — ✅
-- Teks label — ✅ (tapi menggunakan `UPPERCASE`, harus diubah ke First Capital)
-- Props enable/disable logic — ✅
-- Sub-komponen `ToolButton` — ✅
-
-**Yang BELUM ada:**
-- ❌ Responsive: teks label tidak disembunyikan di mobile
-- ❌ Horizontal scroll: tidak ada scroll jika tombol overflow
-- ❌ First Capital: teks masih UPPERCASE
-
----
-
-## Tahapan Implementasi
-
-### Tahap 1: Ubah Teks Label ke First Capital
-
-Buka `app/features/monitoring/components/DrawControls.tsx`.
-
-Cari bagian `ToolButton` yang menampilkan label teks (sekitar baris 164):
-
-**SEBELUM:**
-```tsx
-<span className="text-[9px] font-black uppercase tracking-tight leading-none">{label}</span>
-```
-
-**SESUDAH:**
-```tsx
-<span className="text-[9px] font-black tracking-tight leading-none hidden md:block">{label}</span>
-```
-
-**Penjelasan:**
-- Hapus class `uppercase` — label sudah ditulis dengan First Capital di props (misalnya `"Select"`, `"Draw Line"`)
-- Tambahkan `hidden md:block` — menyembunyikan teks di mobile, tampilkan di desktop (≥768px)
-
----
-
-### Tahap 2: Tambahkan Horizontal Scroll pada Container
-
-Cari container utama `DrawControls` (sekitar baris 43–46):
-
-**SEBELUM:**
-```tsx
-<div className={cn(
-    "flex flex-row items-center gap-1 p-1.5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border dark:border-slate-800 rounded-2xl shadow-2xl no-print",
-    className
-)}>
-```
-
-**SESUDAH:**
-```tsx
-<div className={cn(
-    "flex flex-row items-center gap-1 p-1.5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border dark:border-slate-800 rounded-2xl shadow-2xl no-print overflow-x-auto max-w-[calc(100vw-2rem)] scrollbar-none",
-    className
-)}>
-```
-
-**Penjelasan:**
-- `overflow-x-auto` — mengaktifkan scroll horizontal ketika konten melebihi lebar container
-- `max-w-[calc(100vw-2rem)]` — membatasi lebar maksimum container agar tidak melebihi layar (dikurangi 1rem padding kiri-kanan)
-- `scrollbar-none` — menyembunyikan scrollbar agar lebih bersih (Tailwind plugin). Jika class ini tidak tersedia, tambahkan CSS manual (lihat Tahap 3)
-
----
-
-### Tahap 3: Tambahkan CSS untuk Menyembunyikan Scrollbar (Jika Diperlukan)
-
-Jika class `scrollbar-none` tidak tersedia di project, tambahkan CSS berikut di file global CSS (misalnya `app/index.css` atau `app/globals.css`):
-
-```css
-/* Hide scrollbar for DrawControls horizontal scroll */
-.scrollbar-none::-webkit-scrollbar {
-    display: none;
-}
-.scrollbar-none {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-}
-```
-
-> **CATATAN:** Cek dulu apakah class `scrollbar-none` sudah ada di project. Jika sudah ada (misalnya dari plugin `tailwind-scrollbar-hide`), Tahap ini bisa dilewati.
-
----
-
-### Tahap 4: Sesuaikan `ToolButton` untuk Responsive
-
-Ubah sizing `ToolButton` agar adaptif di mobile:
-
-**SEBELUM:**
-```tsx
-<Button
-    variant={active ? "default" : "ghost"}
-    size="sm"
-    className={cn(
-        "flex flex-col items-center justify-center gap-1 h-auto min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300",
-        variantClasses[variant],
-        disabled && "opacity-40 cursor-not-allowed pointer-events-none",
-        pulse && "animate-pulse"
-    )}
-    onClick={onClick}
-    disabled={disabled}
->
-    <Icon className="h-4 w-4" />
-    <span className="text-[9px] font-black uppercase tracking-tight leading-none">{label}</span>
-</Button>
-```
-
-**SESUDAH:**
-```tsx
-<Button
-    variant={active ? "default" : "ghost"}
-    size="sm"
-    className={cn(
-        "flex flex-col items-center justify-center gap-1 h-auto min-w-[40px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 shrink-0",
-        variantClasses[variant],
-        disabled && "opacity-40 cursor-not-allowed pointer-events-none",
-        pulse && "animate-pulse"
-    )}
-    onClick={onClick}
-    disabled={disabled}
->
-    <Icon className="h-4 w-4" />
-    <span className="text-[9px] font-black tracking-tight leading-none hidden md:block">{label}</span>
-</Button>
-```
-
-**Perubahan yang dilakukan:**
-| Perubahan | Sebelum | Sesudah | Alasan |
-|-----------|---------|---------|--------|
-| min-width | `min-w-[64px]` | `min-w-[40px] md:min-w-[64px]` | Tombol lebih kecil di mobile |
-| shrink | _(tidak ada)_ | `shrink-0` | Mencegah tombol menyusut saat scroll |
-| text class | `uppercase` | _(dihapus)_ | Label sudah First Capital |
-| text visibility | _(selalu tampil)_ | `hidden md:block` | Sembunyikan teks di mobile |
-
----
-
-### Tahap 5: Pastikan Separator Juga Responsive
-
-Separator vertikal antar grup tool (baris 73 dan 93) sudah OK karena hanya menggunakan `h-8` dan tidak ada teks. Tidak perlu diubah.
-
-Namun jika ingin separator lebih pendek di mobile, bisa ditambahkan:
-
-```tsx
-<div className="w-px h-6 md:h-8 bg-slate-200/60 dark:bg-slate-800/60 mx-0.5 md:mx-1 shrink-0" />
-```
-
----
-
-### Tahap 6: Pastikan Tooltip Tetap Berfungsi di Mobile
-
-Tooltip pada `ToolButton` sangat penting di mobile karena teks label tidak ditampilkan. Pastikan:
-- `TooltipContent` dengan `side="top"` sudah benar — ✅ (sudah ada di kode saat ini)
-- Tooltip akan muncul saat long-press di mobile
-
-Tidak perlu mengubah kode tooltip. Hanya pastikan saat testing bahwa tooltip muncul.
-
----
-
-## Referensi Visual
-
-### Desktop (≥768px)
-```
-┌──────────────────────────────────────────────────────────────────────┐
-│  🖱️     ✏️       🔗        │  🗑️       ✖️      │  📥       💾       │
-│ Select  Draw Line Edit&Snap │ Clear All Batal   │ Export   Simpan   │
-└──────────────────────────────────────────────────────────────────────┘
-```
-
-### Mobile (<768px)
-```
-┌──────────────────────────────────────┐
-│  🖱️   ✏️   🔗  │  🗑️  ✖️  │  📥  💾  │  ← scroll horizontal
-└──────────────────────────────────────┘
-```
-
----
-
-## Daftar Tombol dan Label (First Capital)
-
-| Tool | Icon (lucide-react) | Label Desktop | Mobile |
-|------|-------------------|---------------|--------|
-| Select | `MousePointer2` | Select | ikon saja |
-| Draw Line | `Spline` | Draw Line | ikon saja |
-| Edit & Snap | `SplinePointer` | Edit & Snap | ikon saja |
-| Clear All | `Trash2` | Clear All | ikon saja |
-| Batal Edit | `X` | Batal Edit | ikon saja |
-| Export | `Download` | Export | ikon saja |
-| Simpan | `SaveIcon` | Simpan | ikon saja |
+|---|------|------|------------|
+| 1 | `app/lib/api-client.ts` | **MODIFY** | GET request tanpa auth header, non-GET tetap pakai auth |
+| 2 | `app/contexts/auth-context.tsx` | **MODIFY** | Tambah deteksi sesi hampir habis + dispatch event warning |
+| 3 | `app/features/auth/components/SessionExpiredAlert.tsx` | **MODIFY** | Tambah warning dialog dengan countdown timer |
 
 ---
 
 ## Checklist Testing
 
-- [ ] **Desktop:** Semua tombol menampilkan ikon + teks "First Capital"
-- [ ] **Mobile (< 768px):** Semua tombol hanya menampilkan ikon, teks tersembunyi
-- [ ] **Mobile:** Tooltip muncul saat long-press/hover pada tombol
-- [ ] **Scroll horizontal:** Jika layar sempit, panel bisa di-scroll horizontal
-- [ ] **Scrollbar tersembunyi:** Tidak ada scrollbar yang terlihat saat scroll
-- [ ] **Tombol tidak menyusut:** Semua tombol mempertahankan ukuran minimum
-- [ ] **Dark mode:** Panel terlihat baik di dark mode (mobile & desktop)
-- [ ] **Enable/Disable:** Logika enable/disable masih berfungsi setelah perubahan
+- [ ] **GET request tanpa login:** Buka browser incognito, akses API GET endpoint langsung → harus berhasil (200 OK)
+- [ ] **GET request dengan token expired:** Login, tunggu token expired, lakukan navigasi yang trigger GET → harus tetap berhasil tanpa redirect
+- [ ] **POST/PUT/DELETE tanpa login:** Coba submit form tanpa login → harus ditolak (dialog "Sesi Berakhir")
+- [ ] **Warning muncul 2 menit sebelum expired:** Login, tunggu hingga 2 menit sebelum sesi habis → dialog "Sesi Hampir Habis" muncul dengan countdown
+- [ ] **Countdown berjalan:** Timer di dialog warning bergerak mundur dari `2:00` ke `0:00`
+- [ ] **Klik "Login Ulang Sekarang":** Redirect ke halaman login
+- [ ] **Klik "Lanjutkan Bekerja":** Dialog tertutup, pengguna bisa melanjutkan kerja
+- [ ] **Sesi benar-benar habis:** Setelah timer mencapai `0:00`, dialog berubah ke "Sesi Berakhir" (merah)
+- [ ] **Dark mode:** Kedua dialog terlihat baik di dark mode
 
 ---
 
 ## Catatan untuk Implementor
 
-> **PERINGATAN:** Hanya ubah file `DrawControls.tsx`. JANGAN mengubah file `index.tsx` atau file lain untuk issue ini.
+> **PENTING:** Jangan ubah logika `authService.signin()` atau `authService.signout()`. Fokus hanya pada:
+> 1. Pengiriman header di `api-client.ts`
+> 2. Watchdog interval di `auth-context.tsx`
+> 3. UI komponen di `SessionExpiredAlert.tsx`
 
-> **TIPS:** Untuk testing responsive, gunakan Chrome DevTools → Toggle Device Toolbar (Ctrl+Shift+M) dan pilih ukuran mobile (contoh: iPhone 14, 390×844px).
+> **TIPS:** Untuk testing cepat, ubah sementara `TOKEN_EXPIRY_KEY` di localStorage ke waktu 3-5 menit dari sekarang menggunakan Chrome DevTools → Application → Local Storage.
 
-> **PENTING:** Pastikan label props di komponen `DrawControls` sudah menggunakan First Capital. Cek di tempat komponen dipanggil (di `index.tsx`) — label sudah benar karena ditulis langsung di `DrawControls.tsx` (baris 50, 58, 67, 78, 87, 98, 107).
+> **TIPS:** Gunakan `Date.now() + (3 * 60 * 1000)` untuk set token expiry 3 menit dari sekarang saat testing.

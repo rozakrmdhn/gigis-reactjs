@@ -41,22 +41,30 @@ export const apiClient = {
         } = options;
 
         try {
-            // Trigger session check (dispatches event if expired)
-            const isSessionValid = authService.checkSession();
+            const isGetRequest = !fetchOptions.method || fetchOptions.method === "GET";
 
-            // Only block the request if it's NOT a GET request and session is invalid
-            if (!isSessionValid && fetchOptions.method !== "GET" && fetchOptions.method !== undefined) {
-                // If we had a session but it just became invalid, block the write operation
-                throw new Error("Unauthorized");
+            // Untuk non-GET request, cek session terlebih dahulu
+            if (!isGetRequest) {
+                const isSessionValid = authService.checkSession();
+                if (!isSessionValid) {
+                    throw new Error("Unauthorized");
+                }
             }
 
+            // Siapkan headers — GET request tidak perlu auth header
+            const headers: HeadersInit = isGetRequest
+                ? {
+                    'Content-Type': 'application/json',
+                    ...fetchOptions.headers,
+                  }
+                : {
+                    ...authService.getAuthHeaders(),
+                    ...fetchOptions.headers,
+                  };
 
             let response = await fetch(url, {
                 ...fetchOptions,
-                headers: {
-                    ...authService.getAuthHeaders(),
-                    ...fetchOptions.headers,
-                },
+                headers,
             });
 
             // Handle 403 Forbidden (e.g., token expired or invalid after initial check)
