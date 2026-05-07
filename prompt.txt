@@ -1,52 +1,40 @@
 Buatkan issue.md yang berisi perencanaan untuk nanti di implementasikan oleh junior programmer atau AI model yang lebih murah.
 
-Isi dari planning nya adalah sebagai berikut:
-- Buatkan halaman monitoring/jalan-desa
-- Buatkan routing monitoring/jalan-desa
-- Buatkan menu monitoring/jalan-desa di sidebar
+isi dari planning nya adalah sebagai berikut:
+1. Perbaiki fitur DrawControl, control meliputi:
+    - Select : fitur ini digunakan select feature info dari layer
+    - Draw Line : fitur ini aktif jika pengguna melakukan klik jalan ruas utama 
+    - Edit & Snap : fitur ini aktif jika pengguna setelah melakukan Draw Line atau ketika pengguna klik Edit pada SegmenList, fitur ini disabled jika pengguna tidak dalam mode DrawLine
+    - Clear All : fitur ini digunakan untuk membatalkan hasil DrawLine
+    - Batal Edit : fitur ini digunakan untuk membatalkan hasil DrawLine dan Edit & Snap
+    - Export GeoJSON ; fitur ini aktif jika pengguna sudah selesai melakukan DrawLine atau Edit & Snap, fitur untuk melakukan export geojsonnya
+    - Selesai Reshape & Simpan : fitur ini aktif digunakan menyimpan hasil reshape segmen jika pengguna melakukan klik Edit pada SegmenList
 
-Struktur folder di dalam app
-- routes : ini berisi routing react js
-- services : ini berisi service untuk mengambil data dari endpoint
+2. Buatkan UI UX DrawControl diletakan pada bagian bawah tata letak horizontal center untuk masing-masing fitur, berikan icon + teks dibawahnya
 
-Services : jalan.ts
-Endpoint : GET /jalan
+3. Pindahkan Legenda Panel di pojok kiri atas, dan sesuaikan tata letak panel Map Editor Vector Studio ini
 
-Response Body : {
-    "status": "success",
-    "message": "Berhasil mengambil data",
-    "pagination": {
-        "total": 1183,
-        "page": 1,
-        "limit": 50,
-        "totalPages": 24s
-    },
-    "result": [
-        {
-            "id": "3ce6fad1-011f-4209-b660-9dcad298c5ca",
-            "kode_ruas": 1,
-            "nama_ruas": "Ruas Poros Kanten - Mlaten ( Tuban )",
-            "id_desa": 3522232010,
-            "desa": "Kanten",
-            "id_kecamatan": 352223,
-            "kecamatan": "TRUCUK",
-            "panjang": 2708.286703554977,
-            "lebar": 3,
-            "perkerasan": "Paving; Tanah",
-            "kondisi": "RUSAK SEDANG",
-            "status_awal": "Jalan Poros Antar Desa",
-            "status_eksisting": "",
-            "sumber_data": "Data Kecamatan",
-            "created_at": null,
-            "updated_at": null
-        },
-    ]
-}
+Route : /admin/monitoring/draw
 
 Jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimplementasikan adalah junior programmer atau AI model yang lebih murah.
 
-Buatkan issue baru di Github dari issue.md
+--------------------------------------------------------
+Buatkan issue.md yang berisi perencanaan untuk nanti di implementasikan oleh junior programmer atau AI model yang lebih murah.
 
-Buatkan commit baru 
+isi dari planning nya adalah sebagai berikut:
+1. Buatkan UI UX DrawControl Panel, responsive untuk mobile dan desktop
+    - Untuk mobile gunakan ikon saja
+    - Untuk desktop gunakan ikon dan teks
+    - Panel diletakan pada bagian bawah tata letak horizontal center.
+    - Jika terlalu banyak tombol maka diletakan didalam scroll horizontal
+    - Icon menggunakan lucide-react sesuai dengan yang ada
+    - Teks gunakan first capital huruf
 
-Implementasikan issue ini 
+Route : /admin/monitoring/draw
+
+Jelaskan tahapan-tahapan yang harus dilakukan untuk mengimplementasikan fitur ini, anggap nanti yang mengimplementasikan adalah junior programmer atau AI model yang lebih murah.
+--------------------------------------------------------
+
+> Buatkan issue baru di Github dari issue.md
+
+> Buatkan commit baru di GitHub

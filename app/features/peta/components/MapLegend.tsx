@@ -88,7 +88,7 @@ export function MapLegend({
                                                 }}
                                             />
                                         )}
-                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-tighter text-left leading-none">{item.label}</span>
+                                        <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 tracking-tighter text-left leading-none">{item.label}</span>
                                     </div>
                                 ))}
                             </div>
