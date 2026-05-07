@@ -1,4 +1,5 @@
-import { Square, Circle, Pentagon, Minus, Save, MousePointer2, Trash2, Download, Pencil, SplinePointer, Spline, SaveIcon, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Square, Circle, Pentagon, Minus, Save, MousePointer2, Trash2, Download, Pencil, SplinePointer, Spline, SaveIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
@@ -14,7 +15,9 @@ interface DrawControlsProps {
     onFinishReshape?: () => void;
     canFinishReshape?: boolean;
     onCancelReshape?: () => void;
-
+    hasDrawnFeature?: boolean;
+    isEditingSegment?: boolean;
+    selectedRoad?: any | null;
 }
 
 export function DrawControls({
@@ -26,124 +29,220 @@ export function DrawControls({
     onFinishReshape,
     canFinishReshape,
     onCancelReshape,
-
+    hasDrawnFeature,
+    isEditingSegment,
+    selectedRoad,
 }: DrawControlsProps) {
-    const tools = [
-        { id: "view", icon: MousePointer2, label: "View/Select" },
-        { id: "draw-line", icon: Spline, label: "Draw Line" },
-        // { id: "draw-polygon", icon: Pentagon, label: "Draw Polygon" },
-        // { id: "draw-point", icon: Circle, label: "Draw Point" },
-        // { id: "draw-box", icon: Square, label: "Draw Box" },
-        { id: "edit", icon: SplinePointer, label: "Edit & Snap" },
+    const scrollContainerRef = useRef<HTMLDivElement>(null);
+    const [showLeftArrow, setShowLeftArrow] = useState(false);
+    const [showRightArrow, setShowRightArrow] = useState(false);
+
+    const isDrawLineEnabled = !!selectedRoad;
+    const isEditSnapEnabled = hasDrawnFeature || isEditingSegment;
+    const isClearEnabled = mode.startsWith("draw-") || hasDrawnFeature;
+    const isExportEnabled = hasDrawnFeature;
+    const isFinishReshapeEnabled = canFinishReshape && isEditingSegment;
+
+    const allTools = [
+        {
+            id: "view",
+            icon: MousePointer2,
+            label: "Select",
+            active: mode === "view",
+            disabled: false,
+            alwaysShow: true,
+            onClick: () => onSetMode("view"),
+        },
+        {
+            id: "draw-line",
+            icon: Spline,
+            label: "Draw Line",
+            active: mode === "draw-line" || mode === "draw-automatic",
+            disabled: !isDrawLineEnabled,
+            alwaysShow: true,
+            onClick: () => onSetMode("draw-line"),
+        },
+        {
+            id: "edit",
+            icon: SplinePointer,
+            label: "Edit & Snap",
+            active: mode === "edit",
+            disabled: !isEditSnapEnabled,
+            show: isEditSnapEnabled,
+            onClick: () => onSetMode("edit"),
+        },
+        {
+            id: "clear",
+            icon: Trash2,
+            label: "Clear All",
+            variant: "danger" as const,
+            disabled: !isClearEnabled,
+            show: isClearEnabled,
+            onClick: onClear,
+        },
+        {
+            id: "cancel",
+            icon: X,
+            label: "Batal Edit",
+            variant: "danger" as const,
+            disabled: !canFinishReshape,
+            show: canFinishReshape,
+            onClick: onCancelReshape || (() => { }),
+        },
+        {
+            id: "export",
+            icon: Download,
+            label: "Export",
+            variant: "info" as const,
+            disabled: !isExportEnabled,
+            show: isExportEnabled,
+            onClick: onExport,
+        },
+        {
+            id: "save",
+            icon: SaveIcon,
+            label: "Simpan",
+            variant: "success" as const,
+            pulse: isFinishReshapeEnabled,
+            disabled: !isFinishReshapeEnabled,
+            show: isFinishReshapeEnabled,
+            onClick: onFinishReshape || (() => { }),
+        },
     ];
+
+    // Show alwaysShow tools OR tools that are explicitly shown (and not disabled if we only want active ones)
+    const visibleTools = allTools.filter(t => t.alwaysShow || t.show);
+
+    const checkScroll = () => {
+        if (scrollContainerRef.current) {
+            const { scrollLeft, scrollWidth, clientWidth } = scrollContainerRef.current;
+            setShowLeftArrow(scrollLeft > 2);
+            setShowRightArrow(scrollLeft < scrollWidth - clientWidth - 2);
+        }
+    };
+
+    useEffect(() => {
+        checkScroll();
+        const timeout = setTimeout(checkScroll, 100);
+        return () => clearTimeout(timeout);
+    }, [visibleTools, mode]);
+
+    const scroll = (direction: "left" | "right") => {
+        if (scrollContainerRef.current) {
+            const amount = direction === "left" ? -120 : 120;
+            scrollContainerRef.current.scrollBy({ left: amount, behavior: "smooth" });
+        }
+    };
 
     return (
         <TooltipProvider>
-            <div className={cn("flex flex-col gap-1.5 p-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border dark:border-slate-800 rounded-xl shadow-xl", className)}>
-                {tools.map((tool) => (
-                    <Tooltip key={tool.id}>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant={mode === tool.id ? "default" : "ghost"}
-                                size="icon"
-                                className={cn(
-                                    "h-8 w-8 rounded-xl transition-all duration-300",
-                                    mode === tool.id
-                                        ? "bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-blue-900/20"
-                                        : "hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-                                )}
-                                onClick={() => onSetMode(tool.id as DrawMode)}
-                            >
-                                <tool.icon className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">
-                            <p className="text-xs font-semibold">{tool.label}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                ))}
-
-                <div className="h-px bg-slate-200/60 dark:bg-slate-800/60 mx-1" />
-
-                {canFinishReshape && (
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-xl text-rose-500 hover:bg-rose-50 hover:text-rose-600 transition-all duration-300 cursor-pointer"
-                                onClick={onCancelReshape}
-                            >
-                                <X className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">
-                            <p className="text-xs font-semibold text-rose-600">Batal Edit</p>
-                        </TooltipContent>
-                    </Tooltip>
+            <div className={cn(
+                "relative flex items-center group max-w-[calc(100vw-2rem)] md:max-w-[400px]",
+                className
+            )}>
+                {/* Left Arrow */}
+                {showLeftArrow && (
+                    <button
+                        onClick={() => scroll("left")}
+                        className="absolute left-[-12px] z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full p-1 shadow-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all animate-in fade-in zoom-in duration-200"
+                    >
+                        <ChevronLeft className="w-3 h-3 text-slate-600 dark:text-slate-400" />
+                    </button>
                 )}
 
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        <Button
-                            variant={canFinishReshape ? "default" : "ghost"}
-                            size="icon"
-                            className={cn(
-                                "h-8 w-8 rounded-xl transition-all duration-300",
-                                canFinishReshape
-                                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200 animate-pulse cursor-pointer"
-                                    : "opacity-50 cursor-not-allowed"
+                <div
+                    ref={scrollContainerRef}
+                    onScroll={checkScroll}
+                    className={cn(
+                        "flex flex-row items-center gap-1 p-1.5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border dark:border-slate-800 rounded-2xl shadow-2xl no-print overflow-x-auto scrollbar-none scroll-smooth",
+                        visibleTools.length > 4 ? "w-full" : "w-auto"
+                    )}
+                >
+                    {visibleTools.map((tool, index) => (
+                        <div key={tool.id} className="flex items-center gap-1">
+                            {/* Separators logic - add if group changes or specific positions */}
+                            {(tool.id === "clear" || tool.id === "export") && index > 0 && (
+                                <div className="w-px h-6 md:h-8 bg-slate-200/60 dark:bg-slate-800/60 mx-0.5 md:mx-1 shrink-0" />
                             )}
-                            onClick={onFinishReshape}
-                            disabled={!canFinishReshape}
-                        >
-                            <SaveIcon className="h-4 w-4" />
-                        </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="right">
-                        <p className="text-xs font-semibold">Selesai Reshape & Simpan</p>
-                    </TooltipContent>
-                </Tooltip>
+                            <ToolButton
+                                icon={tool.icon}
+                                label={tool.label}
+                                active={tool.active}
+                                disabled={tool.disabled}
+                                onClick={tool.onClick}
+                                variant={tool.variant}
+                                pulse={tool.pulse}
+                            />
+                        </div>
+                    ))}
+                </div>
 
-
-
-                {mode.startsWith("draw-") && (
-                    <>
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-xl hover:bg-red-50 hover:text-red-600 transition-all duration-300 cursor-pointer"
-                                    onClick={onClear}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                                <p className="text-xs font-semibold text-red-600">Clear All</p>
-                            </TooltipContent>
-                        </Tooltip>
-
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 rounded-xl hover:bg-blue-50 hover:text-blue-600 transition-all duration-300 cursor-pointer"
-                                    onClick={onExport}
-                                >
-                                    <Download className="h-4 w-4" />
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">
-                                <p className="text-xs font-semibold text-blue-600">Export GeoJSON</p>
-                            </TooltipContent>
-                        </Tooltip>
-                    </>
+                {/* Right Arrow */}
+                {showRightArrow && (
+                    <button
+                        onClick={() => scroll("right")}
+                        className="absolute right-[-12px] z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-full p-1 shadow-lg hover:bg-slate-50 dark:hover:bg-slate-800 transition-all animate-in fade-in zoom-in duration-200"
+                    >
+                        <ChevronRight className="w-3 h-3 text-slate-600 dark:text-slate-400" />
+                    </button>
                 )}
-
             </div>
         </TooltipProvider>
+    );
+}
+
+interface ToolButtonProps {
+    icon: any;
+    label: string;
+    active?: boolean;
+    disabled?: boolean;
+    onClick: () => void;
+    variant?: "default" | "danger" | "success" | "info";
+    pulse?: boolean;
+}
+
+function ToolButton({
+    icon: Icon,
+    label,
+    active,
+    disabled,
+    onClick,
+    variant = "default",
+    pulse = false,
+}: ToolButtonProps) {
+    const variantClasses = {
+        default: active
+            ? "bg-blue-600 text-white shadow-lg shadow-blue-200 dark:shadow-blue-900/20"
+            : "hover:bg-blue-50 dark:hover:bg-blue-900/20 text-slate-500 hover:text-blue-600",
+        danger: "text-rose-500 hover:bg-rose-50 hover:text-rose-600",
+        success: active || pulse
+            ? "bg-emerald-600 text-white shadow-lg shadow-emerald-200"
+            : "text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700",
+        info: "text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+    };
+
+    return (
+        <Tooltip>
+            <TooltipTrigger asChild>
+                <Button
+                    variant={active ? "default" : "ghost"}
+                    size="sm"
+                    className={cn(
+                        "flex flex-col items-center justify-center gap-1 h-auto min-w-[40px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 shrink-0",
+                        variantClasses[variant],
+                        disabled && "opacity-40 cursor-not-allowed pointer-events-none",
+                        pulse && "animate-pulse"
+                    )}
+                    onClick={onClick}
+                    disabled={disabled}
+                >
+                    <Icon className="h-4 w-4" />
+                    <span className="text-[9px] font-black tracking-tight leading-none hidden md:block">{label}</span>
+                </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+                <p className="text-xs font-semibold">{label}</p>
+            </TooltipContent>
+        </Tooltip>
     );
 }

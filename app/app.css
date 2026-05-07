@@ -243,4 +243,13 @@ body {
       font-size: 14px;
     }
   }
-}
+
+  /* Hide scrollbar for DrawControls horizontal scroll */
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
