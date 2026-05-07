@@ -60,7 +60,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           disableTransitionOnChange
         >
           {children}
-          <Toaster />
+          <Toaster position="top-center" richColors />
           <ScrollRestoration />
           <Scripts />
         </ThemeProvider>

@@ -410,10 +410,17 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 </div>
             </form>
 
-            <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                <Button className="w-full bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 h-10 text-sm font-bold cursor-pointer shadow-lg shadow-amber-200 dark:shadow-amber-900/40" onClick={handleSubmit}>
+            <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900 grid grid-cols-2 gap-2">
+                <Button 
+                    variant="outline" 
+                    className="h-10 text-xs font-bold uppercase tracking-wider dark:border-slate-700 dark:text-slate-300"
+                    onClick={onClose}
+                >
+                    Batal
+                </Button>
+                <Button className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 h-10 text-xs font-bold uppercase tracking-wider cursor-pointer shadow-lg shadow-amber-200 dark:shadow-amber-900/40" onClick={handleSubmit}>
                     <PencilIcon className="w-4 h-4 mr-2" />
-                    UPDATE DATA SEGMEN
+                    Update Data
                 </Button>
             </div>
         </div>

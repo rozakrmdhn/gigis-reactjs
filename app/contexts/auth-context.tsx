@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
+import { useNavigate } from 'react-router';
 import { authService } from '../services/auth.service';
 import type { User } from '../services/auth.service';
 
@@ -16,6 +17,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
     const [user, setUser] = useState<User | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const navigate = useNavigate();
 
     useEffect(() => {
         // Only run on client side
@@ -34,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const handleSessionExpired = () => {
             console.log("Session expired");
             setUser(null);
+            navigate('/login');
         };
 
         window.addEventListener("auth-session-expired", handleSessionExpired);
@@ -61,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             window.removeEventListener("auth-session-expired", handleSessionExpired);
             clearInterval(interval);
         };
-    }, [user]);
+    }, [user, navigate]);
 
     const signin = async (email: string, password: string) => {
         const response = await authService.signin(email, password);
@@ -73,6 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const signout = () => {
         authService.signout();
         setUser(null);
+        navigate('/login');
     };
 
     return (

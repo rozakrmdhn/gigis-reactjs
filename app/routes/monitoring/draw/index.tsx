@@ -61,6 +61,7 @@ import {
     ContextMenuItem,
     ContextMenuTrigger,
     ContextMenuShortcut,
+    ContextMenuSeparator,
 } from "~/components/ui/context-menu";
 import {
     Dialog,
@@ -74,7 +75,7 @@ import { DrawFormPanel } from "~/features/monitoring/components/DrawFormPanel";
 import { MapControls } from "~/features/monitoring/components/MapControls";
 import { DrawControls, type DrawMode } from "~/features/monitoring/components/DrawControls";
 import { GeonodeDatasetPanel } from "~/features/peta/components/GeonodeDatasetPanel";
-import { RoadSegmentsPanel } from "~/features/monitoring/components/RoadSegmentsPanel";
+import { RoadSegmentsPanel } from "~/features/monitoring/components/road-segments";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/use-mobile";
@@ -86,7 +87,7 @@ import { LayerTogglePanel } from "~/features/monitoring/components/LayerTogglePa
 import { BasemapToggle } from "~/features/monitoring/components/BasemapToggle";
 import { GeolocationControl } from "~/features/monitoring/components/GeolocationControl";
 import { MonitoringProgressPanel } from "~/features/monitoring/components/MonitoringProgressPanel";
-import type { MetaFunction } from "react-router";
+import { useNavigate, type MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
@@ -303,6 +304,7 @@ const getFeatureDesaId = (f: any) => {
 };
 
 export default function DrawPage() {
+    const navigate = useNavigate();
     const mapElement = useRef<HTMLDivElement>(null);
     const mapWrapperRef = useRef<HTMLDivElement>(null);
     const mapRef = useRef<OLMap | null>(null);
@@ -332,6 +334,8 @@ export default function DrawPage() {
     const searchSourceRef = useRef<VectorSource | null>(null);
     const highlightSourceRef = useRef<VectorSource | null>(null);
     const highlightLayerRef = useRef<VectorLayer | null>(null);
+    const ghostSourceRef = useRef<VectorSource | null>(null);
+    const ghostLayerRef = useRef<VectorLayer | null>(null);
     const pulseOverlayRef = useRef<Overlay | null>(null);
     const pulseElementRef = useRef<HTMLDivElement | null>(null);
     const vectorPopupRef = useRef<Overlay | null>(null);
@@ -626,6 +630,18 @@ export default function DrawPage() {
         }
     }, [isMobile]);
 
+    // Global ESC key listener to cancel actions
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                handleCancelAction();
+            }
+        };
+
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [mode, navigate]); // navigate added to dependencies if needed, but mode is the main one
+
     // Initialize map and sources
     useEffect(() => {
         if (!isMounted || !mapElement.current) return;
@@ -708,6 +724,37 @@ export default function DrawPage() {
             }
         });
         hoverLayerRef.current = hoverLayer;
+        
+        const ghostSource = new VectorSource();
+        ghostSourceRef.current = ghostSource;
+        const ghostLayer = new VectorLayer({
+            source: ghostSource,
+            zIndex: 900,
+            style: (feature) => {
+                const { color } = getSegmentStyleProps(feature);
+                return [
+                    new Style({
+                        stroke: new Stroke({
+                            color: color,
+                            width: 3,
+                            lineDash: [6, 6],
+                            lineCap: 'round'
+                        }),
+                        text: new Text({
+                            text: "Segmen Awal",
+                            font: "bold 9px sans-serif",
+                            fill: new Fill({ color: color }),
+                            stroke: new Stroke({ color: "#fff", width: 2 }),
+                            offsetY: 12,
+                            padding: [2, 4, 2, 4],
+                            backgroundFill: new Fill({ color: "rgba(255, 255, 255, 0.8)" }),
+                            backgroundStroke: new Stroke({ color: color, width: 1 }),
+                        })
+                    })
+                ];
+            }
+        });
+        ghostLayerRef.current = ghostLayer;
 
         const desaSource = new VectorSource({
             overlaps: false // Performance hint
@@ -953,6 +1000,7 @@ export default function DrawPage() {
                 staLayer,
                 searchLayer,
                 vectorLayer,
+                ghostLayer,
                 highlightLayer,
                 hoverLayer,
             ],
@@ -1251,31 +1299,62 @@ export default function DrawPage() {
                     }
                 }
 
-                // If it's a base road (jalan poros/desa), select it like in the sidebar
-                if (properties.is_base_jalan) {
-                    const roadId = properties.id || properties.ID || properties.id_jalan || properties.kode_ruas_layer;
-                    if (roadId) {
-                        const roadObj: any = {
-                            jalan: {
-                                id: roadId.toString(),
-                                kode_ruas: properties.kode_ruas || properties.KODE_RUAS,
-                                nama_ruas: properties.nama_ruas || properties.NM_RUAS || properties.NAME || 'Nama tidak tersedia',
-                                panjang: properties.panjang || properties.PANJANG || 0,
-                                lebar: properties.lebar || properties.LEBAR || 0,
-                                id_desa: properties.id_desa || properties.desa_id
-                            },
-                            stats: properties.stats || {}
-                        };
-                        setSelectedRoad(roadObj);
-                        setSegmentPanelVisible(true);
-                        setIsSegmentPanelOpen(!isMobile);
-                    }
-                }
-
-                // Sync segment list for this road
+                // Sync segment list and auto-select road for this segment
                 const kodeRuas = properties.kode_ruas || properties.KODE_RUAS;
                 if (kodeRuas) {
                     syncSegmentListFromMap({ kodeRuas });
+                    
+                    // Case 1: Clicked a base road directly
+                    if (properties.is_base_jalan) {
+                        const roadId = properties.id || properties.ID || properties.id_jalan || properties.kode_ruas_layer;
+                        if (roadId) {
+                            setSelectedRoad({
+                                jalan: {
+                                    id: roadId.toString(),
+                                    kode_ruas: properties.kode_ruas || properties.KODE_RUAS,
+                                    nama_ruas: properties.nama_ruas || properties.NM_RUAS || properties.NAME || 'Nama tidak tersedia',
+                                    panjang: properties.panjang || properties.PANJANG || 0,
+                                    lebar: properties.lebar || properties.LEBAR || 0,
+                                    id_desa: properties.id_desa || properties.desa_id,
+                                    kecamatan: properties.kecamatan || properties.KECAMATAN,
+                                    desa: properties.desa || properties.DESA
+                                },
+                                stats: properties.stats || {}
+                            });
+                            setSegmentPanelVisible(true);
+                            setIsSegmentPanelOpen(!isMobile);
+                        }
+                    } 
+                    // Case 2: Clicked a segment, find its corresponding base road
+                    else {
+                        const baseFeature = ruasUtamaSourceRef.current?.getFeatures().find(f => {
+                            const fProps = f.getProperties();
+                            const fKode = fProps.kode_ruas || fProps.KODE_RUAS;
+                            return fKode?.toString() === kodeRuas.toString();
+                        });
+
+                        if (baseFeature) {
+                            const bProps = baseFeature.getProperties();
+                            const roadId = bProps.id || bProps.ID || bProps.id_jalan || bProps.kode_ruas_layer;
+                            if (roadId) {
+                                setSelectedRoad({
+                                    jalan: {
+                                        id: roadId.toString(),
+                                        kode_ruas: bProps.kode_ruas || bProps.KODE_RUAS,
+                                        nama_ruas: bProps.nama_ruas || bProps.NM_RUAS || bProps.NAME || 'Nama tidak tersedia',
+                                        panjang: bProps.panjang || bProps.PANJANG || 0,
+                                        lebar: bProps.lebar || bProps.LEBAR || 0,
+                                        id_desa: bProps.id_desa || bProps.desa_id,
+                                        kecamatan: bProps.kecamatan || bProps.KECAMATAN,
+                                        desa: bProps.desa || bProps.DESA
+                                    },
+                                    stats: bProps.stats || {}
+                                });
+                                setSegmentPanelVisible(true);
+                                setIsSegmentPanelOpen(!isMobile);
+                            }
+                        }
+                    }
                 }
                 return;
             }
@@ -1605,23 +1684,89 @@ export default function DrawPage() {
                 mapRef.current.addInteraction(snapRuasUtama);
             }
         } else if (mode === "draw-automatic") {
-            const draw = new Draw({
-                source: sourceRef.current ?? undefined,
-                type: "LineString",
-                maxPoints: 2,
-                style: new Style({
-                    stroke: new Stroke({
-                        color: "#10b981",
-                        width: 4,
-                        lineDash: [6, 6]
-                    }),
-                    image: new CircleStyle({
-                        radius: 6,
-                        fill: new Fill({ color: "#10b981" }),
-                        stroke: new Stroke({ color: "#fff", width: 2 })
+            const hasFeature = sourceRef.current?.getFeatures().length ?? 0 > 0;
+
+            if (!hasFeature) {
+                const draw = new Draw({
+                    source: sourceRef.current ?? undefined,
+                    type: "LineString",
+                    maxPoints: 2,
+                    style: (feature) => {
+                        const geometry = feature.getGeometry();
+                        const styles = [
+                            new Style({
+                                image: new CircleStyle({
+                                    radius: 10,
+                                    fill: new Fill({ color: "#10b981" }),
+                                    stroke: new Stroke({ color: "#fff", width: 3 })
+                                })
+                            })
+                        ];
+                        
+                        if (geometry instanceof LineString) {
+                            styles.push(new Style({
+                                image: new CircleStyle({
+                                    radius: 10,
+                                    fill: new Fill({ color: "#10b981" }),
+                                    stroke: new Stroke({ color: "#fff", width: 3 })
+                                }),
+                                geometry: new MultiPoint(geometry.getCoordinates())
+                            }));
+                        }
+                        return styles;
+                    }
+                });
+
+                draw.on("drawstart", () => {
+                    if (tooltipElementRef.current) {
+                        tooltipElementRef.current.innerText = "Klik titik kedua untuk menentukan rentang ekstraksi";
+                        tooltipElementRef.current.style.display = 'block';
+                    }
+                });
+
+                draw.on("drawend", (event) => {
+                    const feature = event.feature;
+                    // Apply marker style to the feature so it doesn't show a line on the layer
+                    feature.setStyle(new Style({
+                        image: new CircleStyle({
+                            radius: 10,
+                            fill: new Fill({ color: "#10b981" }),
+                            stroke: new Stroke({ color: "#fff", width: 3 })
+                        }),
+                        geometry: (f) => {
+                            const geom = f.getGeometry() as LineString;
+                            return new MultiPoint(geom.getCoordinates());
+                        }
+                    }));
+                    
+                    if (tooltipElementRef.current) tooltipElementRef.current.style.display = 'none';
+                    setHasTemporaryFeature(true);
+                });
+
+                mapRef.current.addInteraction(draw);
+            } else {
+                // Feature exists, allow modification (move points)
+                const modify = new Modify({ 
+                    source: sourceRef.current ?? undefined,
+                    style: new Style({
+                        image: new CircleStyle({
+                            radius: 12, // Slightly larger when hovering/dragging
+                            fill: new Fill({ color: "#059669" }),
+                            stroke: new Stroke({ color: "#fff", width: 3 })
+                        })
                     })
-                })
-            });
+                });
+                modify.on('modifyend', (event) => {
+                    const feature = event.features.item(0);
+                    if (feature) {
+                        const geometry = feature.getGeometry();
+                        if (geometry instanceof LineString) {
+                            setDrawnLength(getLength(geometry));
+                        }
+                    }
+                });
+                mapRef.current.addInteraction(modify);
+            }
 
             const snapExisting = new Snap({ source: existingSourceRef.current ?? undefined });
             const snapNonBase = new Snap({ source: nonBaseSourceRef.current ?? undefined });
@@ -1630,87 +1775,12 @@ export default function DrawPage() {
             const snapSegmenDesa = new Snap({ source: segmenDesaSourceRef.current ?? undefined });
             const snapJalanKab = new Snap({ source: jalanKabupatenSourceRef.current ?? undefined });
 
-            mapRef.current.addInteraction(draw);
             mapRef.current.addInteraction(snapExisting);
             mapRef.current.addInteraction(snapNonBase);
             mapRef.current.addInteraction(snapSearch);
             mapRef.current.addInteraction(snapRuasUtama);
             mapRef.current.addInteraction(snapSegmenDesa);
             mapRef.current.addInteraction(snapJalanKab);
-
-            draw.on("drawstart", () => {
-                if (tooltipElementRef.current) {
-                    tooltipElementRef.current.innerText = "Klik titik kedua untuk ekstraksi";
-                    tooltipElementRef.current.style.display = 'block';
-                }
-            });
-
-            draw.on("drawend", async (event) => {
-                const feature = event.feature;
-                const geometry = feature.getGeometry();
-                if (geometry instanceof LineString) {
-                    const coords = geometry.getCoordinates().map(c => toLonLat(c));
-
-                    if (tooltipElementRef.current) tooltipElementRef.current.style.display = 'none';
-
-                    setIsExtracting(true);
-                    const toastId = toast.loading("Mengekstraksi segmen jalan...");
-
-                    try {
-                        const response = await monitoringService.extractSegment({
-                            point1: { lng: coords[0][0], lat: coords[0][1] },
-                            point2: { lng: coords[1][0], lat: coords[1][1] },
-                            kode_ruas: selectedRoad?.jalan.kode_ruas?.toString()
-                        });
-
-                        if (response.status === "success" && response.result) {
-                            const extractedFeature = geojsonFormat.readFeature(response.result, {
-                                dataProjection: "EPSG:4326",
-                                featureProjection: "EPSG:3857",
-                            }) as Feature;
-
-                            // Clear temporary points
-                            sourceRef.current?.clear();
-
-                            // Add extracted feature
-                            sourceRef.current?.addFeature(extractedFeature);
-
-                            const extractedGeom = extractedFeature.getGeometry();
-                            if (extractedGeom instanceof LineString) {
-                                setDrawnLength(getLength(extractedGeom));
-
-                                // Zoom to result
-                                const extent = extractedGeom.getExtent();
-                                mapRef.current?.getView().fit(extent, {
-                                    padding: getMapPadding(40),
-                                    duration: 1000,
-                                    maxZoom: 18
-                                });
-                            }
-
-                            setDrawnGeoJSON(geojsonFormat.writeFeature(extractedFeature, {
-                                dataProjection: "EPSG:4326",
-                                featureProjection: "EPSG:3857",
-                            }));
-
-                            setHasTemporaryFeature(true);
-                            setIsPanelVisible(true);
-                            setMode("view");
-                            toast.success("Segmen berhasil diekstraksi!", { id: toastId });
-                        } else {
-                            toast.error("Gagal mendapatkan hasil ekstraksi.", { id: toastId });
-                            setMode("view");
-                        }
-                    } catch (error) {
-                        console.error("Extraction error:", error);
-                        toast.error("Gagal mengekstraksi segmen. Silahkan coba digitasi manual.", { id: toastId });
-                        setMode("view");
-                        sourceRef.current?.clear();
-                    } finally {
-                        setIsExtracting(false);
-                    }
-                }
-            });
         } else if (mode.startsWith("draw-")) {
             let type: any = "Point";
             let geometryFunction = undefined;
@@ -1950,7 +2020,7 @@ export default function DrawPage() {
                 setMode("view");
             });
         }
-    }, [mode, isMounted]);
+    }, [mode, isMounted, hasTemporaryFeature, isContinuing]);
 
     const refreshSegmentData = async (roadId: string, filters = segmentFilters, forceLoadBase = false) => {
         setIsFetchingDetail(true);
@@ -2436,6 +2506,81 @@ export default function DrawPage() {
         URL.revokeObjectURL(url);
     };
 
+    const handleManualExtraction = async () => {
+        const features = sourceRef.current?.getFeatures();
+        if (!features || features.length === 0) {
+            toast.error("Silahkan tentukan 2 titik terlebih dahulu");
+            return;
+        }
+
+        const feature = features[0];
+        const geometry = feature.getGeometry();
+        if (geometry instanceof LineString) {
+            const coords = geometry.getCoordinates().map(c => toLonLat(c));
+            if (coords.length < 2) {
+                toast.error("Silahkan tentukan 2 titik terlebih dahulu");
+                return;
+            }
+
+            setIsExtracting(true);
+            const toastId = toast.loading("Mengekstraksi segmen jalan...");
+
+            try {
+                const response = await monitoringService.extractSegment({
+                    point1: { lng: coords[0][0], lat: coords[0][1] },
+                    point2: { lng: coords[1][0], lat: coords[1][1] },
+                    kode_ruas: selectedRoad?.jalan.kode_ruas?.toString()
+                });
+
+                if (response.status === "success" && response.result) {
+                    const extractedFeature = geojsonFormat.readFeature(response.result, {
+                        dataProjection: "EPSG:4326",
+                        featureProjection: "EPSG:3857",
+                    }) as Feature;
+
+                    sourceRef.current?.clear();
+                    sourceRef.current?.addFeature(extractedFeature);
+
+                    const extractedGeom = extractedFeature.getGeometry();
+                    if (extractedGeom instanceof LineString) {
+                        setDrawnLength(getLength(extractedGeom));
+                        const extent = extractedGeom.getExtent();
+                        mapRef.current?.getView().fit(extent, {
+                            padding: getMapPadding(40),
+                            duration: 1000,
+                            maxZoom: 18
+                        });
+                    }
+
+                    setDrawnGeoJSON(geojsonFormat.writeFeature(extractedFeature, {
+                        dataProjection: "EPSG:4326",
+                        featureProjection: "EPSG:3857",
+                    }));
+
+                    setHasTemporaryFeature(true);
+                    setIsPanelVisible(true);
+                    setMode("view");
+                    toast.success("Segmen berhasil diekstraksi!", { id: toastId });
+                } else {
+                    toast.error("Gagal mendapatkan hasil ekstraksi.", { id: toastId });
+                }
+            } catch (error) {
+                console.error("Extraction error:", error);
+                toast.error("Gagal mengekstraksi segmen. Silahkan coba digitasi manual.", { id: toastId });
+            } finally {
+                setIsExtracting(false);
+            }
+        }
+    };
+
+    useEffect(() => {
+        const handleTrigger = () => {
+            handleManualExtraction();
+        };
+        window.addEventListener("trigger-segment-extraction", handleTrigger);
+        return () => window.removeEventListener("trigger-segment-extraction", handleTrigger);
+    }, [selectedRoad]);
+
     const handleSaveSegment = async (data: any) => {
         try {
             if (editingFeatureId) {
@@ -2454,8 +2599,22 @@ export default function DrawPage() {
             setEditingFeatureId(null);
             setSegmentPanelVisible(true);
             setMode("view");
+            ghostSourceRef.current?.clear();
         } catch (error) {
             // Error toast is already handled by API client
+        }
+    };
+
+    const handleCancelAction = () => {
+        if (mode === "edit") {
+            handleCancelReshape();
+        } else if (mode.startsWith("draw-")) {
+            setMode("view");
+            sourceRef.current?.clear();
+            setDrawnGeoJSON(null);
+            setHasTemporaryFeature(false);
+            setIsContinuing(false);
+            toast.info("Mode digitasi dibatalkan");
         }
     };
 
@@ -2470,6 +2629,7 @@ export default function DrawPage() {
         setEditingFeatureData(null);
         setIsContinuing(false);
         setMode("view");
+        ghostSourceRef.current?.clear();
         if (selectedRoad) {
             refreshSegmentData(selectedRoad.jalan.id, segmentFilters, true);
             setSegmentPanelVisible(true);
@@ -2518,7 +2678,17 @@ export default function DrawPage() {
                 setMode("view");
             }
             setSidebarRefreshTrigger(prev => prev + 1);
-            if (selectedRoad) await refreshSegmentData(selectedRoad.jalan.id);
+            
+            // Remove from local state immediately to avoid reload
+            setFeaturesList(prev => prev.filter(feat => {
+                const featId = feat.getId() || feat.get("id");
+                return featId !== id;
+            }));
+
+            // Optional: If you still want to sync with server stats but without full reload,
+            // you could call a lighter refresh or just trust the local state.
+            // For now, let's skip the full refreshSegmentData as requested.
+            // if (selectedRoad) await refreshSegmentData(selectedRoad.jalan.id);
         } catch (error) {
             // Error toast is already handled by API client
         }
@@ -2566,6 +2736,11 @@ export default function DrawPage() {
         clone.setStyle(null);
         sourceRef.current.clear();
         sourceRef.current.addFeature(clone);
+        
+        // Add to ghost source for "Original Segment" visualization
+        ghostSourceRef.current?.clear();
+        ghostSourceRef.current?.addFeature(feature.clone());
+        
         originalEditFeatureRef.current = feature.clone();
         const props = feature.getProperties();
 
@@ -2581,6 +2756,39 @@ export default function DrawPage() {
                 const initialDistance = turf.length(turf.lineString(gj.coordinates), { units: 'meters' });
                 setDrawnLength(initialDistance);
             } catch (e) { }
+        }
+        
+        // Auto-select parent road if not selected or if kode_ruas differs
+        const kodeRuas = props.kode_ruas || props.KODE_RUAS;
+        if (kodeRuas) {
+            const currentRoadKode = selectedRoad?.jalan?.kode_ruas;
+            if (currentRoadKode?.toString() !== kodeRuas.toString()) {
+                const baseFeature = ruasUtamaSourceRef.current?.getFeatures().find(f => {
+                    const fProps = f.getProperties();
+                    const fKode = fProps.kode_ruas || fProps.KODE_RUAS;
+                    return fKode?.toString() === kodeRuas.toString();
+                });
+
+                if (baseFeature) {
+                    const bProps = baseFeature.getProperties();
+                    const roadId = bProps.id || bProps.ID || bProps.id_jalan || bProps.kode_ruas_layer;
+                    if (roadId) {
+                        setSelectedRoad({
+                            jalan: {
+                                id: roadId.toString(),
+                                kode_ruas: bProps.kode_ruas || bProps.KODE_RUAS,
+                                nama_ruas: bProps.nama_ruas || bProps.NM_RUAS || bProps.NAME || 'Nama tidak tersedia',
+                                panjang: bProps.panjang || bProps.PANJANG || 0,
+                                lebar: bProps.lebar || bProps.LEBAR || 0,
+                                id_desa: bProps.id_desa || bProps.desa_id,
+                                kecamatan: bProps.kecamatan || bProps.KECAMATAN,
+                                desa: bProps.desa || bProps.DESA
+                            },
+                            stats: bProps.stats || {}
+                        });
+                    }
+                }
+            }
         }
 
         setMode("edit");
@@ -3105,6 +3313,22 @@ export default function DrawPage() {
                                 <div ref={mapElement} className="w-full h-full map-container" />
                             </ContextMenuTrigger>
                             <ContextMenuContent className="w-48 bg-white/95 backdrop-blur-md border border-slate-200 shadow-2xl rounded-xl p-1">
+                                {mode !== "view" && (
+                                    <>
+                                        <ContextMenuItem
+                                            onClick={handleCancelAction}
+                                            className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 rounded-lg cursor-pointer transition-colors"
+                                        >
+                                            <X className="h-4 w-4 text-rose-500" />
+                                            <div className="flex flex-col">
+                                                <span className="tracking-tight leading-none">Batal Aksi</span>
+                                                <span className="text-[9px] opacity-60 font-medium">Batal digitasi/edit</span>
+                                            </div>
+                                            <ContextMenuShortcut className="text-[10px] opacity-50 uppercase font-black ml-auto">ESC</ContextMenuShortcut>
+                                        </ContextMenuItem>
+                                        <ContextMenuSeparator />
+                                    </>
+                                )}
                                 <ContextMenuItem
                                     onClick={handleCopyCoordinatesFromMenu}
                                     className="flex items-center gap-2 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg cursor-pointer transition-colors"
@@ -3545,7 +3769,11 @@ export default function DrawPage() {
                 {editingFeatureId ? (
                     <DrawEditFormPanel
                         isVisible={isPanelVisible}
-                        onClose={() => setIsPanelVisible(false)}
+                        onClose={() => {
+                            setIsPanelVisible(false);
+                            setMode("edit");
+                            toast.info("Mode Reshape Aktif: Silahkan sesuaikan titik garis.");
+                        }}
                         selectedRoad={selectedRoad}
                         drawnGeoJSON={drawnGeoJSON}
                         onSave={handleSaveSegment}
@@ -3557,10 +3785,8 @@ export default function DrawPage() {
                         isVisible={isPanelVisible}
                         onClose={() => {
                             setIsPanelVisible(false);
-                            if (hasTemporaryFeature) {
-                                setMode("edit");
-                                toast.info("Mode Reshape Aktif: Silahkan sesuaikan titik garis.");
-                            }
+                            setMode("edit");
+                            toast.info("Mode Reshape Aktif: Silahkan sesuaikan titik garis.");
                         }}
                         selectedRoad={selectedRoad}
                         drawnGeoJSON={drawnGeoJSON}

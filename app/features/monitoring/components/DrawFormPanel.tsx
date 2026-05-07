@@ -373,10 +373,17 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                 </div>
             </form>
 
-            <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
-                <Button className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 h-10 text-sm font-bold shadow-lg shadow-blue-200 dark:shadow-blue-900/40" onClick={handleSubmit}>
+            <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900 grid grid-cols-2 gap-2">
+                <Button 
+                    variant="outline" 
+                    className="h-10 text-xs font-bold uppercase tracking-wider dark:border-slate-700 dark:text-slate-300"
+                    onClick={onClose}
+                >
+                    Batal
+                </Button>
+                <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 h-10 text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-200 dark:shadow-blue-900/40" onClick={handleSubmit}>
                     <Save className="w-4 h-4 mr-2" />
-                    SIMPAN DATA SEGMEN
+                    Simpan Data
                 </Button>
             </div>
         </div>

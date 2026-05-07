@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from "react";
-import { Square, Circle, Pentagon, Minus, Save, MousePointer2, Trash2, Download, Pencil, SplinePointer, Spline, SaveIcon, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Square, Circle, Pentagon, Minus, Save, MousePointer2, Trash2, Download, Pencil, SplinePointer, Spline, SaveIcon, X, ChevronLeft, ChevronRight, Sparkles, Zap } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
@@ -56,16 +56,40 @@ export function DrawControls({
         {
             id: "draw-line",
             icon: Spline,
-            label: "Draw Line",
-            active: mode === "draw-line" || mode === "draw-automatic",
-            disabled: !isDrawLineEnabled,
-            alwaysShow: true,
+            label: "Manual",
+            active: mode === "draw-line",
+            disabled: !isDrawLineEnabled || isEditingSegment,
+            show: !isEditingSegment,
             onClick: () => onSetMode("draw-line"),
+        },
+        {
+            id: "draw-automatic",
+            icon: Sparkles,
+            label: "Point to Point",
+            active: mode === "draw-automatic",
+            disabled: !isDrawLineEnabled || isEditingSegment,
+            show: !isEditingSegment,
+            onClick: () => onSetMode("draw-automatic"),
+        },
+        {
+            id: "extract",
+            icon: Zap,
+            label: "Extract",
+            active: false,
+            variant: "info" as const,
+            disabled: !hasDrawnFeature,
+            show: mode === "draw-automatic" && hasDrawnFeature,
+            onClick: () => {
+                // We'll pass this via a new prop or handle it in index.tsx
+                if (window.dispatchEvent) {
+                    window.dispatchEvent(new CustomEvent("trigger-segment-extraction"));
+                }
+            },
         },
         {
             id: "edit",
             icon: SplinePointer,
-            label: "Edit & Snap",
+            label: "Reshape & Snap",
             active: mode === "edit",
             disabled: !isEditSnapEnabled,
             show: isEditSnapEnabled,
@@ -111,11 +135,14 @@ export function DrawControls({
     ];
 
     // Show alwaysShow tools OR tools that are explicitly shown
-    // Prioritize "save" button to be on the left when active
+    // Prioritize "save" and "cancel" buttons to be on the left when active
     const saveTool = allTools.find(t => t.id === "save");
-    const otherTools = allTools.filter(t => t.id !== "save");
+    const cancelTool = allTools.find(t => t.id === "cancel");
+    const otherTools = allTools.filter(t => t.id !== "save" && t.id !== "cancel");
+
     const visibleTools = [
         ...(saveTool && (saveTool.alwaysShow || saveTool.show) ? [saveTool] : []),
+        ...(cancelTool && (cancelTool.alwaysShow || cancelTool.show) ? [cancelTool] : []),
         ...otherTools.filter(t => t.alwaysShow || t.show)
     ];
 

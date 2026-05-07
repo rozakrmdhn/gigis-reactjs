@@ -1,476 +1,254 @@
-# Issue: Perbaikan Autentikasi API & Notifikasi Sesi Expired Proaktif
+# Redesign UI/UX RoadSegmentsPanel - Simple & Fungsional
 
-**Prioritas:** High  
-**Estimasi:** 2–3 jam  
-**Label:** `enhancement`, `bug`
+## Deskripsi
+
+Melakukan redesign pada komponen `RoadSegmentsPanel` agar tampilannya lebih **sederhana (simple)** dan **fungsional**. Saat ini seluruh fitur panel (header, tabs, filter, list item, action buttons, dll.) berada di dalam satu file monolitik (`RoadSegmentsPanel.tsx` — 458 baris). Hal ini menyulitkan pemeliharaan, pengembangan fitur baru, dan pengujian.
+
+**Tujuan utama:**
+1. Menyederhanakan tampilan panel agar lebih clean dan mudah digunakan.
+2. Memecah file monolitik menjadi komponen-komponen kecil yang modular sesuai fungsionalitasnya.
+
+**Route:** `/admin/monitoring/draw`
+
+**File utama:** `app/features/monitoring/components/RoadSegmentsPanel.tsx`
 
 ---
 
-## Ringkasan
+## Analisis Komponen Saat Ini
 
-Saat ini terdapat dua masalah utama pada manajemen sesi dan autentikasi:
+Komponen `RoadSegmentsPanel` saat ini terdiri dari bagian-bagian berikut yang semuanya ada di satu file:
 
-1. **API Endpoint GET** harus bebas diakses tanpa auth token (public). API Endpoint selain GET (POST, PUT, DELETE) tetap memerlukan auth token dari login.
-2. **Notifikasi sesi habis** saat ini hanya muncul **setelah** pengguna gagal melakukan operasi CRUD. Seharusnya pengguna diberitahu **sebelum** mereka mencoba melakukan aksi tersebut, agar tidak kehilangan data yang sudah diisi.
-
----
-
-## Kondisi Saat Ini
-
-### File-file yang terlibat:
-
-| # | File | Deskripsi |
-|---|------|-----------|
-| 1 | `app/lib/api-client.ts` | API client wrapper — menangani semua request HTTP |
-| 2 | `app/services/auth.service.ts` | Service autentikasi — token, session check, headers |
-| 3 | `app/contexts/auth-context.tsx` | React context — state user, session watchdog |
-| 4 | `app/features/auth/components/SessionExpiredAlert.tsx` | Dialog alert saat sesi expired |
-| 5 | `app/routes/sidebar-layout.tsx` | Layout admin — auth guard untuk route `/admin/*` |
-
-### Yang sudah berfungsi:
-- ✅ `checkSession()` di `auth.service.ts` sudah dispatch event `auth-session-expired` saat token expired
-- ✅ `SessionExpiredAlert.tsx` sudah listen event tersebut dan menampilkan dialog
-- ✅ `auth-context.tsx` sudah punya watchdog interval setiap 1 detik (`setInterval`)
-- ✅ `api-client.ts` sudah membedakan GET dan non-GET saat session tidak valid (baris 48)
-
-### Yang BERMASALAH:
-- ❌ **GET request tetap mengirim auth header** — jika token expired, GET request bisa gagal 401/403 padahal seharusnya bebas diakses
-- ❌ **Watchdog di `auth-context.tsx` hanya memanggil `checkSession()`** — ini membersihkan token dan dispatch event, tapi **tidak ada notifikasi visual proaktif sebelum user melakukan aksi**
-- ❌ **Tidak ada countdown/peringatan** sebelum sesi benar-benar habis, sehingga pengguna kaget saat tiba-tiba muncul dialog "Sesi Berakhir" ketika menekan tombol simpan
+| Bagian | Deskripsi | Baris (kurang lebih) |
+|---|---|---|
+| `SegmentItem` | Kartu individual untuk setiap segmen jalan (kondisi, tahun, panjang, aksi) | 48–153 |
+| `SegmentList` | Daftar scrollable segmen + filter + tombol Tambah | 168–280 |
+| `RoadSegmentsPanel` | Panel utama (header, tabs Ruas/Non Melarosa, toggle buka/tutup) | 300–457 |
+| `formatNumber` | Helper formatting angka | 36–37 |
 
 ---
 
 ## Tahapan Implementasi
 
-### Tahap 1: GET Request Tanpa Auth Header
+### Tahap 1: Persiapan — Buat Folder & Struktur File
 
-**File:** `app/lib/api-client.ts`
+1. Buat folder baru: `app/features/monitoring/components/road-segments/`
+2. Di dalam folder tersebut, buat file-file berikut (masih kosong):
 
-GET request harus bisa diakses tanpa auth. Ubah logika pengiriman header agar GET **tidak memerlukan auth header**.
-
-**SEBELUM (baris 43–60):**
-```typescript
-try {
-    // Trigger session check (dispatches event if expired)
-    const isSessionValid = authService.checkSession();
-
-    // Only block the request if it's NOT a GET request and session is invalid
-    if (!isSessionValid && fetchOptions.method !== "GET" && fetchOptions.method !== undefined) {
-        // If we had a session but it just became invalid, block the write operation
-        throw new Error("Unauthorized");
-    }
-
-
-    let response = await fetch(url, {
-        ...fetchOptions,
-        headers: {
-            ...authService.getAuthHeaders(),
-            ...fetchOptions.headers,
-        },
-    });
+```
+app/features/monitoring/components/road-segments/
+├── index.ts                    # Barrel export
+├── RoadSegmentsPanel.tsx       # Komponen panel utama (container)
+├── SegmentItem.tsx             # Kartu segmen individual
+├── SegmentList.tsx             # Daftar segmen + scroll
+├── SegmentFilters.tsx          # Filter kondisi & status
+├── SegmentActions.tsx          # Tombol aksi (Edit, Monitoring, Delete)
+├── AddSegmentDropdown.tsx      # Dropdown "Tambah" (Manual/Otomatis)
+└── PanelHeader.tsx             # Header panel (judul + tombol close)
 ```
 
-**SESUDAH:**
-```typescript
-try {
-    const isGetRequest = !fetchOptions.method || fetchOptions.method === "GET";
-
-    // Untuk non-GET request, cek session terlebih dahulu
-    if (!isGetRequest) {
-        const isSessionValid = authService.checkSession();
-        if (!isSessionValid) {
-            throw new Error("Unauthorized");
-        }
-    }
-
-    // Siapkan headers — GET request tidak perlu auth header
-    const headers: HeadersInit = isGetRequest
-        ? {
-            'Content-Type': 'application/json',
-            ...fetchOptions.headers,
-          }
-        : {
-            ...authService.getAuthHeaders(),
-            ...fetchOptions.headers,
-          };
-
-    let response = await fetch(url, {
-        ...fetchOptions,
-        headers,
-    });
-```
-
-**Penjelasan:**
-- GET request **tidak lagi mengirim `Authorization` header**, sehingga tidak akan terkena 401/403
-- Non-GET request (POST, PUT, DELETE) **tetap memerlukan auth** dan dicek session-nya sebelum dikirim
-- Jika token ada dan valid, GET request tetap bisa mengirim auth header secara opsional jika diperlukan di masa depan
+3. Setelah semua file dibuat, update import di `app/routes/monitoring/draw/index.tsx`:
+   ```typescript
+   // SEBELUM
+   import { RoadSegmentsPanel } from "~/features/monitoring/components/RoadSegmentsPanel";
+   // SESUDAH
+   import { RoadSegmentsPanel } from "~/features/monitoring/components/road-segments";
+   ```
 
 ---
 
-### Tahap 2: Peringatan Proaktif Sebelum Sesi Habis
+### Tahap 2: Pindahkan `SegmentItem` → `SegmentItem.tsx`
 
-**File:** `app/contexts/auth-context.tsx`
+1. **Salin** komponen `SegmentItem` (baris 48–153 dari file asli) ke file baru `SegmentItem.tsx`.
+2. **Pindahkan juga** helper `formatNumber` ke file ini (atau buat file `utils.ts` terpisah di folder yang sama).
+3. **Sederhanakan tampilan kartu** dengan prinsip berikut:
+   - Hapus bagian `sumber_data` dan `created_at` yang terlalu verbose (pindahkan ke tooltip jika perlu).
+   - Hapus tampilan `props.id` yang tidak diperlukan end-user.
+   - Buat layout kartu lebih compact: satu baris untuk info utama (kondisi + panjang), satu baris untuk aksi.
+4. **Export** komponen dan interface `SegmentItemProps`.
 
-Tambahkan logika untuk mendeteksi **sesi hampir habis** (misalnya 2 menit sebelum expired) dan dispatch event baru.
-
-**SEBELUM (baris 32–49):**
-```typescript
-// Listen for session expiry event
-useEffect(() => {
-    const handleSessionExpired = () => {
-        console.log("Session expired");
-        setUser(null);
-    };
-
-    window.addEventListener("auth-session-expired", handleSessionExpired);
-
-    // Global watchdog check every 1 second
-    const interval = setInterval(() => {
-        authService.checkSession();
-    }, 1000);
-
-    return () => {
-        window.removeEventListener("auth-session-expired", handleSessionExpired);
-        clearInterval(interval);
-    };
-}, []);
+**Contoh struktur baru yang disederhanakan:**
+```
+┌──────────────────────────────────────────────┐
+│ [Badge: Jenis] [Badge: Kondisi]    123.45 m  │
+│ Tahun: 2024                          🔍 Zoom │
+│ ─────────────────────────────────────────── │
+│ [Edit]    [Monitoring]    [Delete]            │
+└──────────────────────────────────────────────┘
 ```
 
-**SESUDAH:**
-```typescript
-// Listen for session expiry event
-useEffect(() => {
-    const handleSessionExpired = () => {
-        console.log("Session expired");
-        setUser(null);
-    };
-
-    window.addEventListener("auth-session-expired", handleSessionExpired);
-
-    // Global watchdog check every 1 second
-    const interval = setInterval(() => {
-        const expiry = authService.getExpiry();
-        const now = Date.now();
-
-        if (expiry && user) {
-            const remainingMs = expiry - now;
-
-            // Peringatan 2 menit sebelum expired
-            if (remainingMs > 0 && remainingMs <= 2 * 60 * 1000) {
-                window.dispatchEvent(new CustomEvent("auth-session-warning", {
-                    detail: { remainingMs }
-                }));
-            }
-        }
-
-        authService.checkSession();
-    }, 1000);
-
-    return () => {
-        window.removeEventListener("auth-session-expired", handleSessionExpired);
-        clearInterval(interval);
-    };
-}, [user]);
-```
-
-**Penjelasan:**
-- Menambahkan pengecekan sisa waktu sesi pada interval watchdog yang sudah ada
-- Jika sisa waktu ≤ 2 menit, dispatch event baru `auth-session-warning` dengan informasi `remainingMs`
-- Dependency array diubah ke `[user]` agar interval ter-reset saat state user berubah
+> **Catatan:** Pastikan tombol `Edit` hanya tampil jika `!props.is_base_jalan`.
 
 ---
 
-### Tahap 3: Buat Komponen Peringatan Sesi Hampir Habis
+### Tahap 3: Pindahkan Tombol Aksi → `SegmentActions.tsx`
 
-**File:** `app/features/auth/components/SessionExpiredAlert.tsx` — **MODIFY**
-
-Tambahkan fitur **countdown warning** di komponen yang sudah ada sebelum dialog "Sesi Berakhir" muncul.
-
-**SEBELUM (seluruh file):**
-```tsx
-export function SessionExpiredAlert() {
-    const [isOpen, setIsOpen] = useState(false);
-    const navigate = useNavigate();
-    // ... hanya handle "auth-session-expired"
-}
-```
-
-**SESUDAH — Tambahkan state dan listener baru:**
-```tsx
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import { LogOut, Clock, RefreshCw } from "lucide-react";
-import { authService } from "~/services/auth.service";
-import { toast } from "sonner";
-
-export function SessionExpiredAlert() {
-    const [isOpen, setIsOpen] = useState(false);
-    const [isWarning, setIsWarning] = useState(false);
-    const [remainingSeconds, setRemainingSeconds] = useState(0);
-    const navigate = useNavigate();
-
-    useEffect(() => {
-        const handleSessionExpired = () => {
-            setIsWarning(false); // Tutup warning jika ada
-            setIsOpen(true);
-        };
-
-        const handleSessionWarning = (event: CustomEvent) => {
-            const { remainingMs } = event.detail;
-            setRemainingSeconds(Math.ceil(remainingMs / 1000));
-
-            // Tampilkan warning dialog hanya sekali
-            if (!isWarning && !isOpen) {
-                setIsWarning(true);
-            }
-        };
-
-        window.addEventListener("auth-session-expired", handleSessionExpired);
-        window.addEventListener("auth-session-warning", handleSessionWarning as EventListener);
-
-        return () => {
-            window.removeEventListener("auth-session-expired", handleSessionExpired);
-            window.removeEventListener("auth-session-warning", handleSessionWarning as EventListener);
-        };
-    }, [isWarning, isOpen]);
-
-    // Update countdown setiap detik
-    useEffect(() => {
-        if (!isWarning) return;
-
-        const interval = setInterval(() => {
-            setRemainingSeconds(prev => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-
-        return () => clearInterval(interval);
-    }, [isWarning]);
-
-    const handleLoginRedirect = () => {
-        setIsOpen(false);
-        setIsWarning(false);
-        navigate("/login");
-    };
-
-    const handleDismissWarning = () => {
-        setIsWarning(false);
-    };
-
-    // Format detik ke "M:SS"
-    const formatTime = (seconds: number) => {
-        const m = Math.floor(seconds / 60);
-        const s = seconds % 60;
-        return `${m}:${s.toString().padStart(2, "0")}`;
-    };
-
-    return (
-        <>
-            {/* Warning Dialog — Sesi Hampir Habis */}
-            <AlertDialog open={isWarning} onOpenChange={setIsWarning}>
-                <AlertDialogContent className="sm:max-w-[425px]">
-                    <AlertDialogHeader className="flex flex-col items-center gap-4 text-center">
-                        <div className="p-3 bg-amber-100 rounded-full text-amber-600">
-                            <Clock className="w-8 h-8" />
-                        </div>
-                        <div className="space-y-2">
-                            <AlertDialogTitle className="text-2xl font-bold text-slate-900">
-                                Sesi Hampir Habis
-                            </AlertDialogTitle>
-                            <AlertDialogDescription className="text-slate-500 font-medium">
-                                Sesi Anda akan berakhir dalam{" "}
-                                <span className="font-bold text-amber-600 text-lg">
-                                    {formatTime(remainingSeconds)}
-                                </span>
-                                . Silakan simpan pekerjaan Anda atau login kembali untuk memperpanjang sesi.
-                            </AlertDialogDescription>
-                        </div>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="sm:flex-col gap-2 mt-4">
-                        <AlertDialogAction
-                            onClick={handleLoginRedirect}
-                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-11"
-                        >
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Login Ulang Sekarang
-                        </AlertDialogAction>
-                        <AlertDialogCancel
-                            onClick={handleDismissWarning}
-                            className="w-full font-bold h-11"
-                        >
-                            Lanjutkan Bekerja
-                        </AlertDialogCancel>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Expired Dialog — Sesi Sudah Habis */}
-            <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-                <AlertDialogContent className="sm:max-w-[425px]">
-                    <AlertDialogHeader className="flex flex-col items-center gap-4 text-center">
-                        <div className="p-3 bg-red-100 rounded-full text-red-600">
-                            <LogOut className="w-8 h-8" />
-                        </div>
-                        <div className="space-y-2">
-                            <AlertDialogTitle className="text-2xl font-bold text-slate-900">
-                                Sesi Berakhir
-                            </AlertDialogTitle>
-                            <AlertDialogDescription className="text-slate-500 font-medium">
-                                Sesi Anda telah berakhir atau tidak valid. Silakan masuk kembali untuk melanjutkan akses ke aplikasi.
-                            </AlertDialogDescription>
-                        </div>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="sm:flex-col gap-2 mt-4">
-                        <AlertDialogAction
-                            onClick={handleLoginRedirect}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-11"
-                        >
-                            Masuk Kembali
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
-    );
-}
-```
-
-**Penjelasan:**
-- Komponen sekarang menangani **dua event**: `auth-session-warning` (peringatan) dan `auth-session-expired` (sudah habis)
-- Warning dialog menampilkan **countdown timer** dalam format `M:SS`
-- Pengguna punya dua opsi: **"Login Ulang Sekarang"** atau **"Lanjutkan Bekerja"**
-- Jika pengguna memilih "Lanjutkan Bekerja", dialog ditutup, tapi akan muncul lagi di detik berikutnya (karena watchdog masih aktif) — ATAU bisa ditambahkan cooldown agar tidak spam
+1. **Ekstrak** bagian tombol aksi dari `SegmentItem` (baris 100–150) ke komponen terpisah.
+2. Interface props:
+   ```typescript
+   interface SegmentActionsProps {
+     segment: any;
+     isBaseJalan: boolean;
+     onEdit: (feature: any) => void;
+     onMonitoring?: (feature: any) => void;
+     onDelete?: (feature: any) => void;
+   }
+   ```
+3. Pindahkan juga komponen `AlertDialog` untuk konfirmasi delete ke dalam file ini.
+4. **Sederhanakan styling:** gunakan icon-only buttons dengan tooltip untuk menghemat ruang, terutama pada mobile.
 
 ---
 
-### Tahap 4: (Opsional) Tambahkan Cooldown pada Warning
+### Tahap 4: Pindahkan Filter → `SegmentFilters.tsx`
 
-Jika warning dialog terlalu sering muncul (setiap detik selama 2 menit terakhir), tambahkan cooldown di `auth-context.tsx`:
+1. **Ekstrak** dropdown filter Status Kondisi dan Kondisi (baris 183–217 dari file asli) ke komponen baru.
+2. Interface props:
+   ```typescript
+   interface SegmentFiltersProps {
+     filters: { kondisi: string; status_kondisi: string };
+     onFilterChange: (filters: { kondisi: string; status_kondisi: string }) => void;
+   }
+   ```
+3. **Sederhanakan tampilan:** Jika filter aktif, tampilkan indikator kecil (badge/dot) agar pengguna tahu ada filter yang aktif. Tambahkan tombol reset filter.
+
+---
+
+### Tahap 5: Pindahkan Dropdown Tambah → `AddSegmentDropdown.tsx`
+
+1. **Ekstrak** `DropdownMenu` untuk opsi Digitasi (baris 220–254) ke komponen terpisah.
+2. Interface props:
+   ```typescript
+   interface AddSegmentDropdownProps {
+     onAdd: (type: 'manual' | 'otomatis') => void;
+   }
+   ```
+3. Komponen ini hanya render dropdown button "Tambah" dengan 2 opsi: Manual dan Otomatis.
+
+---
+
+### Tahap 6: Pindahkan Header Panel → `PanelHeader.tsx`
+
+1. **Ekstrak** bagian header panel (baris 387–401) ke komponen `PanelHeader.tsx`.
+2. Interface props:
+   ```typescript
+   interface PanelHeaderProps {
+     title: string;
+     onClose: () => void;
+   }
+   ```
+3. Sederhanakan: cukup judul + tombol close. Hapus icon besar yang tidak perlu.
+
+---
+
+### Tahap 7: Pindahkan `SegmentList` → `SegmentList.tsx`
+
+1. **Salin** komponen `SegmentList` ke file baru.
+2. Import `SegmentItem`, `SegmentFilters`, dan `AddSegmentDropdown` dari file-file yang sudah dibuat.
+3. **Sederhanakan layout:**
+   - Filter dan tombol Tambah diletakkan di satu baris horizontal.
+   - Daftar segmen menggunakan `ScrollArea` seperti sebelumnya.
+   - Tampilkan jumlah segmen (count) di dekat judul tab.
+
+---
+
+### Tahap 8: Rakit Ulang `RoadSegmentsPanel.tsx`
+
+1. Buka file `RoadSegmentsPanel.tsx` yang baru (di folder `road-segments/`).
+2. Import semua komponen yang sudah dipisah:
+   ```typescript
+   import { PanelHeader } from "./PanelHeader";
+   import { SegmentList } from "./SegmentList";
+   ```
+3. Pertahankan logika:
+   - Toggle buka/tutup panel (slide in/out).
+   - Tabs "Ruas Jalan" dan "Non Melarosa" dengan counter badge.
+   - Filtering segmen berdasarkan `check_melarosa`.
+4. **Redesign layout panel:**
+   - Tampilan lebih compact tanpa padding berlebih.
+   - Tab menampilkan jumlah item: `Ruas Jalan (12)` | `Non Melarosa (5)`.
+   - Warna dan spacing yang konsisten.
+
+---
+
+### Tahap 9: Update Barrel Export → `index.ts`
+
+Buat file `index.ts` untuk barrel export:
 
 ```typescript
-// Di dalam interval watchdog
-const WARNING_THRESHOLD = 2 * 60 * 1000; // 2 menit
-let warningDispatched = false;
-
-const interval = setInterval(() => {
-    const expiry = authService.getExpiry();
-    const now = Date.now();
-
-    if (expiry && user) {
-        const remainingMs = expiry - now;
-
-        if (remainingMs > WARNING_THRESHOLD) {
-            warningDispatched = false; // Reset flag saat masih jauh dari expired
-        }
-
-        // Dispatch warning hanya SEKALI
-        if (remainingMs > 0 && remainingMs <= WARNING_THRESHOLD && !warningDispatched) {
-            warningDispatched = true;
-            window.dispatchEvent(new CustomEvent("auth-session-warning", {
-                detail: { remainingMs }
-            }));
-        }
-    }
-
-    authService.checkSession();
-}, 1000);
-```
-
-**Penjelasan:**
-- Dengan flag `warningDispatched`, event `auth-session-warning` hanya di-dispatch **satu kali**
-- Setelah user dismiss dialog, dia tidak akan diganggu lagi sampai sesi benar-benar expired
-- Countdown tetap berjalan di dalam komponen `SessionExpiredAlert` secara internal
-
----
-
-## Alur UX Setelah Implementasi
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    ALUR SESI PENGGUNA                       │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  [Login] ──→ [Bekerja di /admin] ──→ [Sesi hampir habis]   │
-│                                          │                  │
-│                                          ▼                  │
-│                                   ┌──────────────┐          │
-│                                   │  ⚠️ Warning   │          │
-│                                   │  "Sesi Hampir │          │
-│                                   │   Habis 1:30" │          │
-│                                   │              │          │
-│                                   │ [Login Ulang] │          │
-│                                   │ [Lanjutkan]  │          │
-│                                   └──────┬───────┘          │
-│                                          │                  │
-│                            ┌─────────────┴──────────┐       │
-│                            ▼                        ▼       │
-│                     [Login Ulang]           [Lanjutkan]      │
-│                     → /login               → Bekerja        │
-│                                            → Sesi habis     │
-│                                                   │         │
-│                                                   ▼         │
-│                                            ┌────────────┐   │
-│                                            │ 🔴 Expired  │   │
-│                                            │ "Sesi      │   │
-│                                            │  Berakhir" │   │
-│                                            │            │   │
-│                                            │ [Masuk     │   │
-│                                            │  Kembali]  │   │
-│                                            └────────────┘   │
-│                                                             │
-│  [GET Request] ──→ Langsung berhasil (tanpa auth header)    │
-│  [POST/PUT/DELETE] ──→ Cek session dulu → kirim dengan auth │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+export { RoadSegmentsPanel } from "./RoadSegmentsPanel";
+export type { RoadSegmentsPanelProps } from "./RoadSegmentsPanel";
 ```
 
 ---
 
-## File yang Perlu Diubah
+### Tahap 10: Update Import di Parent & Verifikasi
 
-| # | File | Aksi | Keterangan |
-|---|------|------|------------|
-| 1 | `app/lib/api-client.ts` | **MODIFY** | GET request tanpa auth header, non-GET tetap pakai auth |
-| 2 | `app/contexts/auth-context.tsx` | **MODIFY** | Tambah deteksi sesi hampir habis + dispatch event warning |
-| 3 | `app/features/auth/components/SessionExpiredAlert.tsx` | **MODIFY** | Tambah warning dialog dengan countdown timer |
-
----
-
-## Checklist Testing
-
-- [ ] **GET request tanpa login:** Buka browser incognito, akses API GET endpoint langsung → harus berhasil (200 OK)
-- [ ] **GET request dengan token expired:** Login, tunggu token expired, lakukan navigasi yang trigger GET → harus tetap berhasil tanpa redirect
-- [ ] **POST/PUT/DELETE tanpa login:** Coba submit form tanpa login → harus ditolak (dialog "Sesi Berakhir")
-- [ ] **Warning muncul 2 menit sebelum expired:** Login, tunggu hingga 2 menit sebelum sesi habis → dialog "Sesi Hampir Habis" muncul dengan countdown
-- [ ] **Countdown berjalan:** Timer di dialog warning bergerak mundur dari `2:00` ke `0:00`
-- [ ] **Klik "Login Ulang Sekarang":** Redirect ke halaman login
-- [ ] **Klik "Lanjutkan Bekerja":** Dialog tertutup, pengguna bisa melanjutkan kerja
-- [ ] **Sesi benar-benar habis:** Setelah timer mencapai `0:00`, dialog berubah ke "Sesi Berakhir" (merah)
-- [ ] **Dark mode:** Kedua dialog terlihat baik di dark mode
+1. Update import di `app/routes/monitoring/draw/index.tsx` (baris 77):
+   ```typescript
+   import { RoadSegmentsPanel } from "~/features/monitoring/components/road-segments";
+   ```
+2. **Pastikan semua props yang diteruskan masih sama** — tidak ada perubahan pada interface `RoadSegmentsPanelProps`.
+3. Jalankan aplikasi dan verifikasi:
+   - [ ] Panel bisa dibuka/ditutup dengan slide animation.
+   - [ ] Tabs "Ruas Jalan" dan "Non Melarosa" berfungsi normal.
+   - [ ] Filter Kondisi dan Status berfungsi.
+   - [ ] Tombol Tambah (Manual/Otomatis) berfungsi.
+   - [ ] Tombol Edit, Monitoring, Delete pada setiap segmen berfungsi.
+   - [ ] Alert dialog konfirmasi delete masih muncul.
+   - [ ] Zoom ke segmen berfungsi.
+   - [ ] Tampilan responsive pada mobile dan desktop.
 
 ---
 
-## Catatan untuk Implementor
+### Tahap 11: Hapus File Lama
 
-> **PENTING:** Jangan ubah logika `authService.signin()` atau `authService.signout()`. Fokus hanya pada:
-> 1. Pengiriman header di `api-client.ts`
-> 2. Watchdog interval di `auth-context.tsx`
-> 3. UI komponen di `SessionExpiredAlert.tsx`
+Setelah semua verifikasi berhasil:
 
-> **TIPS:** Untuk testing cepat, ubah sementara `TOKEN_EXPIRY_KEY` di localStorage ke waktu 3-5 menit dari sekarang menggunakan Chrome DevTools → Application → Local Storage.
+1. Hapus file lama: `app/features/monitoring/components/RoadSegmentsPanel.tsx`
+2. Pastikan tidak ada file lain yang mengimport dari path lama.
 
-> **TIPS:** Gunakan `Date.now() + (3 * 60 * 1000)` untuk set token expiry 3 menit dari sekarang saat testing.
+---
+
+## Struktur File Akhir
+
+```
+app/features/monitoring/components/
+├── road-segments/
+│   ├── index.ts                    # Barrel export
+│   ├── RoadSegmentsPanel.tsx       # Panel container (tabs, toggle, filtering logic)
+│   ├── PanelHeader.tsx             # Header: judul + close button
+│   ├── SegmentList.tsx             # Daftar scrollable + filter bar + add button
+│   ├── SegmentItem.tsx             # Kartu segmen individual (compact)
+│   ├── SegmentActions.tsx          # Tombol aksi (Edit/Monitoring/Delete + alert dialog)
+│   ├── SegmentFilters.tsx          # Dropdown filter (Status & Kondisi)
+│   └── AddSegmentDropdown.tsx      # Dropdown tambah (Manual/Otomatis)
+├── DrawControls.tsx                # (tidak diubah)
+├── DrawSidebar.tsx                 # (tidak diubah)
+└── ... (file lain tetap)
+```
+
+---
+
+## Prinsip Redesign UI/UX
+
+1. **Compact & Clean:** Kurangi padding, margin, dan elemen dekoratif yang tidak perlu.
+2. **Information Density:** Tampilkan info penting saja pada kartu segmen; detail lainnya bisa diakses via tooltip atau expand.
+3. **Consistent Spacing:** Gunakan spacing yang seragam (p-2, gap-2 sebagai base).
+4. **Action Clarity:** Tombol aksi harus jelas dan mudah dijangkau. Pada mobile, gunakan icon-only dengan tooltip.
+5. **State Feedback:** Berikan indikator visual saat filter aktif (dot/badge) dan jumlah item pada tab.
+
+---
+
+## Checklist
+
+- [x] Folder `road-segments/` dibuat
+- [x] `SegmentItem.tsx` — kartu segmen yang lebih compact
+- [x] `SegmentActions.tsx` — tombol aksi + dialog konfirmasi
+- [x] `SegmentFilters.tsx` — dropdown filter
+- [x] `AddSegmentDropdown.tsx` — dropdown tambah segmen
+- [x] `PanelHeader.tsx` — header panel
+- [x] `SegmentList.tsx` — daftar segmen
+- [x] `RoadSegmentsPanel.tsx` — panel container baru
+- [x] `index.ts` — barrel export
+- [x] Import di `draw/index.tsx` diperbarui
+- [x] Verifikasi semua fitur berfungsi
+- [x] File lama dihapus
