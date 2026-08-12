@@ -1,4 +1,4 @@
-import {
+﻿import {
     Layers, X, GripVertical, RotateCcw, Search, Trash2,
     Database, Filter, Play, RefreshCw, Loader2, Eye, EyeOff, Plus
 } from "lucide-react";
@@ -16,7 +16,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "~/components/ui/select";
-import { cn } from "~/lib/utils";
+import { cn, getProxiedLayerUrl } from "~/lib/utils";
 import { useState, useMemo, useEffect } from "react";
 import {
     DndContext,
@@ -107,7 +107,7 @@ function SortableLayerItem({
                 
                 if (layer.url && layer.wmsParams?.LAYERS) {
                     targetType = layer.wmsParams.LAYERS;
-                    const proxyUrl = layer.url.replace('https://saggaserv.my.id/geoserver', `${window.location.origin}/proxy/geoserver`);
+                    const proxyUrl = getProxiedLayerUrl(layer.url);
                     url = new URL(proxyUrl, window.location.origin);
                     url.searchParams.set('service', 'WFS');
                     url.searchParams.set('version', '1.0.0');

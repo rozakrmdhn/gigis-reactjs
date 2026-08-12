@@ -51,7 +51,7 @@ export function NonBaseSegmentList({ segments, onZoom, onEdit, onDelete, isLoadi
                                         {props.status_jalan || "Non-Ruas"}
                                     </Badge>
                                     <span className="text-[10px] text-slate-500 font-medium">
-                                        {props.panjang ? `${parseFloat(props.panjang).toFixed(1)}m` : "- m"}
+                                        {props.panjang ? `${parseFloat(props.panjang).toFixed(2)}m` : "- m"}
                                     </span>
                                 </div>
                                 <p className="text-[10px] text-slate-400 mt-1 truncate">

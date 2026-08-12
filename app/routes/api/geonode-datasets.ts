@@ -1,6 +1,10 @@
-import type { LoaderFunctionArgs } from "react-router";
+﻿import type { LoaderFunctionArgs } from "react-router";
+
+// Disable SSL certificate verification for backend proxying (e.g. government GeoServers with expired/untrusted SSL certs)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 // In-memory cache setup
+
 let cachedData: any = null;
 let cacheTimestamp: number = 0;
 const CACHE_DURATION_MS = 15 * 60 * 1000; // 15 minutes cache

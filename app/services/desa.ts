@@ -1,4 +1,4 @@
-import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
+﻿import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
 import { apiClient } from '~/lib/api-client';
 
 export interface DesaGeoJSONResponse {
@@ -31,9 +31,14 @@ export const desaService = {
      * @returns Promise resolving to a list of Desa
      */
     getDesa: async (idKecamatan?: string | number): Promise<Desa[]> => {
-        const url = idKecamatan
-            ? getUrl(`/desa?id_kecamatan=${encodeURIComponent(idKecamatan.toString())}`)
-            : getUrl(`/desa`);
+        // Sanitize: If idKecamatan is 'all', '', 0, negative, or NaN, remove it so we fetch all desa
+        const cleanId = idKecamatan === 'all' || !idKecamatan || isNaN(Number(idKecamatan)) || Number(idKecamatan) <= 0
+            ? undefined
+            : idKecamatan;
+
+        const url = cleanId
+            ? getUrl(`/v1/desa?id_kecamatan=${encodeURIComponent(cleanId.toString())}`)
+            : getUrl(`/v1/desa`);
 
         const response = await apiClient.get<Desa[]>(url);
         return response.result || [];
@@ -46,9 +51,14 @@ export const desaService = {
      */
     getGeojsonDesa: async (idKecamatan?: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         try {
-            const url = idKecamatan
-                ? getUrl(`/desa/geojson?id_kecamatan=${encodeURIComponent(idKecamatan.toString())}&format=geojson`)
-                : getUrl(`/desa/geojson?format=geojson`);
+            // Sanitize: If idKecamatan is 'all', '', 0, negative, or NaN, remove it so we fetch all desa GeoJSON
+            const cleanId = idKecamatan === 'all' || !idKecamatan || isNaN(Number(idKecamatan)) || Number(idKecamatan) <= 0
+                ? undefined
+                : idKecamatan;
+
+            const url = cleanId
+                ? getUrl(`/v1/desa?id_kecamatan=${encodeURIComponent(cleanId.toString())}&format=geojson`)
+                : getUrl(`/v1/desa?format=geojson`);
 
             const response = await apiClient.get<any>(url) as any;
             if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
@@ -66,7 +76,7 @@ export const desaService = {
      */
     getDesaGeojsonById: async (idDesa: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         try {
-            const url = getUrl(`/desa/geojson?id_desa=${encodeURIComponent(idDesa.toString())}&format=geojson`);
+            const url = getUrl(`/v1/desa/${encodeURIComponent(idDesa.toString())}?format=geojson`);
             const response = await apiClient.get<any>(url, {
                 errorMessage: "Gagal mengambil batas wilayah desa"
             }) as any;
@@ -78,5 +88,23 @@ export const desaService = {
             console.error(`Failed to fetch geojson for desa ${idDesa}:`, error);
             return null;
         }
+    },
+
+    /**
+     * Fetch village (desa) details by ID (returns JSON object).
+     */
+    getDesaById: async (idDesa: string | number): Promise<any> => {
+        const url = getUrl(`/v1/desa/${encodeURIComponent(idDesa.toString())}`);
+        const response = await apiClient.get<any>(url);
+        return response.result || response.data || null;
+    },
+
+    /**
+     * Update village (desa) profile details by ID using PATCH.
+     */
+    patchDesa: async (idDesa: string | number, payload: { nama_pimpinan?: string; nama_jabatan?: string; nip?: string }): Promise<any> => {
+        const url = getUrl(`/v1/desa/${encodeURIComponent(idDesa.toString())}`);
+        const response = await apiClient.patch<any>(url, payload);
+        return response.result || response.data || null;
     },
 };

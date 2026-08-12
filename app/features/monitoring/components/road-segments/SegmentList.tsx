@@ -1,4 +1,4 @@
-import { List } from "lucide-react";
+﻿import { List } from "lucide-react";
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { cn } from "~/lib/utils";
 import { SegmentItem } from "./SegmentItem";

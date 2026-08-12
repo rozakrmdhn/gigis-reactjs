@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { useLoaderData, useRevalidator, useSearchParams, type LoaderFunctionArgs } from "react-router";
 import { monitoringService } from "~/features/monitoring/services/monitoring.service";
 import { kecamatanService } from "~/services/kecamatan";
@@ -27,7 +27,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Data Monitoring - GIGIS Monitoring" },
+        { title: "Data Monitoring - MELAROSA" },
         { name: "description", content: "Daftar monitoring ruas jalan poros desa Bojonegoro" },
     ];
 };

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+﻿import { useState, useEffect, useCallback, useRef } from "react";
 import { Link, useSearchParams, useLocation } from "react-router";
 import { PublicNavbar } from "~/components/public-navbar";
 import { monitoringService } from "~/features/monitoring/services/monitoring.service";
@@ -27,7 +27,7 @@ import { SegmenMiniMap } from "~/features/peta/components/SegmenMiniMap";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Daftar Ruas Jalan - GIGIS Monitoring" },
+        { title: "Daftar Ruas Jalan - MELAROSA" },
         { name: "description", content: "Daftar ruas jalan desa di Kabupaten Bojonegoro" },
     ];
 };
@@ -523,7 +523,7 @@ export default function JalanDesaListPage() {
 
             <footer className="mt-16 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 py-10">
                 <div className="container mx-auto px-4 text-center">
-                    <p className="text-slate-400 text-sm font-medium">© 2026 GIGIS Monitoring Jalan Poros. All rights reserved.</p>
+                    <p className="text-slate-400 text-sm font-medium">© 2026 MELAROSA Monitoring Infrastruktur. All rights reserved.</p>
                 </div>
             </footer>
         </div>

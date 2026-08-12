@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { useRevalidator } from "react-router";
 import { PublicNavbar } from "~/components/public-navbar";
 import { LaporanFilters } from "~/features/laporan/components/LaporanFilters";
@@ -10,7 +10,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Statistik - GIGIS Monitoring" },
+        { title: "Statistik - MELAROSA" },
         { name: "description", content: "Data dan statistik pembangunan jalan desa Bojonegoro" },
     ];
 };
@@ -112,7 +112,7 @@ export default function StatistikPage() {
 
             <footer className="mt-20 border-t bg-white dark:bg-slate-900 py-12">
                 <div className="container mx-auto px-4 text-center text-slate-500">
-                    <p>© 2026 GIGIS Monitoring Jalan Poros. All rights reserved.</p>
+                    <p>© 2026 MELAROSA Monitoring Infrastruktur. All rights reserved.</p>
                 </div>
             </footer>
         </div>

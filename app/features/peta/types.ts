@@ -1,4 +1,4 @@
-import type { Feature, FeatureCollection, Geometry } from 'geojson';
+﻿import type { Feature, FeatureCollection, Geometry } from 'geojson';
 
 export interface Jalan {
     id: string;

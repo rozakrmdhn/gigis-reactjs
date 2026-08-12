@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Trash2, MapPin, Navigation, Pencil, Check, X } from 'lucide-react';
+﻿import { useState } from 'react';
+import { Plus, Trash2, MapPin, Navigation, Pencil, Check, X, Loader2 } from 'lucide-react';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { Button } from '~/components/ui/button';
@@ -26,6 +26,7 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
     const [title, setTitle] = useState('');
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState('');
+    const [isLocating, setIsLocating] = useState(false);
 
     const parseCoordinate = (input: string): { lat: number; lon: number } | null => {
         const cleanInput = input.trim();
@@ -108,6 +109,34 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
         }
     };
 
+    const handleUseMyLocation = () => {
+        if (!navigator.geolocation) {
+            alert('Geolocation tidak didukung oleh browser Anda.');
+            return;
+        }
+        setIsLocating(true);
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                setIsLocating(false);
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                const markerTitle = title || `Lokasi Saya (${markers.length + 1})`;
+                onAdd({
+                    id: crypto.randomUUID(),
+                    lat,
+                    lon,
+                    title: markerTitle
+                });
+                setTitle('');
+            },
+            (error) => {
+                setIsLocating(false);
+                alert(`Gagal mengambil lokasi GPS: ${error.message}`);
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        );
+    };
+
     const startEditing = (marker: Marker) => {
         setEditingId(marker.id);
         setEditValue(marker.title || '');
@@ -128,20 +157,37 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
         <div className={cn("space-y-4", className)}>
             {/* Input Form */}
             <div className="bg-slate-50/50 dark:bg-slate-800/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
-                <div className="flex items-center gap-2 mb-1">
-                    <div className="p-1.5 bg-blue-600 rounded-lg text-white">
-                        <Plus size={14} />
+                <div className="flex items-center justify-between mb-1">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-blue-600 rounded-lg text-white">
+                            <Plus size={14} />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Tambah Titik Koordinat</span>
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Tambah Titik Koordinat</span>
                 </div>
 
+                <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleUseMyLocation}
+                    disabled={isLocating}
+                    className="w-full h-9 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-[9px] uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                >
+                    {isLocating ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                        <Navigation className="w-3.5 h-3.5" />
+                    )}
+                    {isLocating ? "Mencari Sinyal GPS..." : "Gunakan Lokasi Saya Saat Ini"}
+                </Button>
+
                 <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Koordinat (Pemisah Enter)</label>
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Koordinat Manual (Pemisah Enter)</label>
                     <Textarea
                         placeholder="Contoh:&#10;-7.15, 111.88&#10;-7.20, 111.90"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
-                        className="min-h-[100px] rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium text-xs resize-none"
+                        className="min-h-[90px] rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium text-xs resize-none"
                     />
                     <p className="text-[8px] text-slate-400 font-medium italic ml-1">Ketik banyak koordinat dipisahkan dengan tombol Enter.</p>
                 </div>

@@ -32,9 +32,11 @@ export function MapViewSidebar({
     return (
         <div
             className={cn(
-                "absolute top-0 left-0 bottom-0 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm border-r dark:border-slate-800 transition-transform duration-500 ease-in-out flex flex-col z-40 shadow-xl will-change-transform",
+                "absolute bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out flex flex-col z-30 shadow-xl will-change-transform",
                 widthClass,
-                !isOpen && "-translate-x-full",
+                isOpen
+                    ? "translate-x-0 opacity-100 pointer-events-auto"
+                    : "-translate-x-[calc(100%+24px)] opacity-0 pointer-events-none",
                 className
             )}
         >
@@ -42,13 +44,15 @@ export function MapViewSidebar({
                 {children}
             </div>
 
+            {/* Toggle Handle Button attached to right edge */}
             <Button
                 variant="secondary"
                 size="icon"
-                className="absolute top-1/2 -translate-y-1/2 -right-8 h-10 w-8 rounded-l-none cursor-pointer shadow-md z-40 bg-white/90 dark:bg-slate-900/90 border-y border-r dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800"
+                className="absolute top-1/2 -translate-y-1/2 -right-9 h-10 w-9 rounded-l-none rounded-r-xl pointer-events-auto cursor-pointer shadow-md z-40 bg-white/95 dark:bg-slate-900/95 border border-l-0 border-slate-200/80 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-200 hover:text-blue-600 transition-all"
                 onClick={handleToggle}
+                title={isOpen ? "Sembunyikan Panel Spasial" : "Tampilkan Panel Spasial"}
             >
-                {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
             </Button>
         </div>
     );

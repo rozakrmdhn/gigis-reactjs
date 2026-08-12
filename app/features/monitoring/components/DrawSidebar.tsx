@@ -1,12 +1,21 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+﻿import { useEffect, useState, useMemo, useCallback } from "react";
 import { MonitoringSidebar } from "./MonitoringSidebar";
 import { MonitoringList } from "./MonitoringList";
 import { monitoringService, type MonitoringJalanResult } from "../services/monitoring.service";
 import { kecamatanService, type Kecamatan } from "~/services/kecamatan";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
-import { Search, MapPin, Recycle, RotateCw, X } from "lucide-react";
+import { Search, MapPin, Recycle, RotateCw, X, Check, ChevronsUpDown } from "lucide-react";
 import { ScrollArea } from "~/components/ui/scroll-area";
+import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "~/components/ui/command";
 import {
     Select,
     SelectContent,
@@ -126,6 +135,7 @@ export function DrawSidebar({
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
     const [kecamatanList, setKecamatanList] = useState<Kecamatan[]>([]);
+    const [kecamatanOpen, setKecamatanOpen] = useState(false);
     const [pagination, setPagination] = useState<{
         total: number;
         page: number;
@@ -279,86 +289,134 @@ export function DrawSidebar({
                         <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 shrink-0">
                             {/* Header Controls */}
                             <div className="p-2 border-b dark:border-slate-800 space-y-2">
-                                <div className="flex items-center gap-3">
-                                    <div className="flex flex-col gap-0.5 w-28 shrink-0">
-                                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Data</span>
-                                        <div className="flex items-center h-6">
-                                            <span className="text-sm font-bold text-primary mr-1.5">{pagination?.total || 0}</span>
-                                        </div>
+                                {/* Row 1: Kecamatan Combobox & Limit & Clear Filter */}
+                                <div className="flex items-center gap-2">
+                                    {/* Kecamatan Combobox */}
+                                    <div className="flex-1 min-w-0">
+                                        <Popover open={kecamatanOpen} onOpenChange={setKecamatanOpen}>
+                                            <PopoverTrigger asChild>
+                                                <Button
+                                                    variant="outline"
+                                                    role="combobox"
+                                                    aria-expanded={kecamatanOpen}
+                                                    className={cn(
+                                                        "w-full h-8 px-2 justify-between text-[10px] font-medium uppercase tracking-tight truncate",
+                                                        filters.id_kecamatan === "all" ? "text-muted-foreground/70" : "text-slate-800 dark:text-slate-200"
+                                                    )}
+                                                    title={filters.id_kecamatan === "all" ? "Pilih Kecamatan" : (kecamatanList.find(k => k.id.toString() === filters.id_kecamatan)?.nama_kecamatan || "Pilih Kecamatan")}
+                                                >
+                                                    <span className="truncate">
+                                                        {filters.id_kecamatan === "all" ? "Pilih Kecamatan" : (kecamatanList.find(k => k.id.toString() === filters.id_kecamatan)?.nama_kecamatan || "Pilih Kecamatan")}
+                                                    </span>
+                                                    <ChevronsUpDown className="ml-1 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="p-0" align="start" style={{ width: 'var(--radix-popover-trigger-width)' }}>
+                                                <Command>
+                                                    <CommandInput placeholder="Cari kecamatan..." className="h-8 text-[11px]" />
+                                                    <CommandList>
+                                                        <CommandEmpty className="text-xs py-2 text-center text-muted-foreground">Kecamatan tidak ditemukan.</CommandEmpty>
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                value="semua kecamatan"
+                                                                onSelect={() => {
+                                                                    setFilters(prev => ({ ...prev, id_kecamatan: "all", id_desa: "all", page: 1 }));
+                                                                    if (onKecamatanChange) onKecamatanChange("all");
+                                                                    setKecamatanOpen(false);
+                                                                }}
+                                                                className="text-xs cursor-pointer font-medium uppercase"
+                                                            >
+                                                                <Check
+                                                                    className={cn(
+                                                                        "mr-2 h-3.5 w-3.5",
+                                                                        filters.id_kecamatan === "all" ? "opacity-100" : "opacity-0"
+                                                                    )}
+                                                                />
+                                                                Semua Kecamatan
+                                                            </CommandItem>
+                                                            {kecamatanList.map((k) => (
+                                                                <CommandItem
+                                                                    key={k.id}
+                                                                    value={k.nama_kecamatan}
+                                                                    onSelect={() => {
+                                                                        const valStr = k.id.toString();
+                                                                        setFilters(prev => ({ ...prev, id_kecamatan: valStr, id_desa: "all", page: 1 }));
+                                                                        if (onKecamatanChange) onKecamatanChange(valStr);
+                                                                        setKecamatanOpen(false);
+                                                                    }}
+                                                                    className="text-xs cursor-pointer font-medium uppercase"
+                                                                >
+                                                                    <Check
+                                                                        className={cn(
+                                                                            "mr-2 h-3.5 w-3.5",
+                                                                            filters.id_kecamatan === k.id.toString() ? "opacity-100" : "opacity-0"
+                                                                        )}
+                                                                    />
+                                                                    {k.nama_kecamatan}
+                                                                </CommandItem>
+                                                            ))}
+                                                        </CommandGroup>
+                                                    </CommandList>
+                                                </Command>
+                                            </PopoverContent>
+                                        </Popover>
                                     </div>
 
-                                    <div className="flex-1 flex gap-2">
-                                        <Select
-                                            value={filters.id_kecamatan}
-                                            onValueChange={(value) => {
-                                                setFilters(prev => ({ ...prev, id_kecamatan: value, id_desa: "all", page: 1 }));
-                                                if (onKecamatanChange) onKecamatanChange(value);
+                                    {/* Limit Select */}
+                                    <Select
+                                        value={filters.limit.toString()}
+                                        onValueChange={(value) => setFilters(prev => ({ ...prev, limit: parseInt(value), page: 1 }))}
+                                    >
+                                        <SelectTrigger className="w-[70px] h-8 text-[11px] font-medium shrink-0">
+                                            <SelectValue placeholder="Limit" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="10">10</SelectItem>
+                                            <SelectItem value="25">25</SelectItem>
+                                            <SelectItem value="50">50</SelectItem>
+                                            <SelectItem value="100">100</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+
+                                    {/* Clear Filter Button */}
+                                    {(filters.id_kecamatan !== "all" || filters.id_desa !== "all") && (
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => {
+                                                setFilters(prev => ({ ...prev, id_kecamatan: "all", id_desa: "all", page: 1 }));
+                                                if (onKecamatanChange) onKecamatanChange("all");
+                                                if (onDesaChange) onDesaChange("all");
                                             }}
+                                            className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg shrink-0"
+                                            title="Clear Filter"
                                         >
-                                            <SelectTrigger className="w-full h-8 text-[10px] font-bold uppercase tracking-tight">
-                                                <SelectValue placeholder="Kecamatan" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">Kecamatan</SelectItem>
-                                                {kecamatanOptions}
-                                            </SelectContent>
-                                        </Select>
-
-                                        <Select
-                                            value={filters.limit.toString()}
-                                            onValueChange={(value) => setFilters(prev => ({ ...prev, limit: parseInt(value), page: 1 }))}
-                                        >
-                                            <SelectTrigger className="w-[70px] h-8 text-xs">
-                                                <SelectValue placeholder="Limit" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="10">10</SelectItem>
-                                                <SelectItem value="25">25</SelectItem>
-                                                <SelectItem value="50">50</SelectItem>
-                                                <SelectItem value="100">100</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
+                                            <X className="h-4 w-4" />
+                                        </Button>
+                                    )}
                                 </div>
-                            </div>
 
-                            {/* Search & Clear Filter Indicator */}
-                            <div className="p-2 flex gap-2">
-                                <div className="relative flex-1">
+                                {/* Row 2: Search Input (Full Width) */}
+                                <div className="relative w-full">
                                     <Search className={cn(
                                         "absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 transition-colors",
                                         loading ? "text-emerald-500 animate-pulse" : "text-slate-400"
                                     )} />
                                     <Input
                                         placeholder="Cari ruas jalan..."
-                                        className="pl-8 h-8 text-base md:text-[10px] bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-950 transition-all rounded-lg pr-7 dark:text-slate-100"
+                                        className="pl-8 h-8 text-base md:text-[10px] bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800 focus:bg-white dark:focus:bg-slate-950 transition-all rounded-lg pr-7 dark:text-slate-100 font-medium"
                                         value={search}
                                         onChange={(e) => setSearch(e.target.value)}
                                     />
                                     {search && (
                                         <button
                                             onClick={() => setSearch("")}
-                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-0.5 rounded-full hover:bg-slate-100 transition-colors"
+                                            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded-full hover:bg-slate-100 transition-colors"
                                         >
                                             <X className="h-3 w-3" />
                                         </button>
                                     )}
                                 </div>
-                                {(filters.id_kecamatan !== "all" || filters.id_desa !== "all") && (
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            setFilters(prev => ({ ...prev, id_kecamatan: "all", id_desa: "all", page: 1 }));
-                                            if (onKecamatanChange) onKecamatanChange("all");
-                                            if (onDesaChange) onDesaChange("all");
-                                        }}
-                                        className="h-8 px-2 text-[9px] cursor-pointer font-bold uppercase tracking-tighter text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg flex items-center shrink-0 border border-rose-200/50 dark:border-rose-900/30"
-                                    >
-                                        <X className="h-3 w-3 mr-1" />
-                                        Clear Filter
-                                    </Button>
-                                )}
                             </div>
                         </div>
 
@@ -437,17 +495,23 @@ export function DrawSidebar({
                 </Tabs>
 
                 {/* Footer Pagination & Refresh */}
-                <div className="sticky bottom-0 left-0 right-0 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm border-t dark:border-slate-800 p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center gap-1 shrink-0">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-muted-foreground hover:text-emerald-600 shrink-0"
-                        onClick={() => onRefresh ? onRefresh() : fetchRoads()}
-                        disabled={loading}
-                    >
-                        <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />
-                    </Button>
-                    <div className="flex-1">
+                <div className="sticky bottom-0 left-0 right-0 bg-background/95 dark:bg-slate-950/95 backdrop-blur-sm border-t dark:border-slate-800 p-2 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-20 flex items-center justify-between gap-1 shrink-0">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground hover:text-emerald-600 shrink-0"
+                            onClick={() => onRefresh ? onRefresh() : fetchRoads()}
+                            disabled={loading}
+                        >
+                            <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                        </Button>
+                        <div className="flex flex-col leading-none text-left justify-center pr-2 border-r dark:border-slate-800">
+                            <span className="text-[8px] uppercase font-black text-muted-foreground tracking-widest mb-0.5">Total</span>
+                            <span className="text-xs font-black text-slate-800 dark:text-slate-200">{pagination?.total || 0}</span>
+                        </div>
+                    </div>
+                    <div className="flex-1 flex justify-end">
                         {!loading && pagination && pagination.totalPages > 1 && (
                             <Pagination>
                                 <PaginationContent>

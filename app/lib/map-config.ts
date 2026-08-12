@@ -1,4 +1,4 @@
-export const CORE_LAYER_COLORS = {
+﻿export const CORE_LAYER_COLORS = {
     SEGMENTS: {
         hex: '#00cf64ff',
         tw: 'slate-700',

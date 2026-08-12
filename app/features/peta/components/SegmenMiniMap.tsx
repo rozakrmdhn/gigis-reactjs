@@ -1,4 +1,4 @@
-/**
+﻿/**
  * SegmenMiniMap
  * Renders a GeoJSON LineString/MultiLineString feature as a tiny SVG polyline.
  * Zero dependencies — no OpenLayers needed for a decorative mini map.

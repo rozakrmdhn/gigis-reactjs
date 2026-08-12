@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { Square, Circle, Pentagon, Minus, Save, MousePointer2, Trash2, Download, Pencil, SplinePointer, Spline, SaveIcon, X, ChevronLeft, ChevronRight, Sparkles, Zap } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
@@ -17,7 +17,9 @@ interface DrawControlsProps {
     onCancelReshape?: () => void;
     hasDrawnFeature?: boolean;
     isEditingSegment?: boolean;
+    isPanelVisible?: boolean;
     selectedRoad?: any | null;
+    geometryType?: "LINESTRING" | "POLYGON" | "POINT" | "ALL" | string;
 }
 
 export function DrawControls({
@@ -31,17 +33,24 @@ export function DrawControls({
     onCancelReshape,
     hasDrawnFeature,
     isEditingSegment,
+    isPanelVisible,
     selectedRoad,
+    geometryType = "LINESTRING",
 }: DrawControlsProps) {
     const scrollContainerRef = useRef<HTMLDivElement>(null);
     const [showLeftArrow, setShowLeftArrow] = useState(false);
     const [showRightArrow, setShowRightArrow] = useState(false);
 
-    const isDrawLineEnabled = !!selectedRoad;
+    const normGeomType = (geometryType || "LINESTRING").toUpperCase();
+    const isLineType = normGeomType === "LINESTRING" || normGeomType === "MULTILINESTRING" || normGeomType === "ALL";
+    const isPolygonType = normGeomType === "POLYGON" || normGeomType === "MULTIPOLYGON" || normGeomType === "ALL";
+    const isPointType = normGeomType === "POINT" || normGeomType === "MULTIPOINT" || normGeomType === "ALL";
+
+    const isDrawEnabled = !isPanelVisible;
     const isEditSnapEnabled = hasDrawnFeature || isEditingSegment;
-    const isClearEnabled = mode.startsWith("draw-") || hasDrawnFeature;
-    const isExportEnabled = hasDrawnFeature;
-    const isFinishReshapeEnabled = canFinishReshape && isEditingSegment;
+    const isClearEnabled = (mode.startsWith("draw-") || hasDrawnFeature) && !isPanelVisible;
+    const isExportEnabled = hasDrawnFeature && !isPanelVisible;
+    const isFinishReshapeEnabled = isEditingSegment && !isPanelVisible;
 
     const allTools = [
         {
@@ -49,38 +58,73 @@ export function DrawControls({
             icon: MousePointer2,
             label: "Select",
             active: mode === "view",
-            disabled: false,
+            disabled: isPanelVisible,
             alwaysShow: true,
             onClick: () => onSetMode("view"),
         },
-        {
-            id: "draw-line",
-            icon: Spline,
-            label: "Manual",
-            active: mode === "draw-line",
-            disabled: !isDrawLineEnabled || isEditingSegment,
-            show: !isEditingSegment,
-            onClick: () => onSetMode("draw-line"),
-        },
-        {
-            id: "draw-automatic",
-            icon: Sparkles,
-            label: "Point to Point",
-            active: mode === "draw-automatic",
-            disabled: !isDrawLineEnabled || isEditingSegment,
-            show: !isEditingSegment,
-            onClick: () => onSetMode("draw-automatic"),
-        },
+        // --- Line Tools ---
+        ...(isLineType ? [
+            {
+                id: "draw-line",
+                icon: Spline,
+                label: "Garis Segmen",
+                active: mode === "draw-line",
+                disabled: !isDrawEnabled || isPanelVisible,
+                alwaysShow: true,
+                onClick: () => onSetMode("draw-line"),
+            },
+            {
+                id: "draw-automatic",
+                icon: Sparkles,
+                label: "Point to Point",
+                active: mode === "draw-automatic",
+                disabled: !isDrawEnabled || isPanelVisible,
+                alwaysShow: true,
+                onClick: () => onSetMode("draw-automatic"),
+            },
+        ] : []),
+        // --- Polygon / Area Tools ---
+        ...(isPolygonType ? [
+            {
+                id: "draw-polygon",
+                icon: Pentagon,
+                label: "Area Polygon",
+                active: mode === "draw-polygon",
+                disabled: !isDrawEnabled || isPanelVisible,
+                alwaysShow: true,
+                onClick: () => onSetMode("draw-polygon"),
+            },
+            {
+                id: "draw-box",
+                icon: Square,
+                label: "Kotak P × L",
+                active: mode === "draw-box",
+                disabled: !isDrawEnabled || isPanelVisible,
+                alwaysShow: true,
+                onClick: () => onSetMode("draw-box"),
+            },
+        ] : []),
+        // --- Point Tools ---
+        ...(isPointType ? [
+            {
+                id: "draw-point",
+                icon: Circle,
+                label: "Titik Point",
+                active: mode === "draw-point",
+                disabled: !isDrawEnabled || isPanelVisible,
+                alwaysShow: true,
+                onClick: () => onSetMode("draw-point"),
+            },
+        ] : []),
         {
             id: "extract",
             icon: Zap,
             label: "Extract",
             active: false,
             variant: "info" as const,
-            disabled: !hasDrawnFeature,
-            show: mode === "draw-automatic" && hasDrawnFeature,
+            disabled: !hasDrawnFeature || isPanelVisible,
+            show: mode === "draw-automatic" && hasDrawnFeature && !isPanelVisible,
             onClick: () => {
-                // We'll pass this via a new prop or handle it in index.tsx
                 if (window.dispatchEvent) {
                     window.dispatchEvent(new CustomEvent("trigger-segment-extraction"));
                 }
@@ -91,8 +135,8 @@ export function DrawControls({
             icon: SplinePointer,
             label: "Reshape & Snap",
             active: mode === "edit",
-            disabled: !isEditSnapEnabled,
-            show: isEditSnapEnabled,
+            disabled: !isEditSnapEnabled || isPanelVisible,
+            show: isEditSnapEnabled && !isPanelVisible,
             onClick: () => onSetMode("edit"),
         },
         {
@@ -107,10 +151,10 @@ export function DrawControls({
         {
             id: "cancel",
             icon: X,
-            label: "Batal Edit",
+            label: "Batal",
             variant: "danger" as const,
-            disabled: !canFinishReshape,
-            show: canFinishReshape,
+            disabled: !canFinishReshape && !isPanelVisible,
+            show: (canFinishReshape || isPanelVisible) && (isEditingSegment || isPanelVisible),
             onClick: onCancelReshape || (() => { }),
         },
         {

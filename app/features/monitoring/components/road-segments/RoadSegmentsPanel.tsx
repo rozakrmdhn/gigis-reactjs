@@ -1,4 +1,4 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
@@ -97,7 +97,7 @@ export function RoadSegmentsPanel({
             <Button
                 variant="secondary"
                 size="icon"
-                className="absolute top-1/2 -translate-y-1/2 -left-8 h-10 w-8 rounded-r-none shadow-md z-50 bg-white dark:bg-slate-900 border border-l-0 cursor-pointer border-slate-200 dark:border-slate-800 shrink-0"
+                className="absolute top-1/2 -translate-y-1/2 -left-8 h-10 w-8 rounded-r-none shadow-md z-50 bg-white dark:bg-slate-900 border border-l-0 cursor-pointer border-slate-200 dark:border-slate-800 shrink-0 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
                 onClick={handleToggle}
             >
                 {isOpen ? <ChevronRight className="h-4 w-4 text-slate-600 dark:text-slate-400" /> : <ChevronLeft className="h-4 w-4 text-slate-600 dark:text-slate-400" />}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
+﻿import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
 import { createPortal } from 'react-dom';
 import Map from 'ol/Map';
 import View from 'ol/View';
@@ -14,10 +14,56 @@ import Overlay from 'ol/Overlay';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
 import { Style, Stroke, Fill, Text, Icon } from 'ol/style';
-import { X, ChevronUp, ChevronDown, Layers, MapPin } from 'lucide-react';
+import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Layers, MapPin, Copy, Check } from 'lucide-react';
+import { toast } from 'sonner';
+import { Tooltip, TooltipTrigger, TooltipContent } from '~/components/ui/tooltip';
 import { cn } from '~/lib/utils';
 import { CORE_LAYER_COLORS } from '~/lib/map-config';
 import 'ol/ol.css';
+import { getProxiedLayerUrl } from '~/lib/utils';
+import { useTheme } from "next-themes";
+
+const getStoredStyle = (key: string, defaultStyle: { color: string; width: number; lineDash?: number[]; scale?: number }) => {
+    try {
+        if (typeof window !== 'undefined') {
+            const stored = localStorage.getItem('gigis_custom_vector_styles');
+            if (stored) {
+                const parsed = JSON.parse(stored);
+                if (parsed[key]) {
+                    const item = parsed[key];
+                    let lineDashVal: number[] | undefined = undefined;
+                    if (item.lineDash === 'dashed') {
+                        lineDashVal = [6, 6];
+                    } else if (item.lineDash === 'solid') {
+                        lineDashVal = undefined;
+                    } else if (Array.isArray(item.lineDash)) {
+                        lineDashVal = item.lineDash;
+                    }
+                    return {
+                        color: item.color || defaultStyle.color,
+                        width: item.width !== undefined ? Number(item.width) : defaultStyle.width,
+                        lineDash: lineDashVal,
+                        scale: item.scale !== undefined ? Number(item.scale) : defaultStyle.scale,
+                        fillColor: item.fillColor || `${item.color || defaultStyle.color}0d`
+                    };
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Error loading custom styles from localStorage:", e);
+    }
+    return defaultStyle;
+};
+
+export interface MapPopupItem {
+    id: string | number;
+    layerId?: string;
+    title: string;
+    badgeText: string;
+    badgeColor?: string;
+    properties: Record<string, any>;
+    geometry?: any;
+}
 
 export interface MapLayerConfig {
     id: string;
@@ -48,6 +94,7 @@ interface OpenLayersMapProps {
     markers?: { id: string; lat: number; lon: number; title?: string }[];
     onFeatureSelect?: (properties: any) => void;
     disablePopup?: boolean;
+    onMapReady?: (map: Map) => void;
 }
 
 export interface OpenLayersMapRef {
@@ -73,6 +120,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     markers = [],
     onFeatureSelect,
     disablePopup = false,
+    onMapReady,
 }, ref) => {
     const mapElement = useRef<HTMLDivElement>(null);
     const mapRef = useRef<Map | null>(null);
@@ -85,18 +133,25 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     const batasDesaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const utamaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const segmenLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+    const markerLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
 
     const vectorPopupRef = useRef<Overlay | null>(null);
     const vectorPopupElementRef = useRef<HTMLDivElement | null>(null);
 
-    // Popup State
-    const [selectedVectorInfo, setSelectedVectorInfo] = useState<{
-        properties: any;
-        coordinate: number[] | null;
-        id?: string | number | null;
-    } | null>(null);
+    const { resolvedTheme } = useTheme();
+    const isDark = resolvedTheme === "dark";
+
+    // Multi-Popup Layer State
+    const [popupItems, setPopupItems] = useState<MapPopupItem[]>([]);
+    const [popupIndex, setPopupIndex] = useState<number>(0);
+    const [popupCoordinate, setPopupCoordinate] = useState<number[] | null>(null);
     const [isPopupMinimized, setIsPopupMinimized] = useState(false);
     const [isPopupClosing, setIsPopupClosing] = useState(false);
+
+    const layersRef = useRef<MapLayerConfig[]>(layers);
+    useEffect(() => {
+        layersRef.current = layers;
+    }, [layers]);
 
     useImperativeHandle(ref, () => ({
         getMap: () => mapRef.current,
@@ -184,14 +239,15 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 const props = feature.getProperties();
                 const layer = props._layer;
                 if (layer === 'batas_desa') {
+                    const custom = getStoredStyle('batas_desa', { color: CORE_LAYER_COLORS.ADMIN.hex, width: 2, lineDash: [4, 4] });
                     return new Style({
                         stroke: new Stroke({
-                            color: CORE_LAYER_COLORS.ADMIN.hex,
-                            width: 2,
-                            lineDash: [4, 4],
+                            color: custom.color,
+                            width: custom.width,
+                            lineDash: custom.lineDash,
                         }),
                         fill: new Fill({
-                            color: `${CORE_LAYER_COLORS.ADMIN.hex}0d`, // 05 opacity
+                            color: (custom as any).fillColor || `${custom.color}0d`,
                         }),
                     });
                 }
@@ -209,10 +265,12 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 const props = feature.getProperties();
                 const layer = props._layer;
                 if (layer === 'jalan_utama') {
+                    const custom = getStoredStyle('jalan_utama', { color: CORE_LAYER_COLORS.GENERAL.hex, width: 2 });
                     return new Style({
                         stroke: new Stroke({
-                            color: CORE_LAYER_COLORS.GENERAL.hex,
-                            width: 2,
+                            color: custom.color,
+                            width: custom.width,
+                            lineDash: custom.lineDash,
                         }),
                     });
                 }
@@ -235,38 +293,47 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                     const statusJalan = props.status_jalan;
                     const kondisi = (props.kondisi || props.KONDISI || '').toLowerCase();
 
-                    let color = '#22c55e'; // Default Green (Baik)
-                    let lineDash: number[] | undefined = undefined;
+                    let styleKey = 'jalan_desa_baik';
+                    let defaultColor = '#22c55e';
+                    let defaultWidth = 5;
+                    let defaultLineDash: number[] | undefined = undefined;
 
                     if (statusJalan === 'Jalan Desa') {
-                        // Category 1 & 2
-                        if (kondisi === 'baik') color = '#22c55e';
-                        else if (kondisi === 'sedang') color = '#f59e0b'; // Orange
-                        else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') color = '#ef4444'; // Merah
-
+                        if (kondisi === 'baik') {
+                            styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_baik' : 'jalan_desa_baik';
+                            defaultColor = '#22c55e';
+                        } else if (kondisi === 'sedang') {
+                            styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_sedang' : 'jalan_desa_sedang';
+                            defaultColor = '#f59e0b';
+                        } else {
+                            styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_rusak' : 'jalan_desa_rusak';
+                            defaultColor = '#ef4444';
+                        }
                         if (checkMelarosa === 'Tidak') {
-                            lineDash = [6, 6]; // Dashed
+                            defaultLineDash = [6, 6];
                         }
                     } else if (statusJalan === 'Jalan Kabupaten') {
-                        // Category 3
                         if (kondisi === 'baik') {
-                            color = '#2563eb'; // Biru
-                            lineDash = undefined;
+                            styleKey = 'jalan_kabupaten_baik';
+                            defaultColor = '#2563eb';
                         } else if (kondisi === 'sedang') {
-                            color = '#60a5fa'; // Biru Muda
-                            lineDash = undefined;
-                        } else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') {
-                            color = '#60a5fa'; // Biru Muda
-                            lineDash = [6, 6]; // Dashed
+                            styleKey = 'jalan_kabupaten_sedang';
+                            defaultColor = '#60a5fa';
+                        } else {
+                            styleKey = 'jalan_kabupaten_rusak';
+                            defaultColor = '#60a5fa';
+                            defaultLineDash = [6, 6];
                         }
                     }
+
+                    const custom = getStoredStyle(styleKey, { color: defaultColor, width: defaultWidth, lineDash: defaultLineDash });
 
                     const styles = [
                         new Style({
                             stroke: new Stroke({
-                                color: color,
-                                width: 5,
-                                lineDash: lineDash
+                                color: custom.color,
+                                width: custom.width,
+                                lineDash: custom.lineDash
                             }),
                         })
                     ];
@@ -278,7 +345,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                 text: label.toString().toUpperCase(),
                                 font: 'bold 10px Inter, sans-serif',
                                 fill: new Fill({ color: '#fff' }),
-                                stroke: new Stroke({ color: color, width: 3 }),
+                                stroke: new Stroke({ color: custom.color, width: 3 }),
                                 offsetY: -12,
                                 placement: 'line',
                                 repeat: 300,
@@ -299,16 +366,18 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             zIndex: 500,
             style: (feature) => {
                 const title = feature.get('title');
+                const custom = getStoredStyle('marker_titik', { color: '#1e40af', width: 2, scale: 0.07 });
                 return new Style({
                     image: new Icon({
                         anchor: [0.5, 1],
                         src: 'https://cdn-icons-png.flaticon.com/512/684/684908.png', // Blue pin icon
-                        scale: 0.07,
+                        scale: custom.scale !== undefined ? custom.scale : 0.07,
+                        color: custom.color !== '#1e40af' ? custom.color : undefined, // Apply custom color directly to icon if customized
                     }),
                     text: title ? new Text({
                         text: title.toString().toUpperCase(),
                         font: 'bold 10px Inter, sans-serif',
-                        fill: new Fill({ color: '#1e40af' }), // dark blue
+                        fill: new Fill({ color: custom.color }),
                         stroke: new Stroke({ color: '#ffffff', width: 3 }),
                         offsetY: 8,
                         placement: 'point',
@@ -317,6 +386,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 });
             }
         });
+        markerLayerRef.current = markerLayer;
 
         // 6. Highlight Layer
         const highlightLayer = new VectorLayer({
@@ -345,14 +415,18 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         const vectorPopup = new Overlay({
             element: popupEl,
             positioning: 'bottom-center',
-            offset: [0, -10],
+            offset: [0, 0],
             stopEvent: true,
         });
         vectorPopupRef.current = vectorPopup;
 
-        const initialBasemapSource = (basemapUrl && basemapUrl !== 'osm')
-            ? new XYZ({ url: basemapUrl, crossOrigin: 'anonymous' })
-            : new OSM();
+        const isAtrBpn = basemapUrl && basemapUrl.includes("atrbpn.go.id");
+        const finalUrl = isAtrBpn ? `/proxy/basemap?url=${encodeURIComponent(basemapUrl)}` : basemapUrl;
+        const initialBasemapSource = (isDark && (!basemapUrl || basemapUrl === 'osm' || basemapUrl.includes('cartocdn.com/dark_all')))
+            ? new XYZ({ url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png", crossOrigin: 'anonymous' })
+            : ((basemapUrl && basemapUrl !== 'osm')
+                ? new XYZ({ url: finalUrl, crossOrigin: 'anonymous' })
+                : new OSM());
 
         const basemapLayer = new TileLayer({
             source: initialBasemapSource,
@@ -416,41 +490,62 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         // (Handled via useEffect now)
 
         mapRef.current = map;
+        if (onMapReady) {
+            onMapReady(map);
+        }
 
-        // Click Handler
+        // Click Handler (Multi-Popup Layer Support)
         map.on('click', async (evt) => {
             highlightSourceRef.current.clear();
+            const currentLayers = layersRef.current;
 
-            // 1. Check Vector Features
-            const feature = map.forEachFeatureAtPixel(evt.pixel, (f) => f, {
-                layerFilter: (l) => l !== highlightLayer,
-                hitTolerance: 5
-            });
+            const vectorItems: MapPopupItem[] = [];
 
-            if (feature instanceof Feature) {
-                const props = feature.getProperties();
-                const featureId = feature.getId();
+            // 1. Collect all Vector Features at clicked pixel
+            map.forEachFeatureAtPixel(evt.pixel, (feature, layer) => {
+                if (feature instanceof Feature && layer !== highlightLayer) {
+                    const props = feature.getProperties();
+                    const fId = feature.getId() || props.id || props.ID || Math.random().toString();
 
-                setIsPopupClosing(false);
-                setSelectedVectorInfo({
-                    properties: props,
-                    coordinate: evt.coordinate,
-                    id: featureId
-                });
-                vectorPopup.setPosition(evt.coordinate);
+                    let title = "Detail Data";
+                    let badgeText = "Vector";
+                    let badgeColor = "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300";
 
-                if (onFeatureSelect) {
-                    onFeatureSelect(props);
+                    const layerType = props._layer;
+                    if (layerType === 'jalan_segmen') {
+                        title = props.nama_ruas || props.NM_RUAS || "Segmen Jalan";
+                        badgeText = "Segmen Jalan";
+                        badgeColor = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
+                    } else if (layerType === 'jalan_utama') {
+                        title = props.nama_ruas || props.NM_RUAS || "Jalan Utama";
+                        badgeText = "Jalan Utama";
+                        badgeColor = "bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300";
+                    } else if (layerType === 'batas_desa') {
+                        title = props.nama_desa || props.NAMOBJ || "Batas Desa";
+                        badgeText = "Batas Desa";
+                        badgeColor = "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300";
+                    } else {
+                        const layerId = layer?.get('id');
+                        const matchedConfig = currentLayers.find(c => c.id === layerId);
+                        title = props.nama || props.name || props.NAMOBJ || matchedConfig?.title || "Dataset Katalog";
+                        badgeText = matchedConfig?.title || "Katalog Vector";
+                        badgeColor = "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
+                    }
+
+                    vectorItems.push({
+                        id: fId,
+                        layerId: layer?.get('id'),
+                        title,
+                        badgeText,
+                        badgeColor,
+                        properties: props,
+                        geometry: feature
+                    });
                 }
+            }, { hitTolerance: 6 });
 
-                // Highlight selected feature
-                const highlightFeature = feature.clone();
-                highlightSourceRef.current.addFeature(highlightFeature);
-                return;
-            }
-
-            // 2. Check WMS Feature Info from dynamic layers
-            // Get all visible WMS layers
+            // 2. Collect all WMS Features from dynamic catalog layers
+            const wmsItems: MapPopupItem[] = [];
             const visibleWmsLayers = map.getLayers().getArray()
                 .filter(l => l instanceof TileLayer && l.get('type') === 'wms' && l.getVisible());
 
@@ -462,35 +557,34 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                         evt.coordinate,
                         view.getResolution() || 0,
                         view.getProjection(),
-                        { 'INFO_FORMAT': 'application/json', 'FEATURE_COUNT': 1 }
+                        { 'INFO_FORMAT': 'application/json', 'FEATURE_COUNT': 5 }
                     );
 
                     if (url) {
                         try {
-                            // Proxy domain replacement for CORS
-                            const proxiedUrl = url.replace('https://saggaserv.my.id/geoserver', `${window.location.origin}/proxy/geoserver`);
+                            const proxiedUrl = getProxiedLayerUrl(url);
                             const response = await fetch(proxiedUrl);
-                            const data = await response.json();
-                            if (data.features && data.features.length > 0) {
-                                const feat = data.features[0];
-                                setIsPopupClosing(false);
-                                setSelectedVectorInfo({
-                                    properties: feat.properties,
-                                    coordinate: evt.coordinate,
-                                    id: feat.id
-                                });
-                                vectorPopup.setPosition(evt.coordinate);
+                            if (response.ok) {
+                                const data = await response.json();
+                                if (data.features && data.features.length > 0) {
+                                    const matchedConfig = currentLayers.find(c => c.id === layer.get('id'));
+                                    const catalogTitle = matchedConfig?.title || layer.get('title') || 'Dataset Katalog (WMS)';
 
-                                if (onFeatureSelect) {
-                                    onFeatureSelect(feat.properties);
-                                }
+                                    data.features.forEach((feat: any, idx: number) => {
+                                        const props = feat.properties || {};
+                                        const title = props.nama || props.name || props.NAMOBJ || props.nama_ruas || catalogTitle;
 
-                                if (feat.geometry) {
-                                    const format = new GeoJSON();
-                                    const wmsFeatures = format.readFeatures(data);
-                                    highlightSourceRef.current.addFeatures(wmsFeatures);
+                                        wmsItems.push({
+                                            id: feat.id || `${layer.get('id')}-${idx}`,
+                                            layerId: layer.get('id'),
+                                            title,
+                                            badgeText: catalogTitle,
+                                            badgeColor: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/40 dark:text-cyan-300",
+                                            properties: props,
+                                            geometry: feat.geometry
+                                        });
+                                    });
                                 }
-                                return;
                             }
                         } catch (err) {
                             console.error("WMS GetFeatureInfo failed", err);
@@ -499,55 +593,17 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 }
             }
 
-            // Fallback to legacy WMS check
-            if (showJalanKabupaten && jalanKabupatenWmsLayerRef.current) {
-                const source = jalanKabupatenWmsLayerRef.current.getSource();
-                const view = map.getView();
-                if (source) {
-                    const url = source.getFeatureInfoUrl(
-                        evt.coordinate,
-                        view.getResolution() || 0,
-                        view.getProjection(),
-                        { 'INFO_FORMAT': 'application/json', 'FEATURE_COUNT': 1 }
-                    );
+            const allItems = [...vectorItems, ...wmsItems];
 
-                    if (url) {
-                        try {
-                            // Proxy domain replacement for CORS
-                            const proxiedUrl = url.replace('https://saggaserv.my.id/geoserver', `${window.location.origin}/proxy/geoserver`);
-                            const response = await fetch(proxiedUrl);
-                            const data = await response.json();
-                            if (data.features && data.features.length > 0) {
-                                const feat = data.features[0];
-                                setIsPopupClosing(false);
-                                setSelectedVectorInfo({
-                                    properties: feat.properties,
-                                    coordinate: evt.coordinate,
-                                    id: feat.id
-                                });
-                                vectorPopup.setPosition(evt.coordinate);
-
-                                if (onFeatureSelect) {
-                                    onFeatureSelect(feat.properties);
-                                }
-
-                                // Try to highlight WMS feature if geometry is returned
-                                if (feat.geometry) {
-                                    const format = new GeoJSON();
-                                    const wmsFeatures = format.readFeatures(data);
-                                    highlightSourceRef.current.addFeatures(wmsFeatures);
-                                }
-                                return;
-                            }
-                        } catch (err) {
-                            console.error("WMS GetFeatureInfo failed", err);
-                        }
-                    }
-                }
+            if (allItems.length > 0) {
+                setIsPopupClosing(false);
+                setPopupItems(allItems);
+                setPopupIndex(0);
+                setPopupCoordinate(evt.coordinate);
+                vectorPopup.setPosition(evt.coordinate);
+            } else {
+                closePopup();
             }
-
-            // No feature found - close popup
-            closePopup();
         });
 
         const resizeObserver = new ResizeObserver(() => {
@@ -563,21 +619,77 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             map.setTarget(undefined);
             mapRef.current = null;
         };
-    }, []); // Removed basemapUrl from dependency to avoid recreation. We use a separate useEffect.
+    }, []);
+
+    useEffect(() => {
+        const handleStyleChange = () => {
+            if (batasDesaLayerRef.current) batasDesaLayerRef.current.changed();
+            if (utamaLayerRef.current) utamaLayerRef.current.changed();
+            if (segmenLayerRef.current) segmenLayerRef.current.changed();
+            if (markerLayerRef.current) markerLayerRef.current.changed();
+        };
+
+        window.addEventListener('MELAROSA-vector-styles-changed', handleStyleChange);
+        return () => {
+            window.removeEventListener('MELAROSA-vector-styles-changed', handleStyleChange);
+        };
+    }, []);
+
+    // Reactive effect when active popup item changes
+    useEffect(() => {
+        if (popupItems.length > 0 && popupItems[popupIndex]) {
+            const item = popupItems[popupIndex];
+            highlightSourceRef.current.clear();
+
+            if (item.geometry) {
+                try {
+                    const format = new GeoJSON();
+                    let feat;
+                    if (item.geometry instanceof Feature) {
+                        feat = item.geometry.clone();
+                    } else if (typeof item.geometry === 'object' && item.geometry.type) {
+                        feat = format.readFeature(item.geometry, { featureProjection: 'EPSG:3857' });
+                    }
+                    if (feat) {
+                        if (Array.isArray(feat)) {
+                            highlightSourceRef.current.addFeatures(feat);
+                        } else {
+                            highlightSourceRef.current.addFeature(feat as Feature);
+                        }
+                    }
+                } catch (err) {
+                    console.error("Highlight parse error:", err);
+                }
+            }
+
+            if (onFeatureSelect) {
+                onFeatureSelect(item.properties);
+            }
+        }
+    }, [popupIndex, popupItems, onFeatureSelect]);
 
     useEffect(() => {
         if (!basemapLayerRef.current) return;
-        if (!basemapUrl || basemapUrl === 'osm') {
+        if (isDark && (!basemapUrl || basemapUrl === 'osm' || basemapUrl.includes('cartocdn.com/dark_all'))) {
+            basemapLayerRef.current.setSource(new XYZ({
+                url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+                crossOrigin: 'anonymous'
+            }));
+        } else if (!basemapUrl || basemapUrl === 'osm') {
             basemapLayerRef.current.setSource(new OSM());
         } else {
-            basemapLayerRef.current.setSource(new XYZ({ url: basemapUrl, crossOrigin: 'anonymous' }));
+            const isAtrBpn = basemapUrl && basemapUrl.includes("atrbpn.go.id");
+            const finalUrl = isAtrBpn ? `/proxy/basemap?url=${encodeURIComponent(basemapUrl)}` : basemapUrl;
+            basemapLayerRef.current.setSource(new XYZ({ url: finalUrl, crossOrigin: 'anonymous' }));
         }
-    }, [basemapUrl]);
+    }, [basemapUrl, isDark]);
 
     const closePopup = () => {
         setIsPopupClosing(true);
         setTimeout(() => {
-            setSelectedVectorInfo(null);
+            setPopupItems([]);
+            setPopupIndex(0);
+            setPopupCoordinate(null);
             vectorPopupRef.current?.setPosition(undefined);
             highlightSourceRef.current.clear();
             setIsPopupMinimized(false);
@@ -759,7 +871,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
                 // Update WMS params if changed (crucial for reactive CQL filtering)
                 if (layerConfig.type === 'wms') {
-                    const source = layer.getSource() as TileWMS;
+                    const source = (layer as any).getSource() as TileWMS;
                     if (source && layerConfig.params) {
                         source.updateParams(layerConfig.params);
                     }
@@ -828,71 +940,162 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
     return (
         <div ref={mapElement} className={className}>
-            {!disablePopup && selectedVectorInfo && vectorPopupElementRef.current && createPortal(
+            {!disablePopup && popupItems.length > 0 && popupCoordinate && vectorPopupElementRef.current && createPortal(
                 <div className={cn(
-                    "bg-white/95 backdrop-blur-md rounded-2xl border border-blue-50 shadow-2xl w-64 flex flex-col pointer-events-auto relative mb-4 transition-all duration-300",
-                    isPopupMinimized ? "p-2 h-auto" : "p-4 max-h-[350px]",
+                    "flex flex-col items-center select-none pointer-events-none origin-bottom transform-gpu transition-all duration-300",
                     isPopupClosing ? "animate-out zoom-out-95 fade-out" : "animate-in zoom-in-95 fade-in"
                 )}>
-                    {/* Shadow Arrow */}
-                    <div className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white rotate-45 border-r border-b border-blue-50" />
-
-                    {/* Actions */}
-                    <div className="absolute top-3 right-3 flex gap-1 z-10">
-                        <button
-                            onClick={() => setIsPopupMinimized(!isPopupMinimized)}
-                            className="p-1 hover:bg-slate-100 rounded-md transition-colors text-slate-400"
-                        >
-                            {isPopupMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                        </button>
-                        <button
-                            onClick={closePopup}
-                            className="p-1 hover:bg-red-50 hover:text-red-500 rounded-md transition-colors text-slate-400"
-                        >
-                            <X size={14} />
-                        </button>
-                    </div>
-
-                    {/* Header */}
-                    <div className="flex items-center gap-2.5 mb-3 shrink-0 mr-12">
-                        <div className="p-1.5 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-200">
-                            <Layers size={14} />
-                        </div>
-                        <div className="min-w-0">
-                            <p className="text-[9px] font-black uppercase tracking-widest text-blue-600 leading-none mb-1">Informasi Fitur</p>
-                            <h4 className="font-bold text-slate-800 text-xs truncate">
-                                {selectedVectorInfo.properties.nama_ruas || selectedVectorInfo.properties.NM_RUAS || selectedVectorInfo.properties.nama_desa || 'DETAIL DATA'}
-                            </h4>
-                        </div>
-                    </div>
-
-                    {/* Content */}
+                    {/* Main Popup Card Container */}
                     <div className={cn(
-                        "transition-all duration-300 overflow-hidden flex flex-col",
-                        isPopupMinimized ? "max-h-0 opacity-0" : "max-h-[250px] opacity-100 border-t border-slate-100 pt-3"
+                        "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-blue-100 dark:border-slate-800 shadow-2xl w-72 flex flex-col pointer-events-auto relative transition-all duration-300",
+                        isPopupMinimized ? "p-2 h-auto" : "p-3.5 max-h-[380px]"
                     )}>
-                        <div className="overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                            {Object.entries(selectedVectorInfo.properties)
-                                .filter(([key]) => !['geometry', '_layer', 'bbox', 'fid', 'id'].includes(key))
-                                .map(([key, value]) => (
-                                    <div key={key} className="flex flex-col p-1.5 rounded-lg hover:bg-slate-50 transition-colors">
-                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter leading-none mb-1">
-                                            {key.replace(/_/g, ' ')}
-                                        </span>
-                                        <span className="text-[11px] font-extrabold text-slate-700 break-words">
-                                            {formatValue(key, value)}
-                                            {(key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar')) ? ' m' : ''}
-                                        </span>
-                                    </div>
-                                ))}
+                        {/* Action Controls (Minimize & Close) */}
+                        <div className="absolute top-3 right-3 flex gap-1 z-10">
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsPopupMinimized(!isPopupMinimized)}
+                                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-slate-400"
+                                    >
+                                        {isPopupMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                                    {isPopupMinimized ? "Perbesar Popup" : "Minimalkan Popup"}
+                                </TooltipContent>
+                            </Tooltip>
+
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <button
+                                        type="button"
+                                        onClick={closePopup}
+                                        className="p-1 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 rounded-md transition-colors text-slate-400"
+                                    >
+                                        <X size={14} />
+                                    </button>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                                    Tutup Popup
+                                </TooltipContent>
+                            </Tooltip>
                         </div>
 
-                        <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between shrink-0">
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">Koordinat</span>
-                            <code className="text-[9px] font-bold bg-slate-50 px-2 py-0.5 rounded border text-blue-600">
-                                {toLonLat(selectedVectorInfo.coordinate!)[1].toFixed(6)}, {toLonLat(selectedVectorInfo.coordinate!)[0].toFixed(6)}
-                            </code>
+                        {/* Multi-layer Popup Navigator Header */}
+                        {popupItems.length > 1 && (
+                            <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 px-2 py-1 rounded-xl text-[10px] font-bold mb-2 mr-14">
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            disabled={popupIndex === 0}
+                                            onClick={() => setPopupIndex(prev => Math.max(0, prev - 1))}
+                                            className="p-0.5 hover:bg-white dark:hover:bg-slate-700 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all text-slate-600 dark:text-slate-300"
+                                        >
+                                            <ChevronLeft size={13} />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                                        Layer Sebelumnya
+                                    </TooltipContent>
+                                </Tooltip>
+                                <span className="text-[9px] font-black text-slate-600 dark:text-slate-300 tracking-tight">
+                                    Layer {popupIndex + 1} dari {popupItems.length}
+                                </span>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <button
+                                            type="button"
+                                            disabled={popupIndex === popupItems.length - 1}
+                                            onClick={() => setPopupIndex(prev => Math.min(popupItems.length - 1, prev + 1))}
+                                            className="p-0.5 hover:bg-white dark:hover:bg-slate-700 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all text-slate-600 dark:text-slate-300"
+                                        >
+                                            <ChevronRight size={13} />
+                                        </button>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                                        Layer Selanjutnya
+                                    </TooltipContent>
+                                </Tooltip>
+                            </div>
+                        )}
+
+                        {/* Current Active Item Header */}
+                        <div className={cn("flex items-center gap-2.5 mb-2.5 shrink-0", popupItems.length === 1 && "mr-12")}>
+                            <div className="p-1.5 bg-blue-600 rounded-lg text-white shadow-md shadow-blue-500/20 shrink-0">
+                                <Layers size={14} />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <span className={cn(
+                                    "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none inline-block mb-1",
+                                    popupItems[popupIndex]?.badgeColor || "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                                )}>
+                                    {popupItems[popupIndex]?.badgeText || "Feature"}
+                                </span>
+                                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate leading-tight">
+                                    {popupItems[popupIndex]?.title || 'DETAIL DATA'}
+                                </h4>
+                            </div>
                         </div>
+
+                        {/* Content Body */}
+                        <div className={cn(
+                            "transition-all duration-300 overflow-hidden flex flex-col",
+                            isPopupMinimized ? "max-h-0 opacity-0" : "max-h-[250px] opacity-100 border-t border-slate-100 dark:border-slate-800 pt-2.5"
+                        )}>
+                            <div className="overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                                {Object.entries(popupItems[popupIndex]?.properties || {})
+                                    .filter(([key]) => !['geometry', '_layer', 'bbox', 'fid', 'id'].includes(key))
+                                    .map(([key, value]) => (
+                                        <div key={key} className="flex flex-col p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                            <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter leading-none mb-1">
+                                                {key.replace(/_/g, ' ')}
+                                            </span>
+                                            <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-200 break-words">
+                                                {formatValue(key, value)}
+                                                {(key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar')) ? ' m' : ''}
+                                            </span>
+                                        </div>
+                                    ))}
+                            </div>
+
+                            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 gap-1.5">
+                                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Koordinat</span>
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                    <code className="text-[9.5px] font-mono font-bold bg-slate-50 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 truncate">
+                                        {toLonLat(popupCoordinate)[1].toFixed(6)}, {toLonLat(popupCoordinate)[0].toFixed(6)}
+                                    </code>
+                                    <Tooltip>
+                                        <TooltipTrigger asChild>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const lonLat = toLonLat(popupCoordinate);
+                                                    const coordText = `${lonLat[1].toFixed(6)}, ${lonLat[0].toFixed(6)}`;
+                                                    navigator.clipboard.writeText(coordText);
+                                                    toast.success(`Koordinat disalin: ${coordText}`);
+                                                }}
+                                                className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
+                                            >
+                                                <Copy size={13} />
+                                            </button>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="top" className="text-[10px] py-1 px-2">
+                                            Salin Koordinat
+                                        </TooltipContent>
+                                    </Tooltip>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Thick Vertical Dotted Pointer Line & Pulsing Target Point Indicator */}
+                    <div className="flex flex-col items-center relative z-20 shrink-0 pointer-events-none">
+                        <div className="w-0 h-6 border-l-[3px] border-dotted border-blue-600 dark:border-blue-400 shadow-sm" />
+                        <div className="w-3 h-3 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 shadow-md animate-ping absolute -bottom-0.5" />
+                        <div className="w-3 h-3 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 shadow-md" />
                     </div>
                 </div>,
                 vectorPopupElementRef.current

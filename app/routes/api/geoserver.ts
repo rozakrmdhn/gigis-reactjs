@@ -1,17 +1,37 @@
-import type { LoaderFunctionArgs } from "react-router";
+﻿import type { LoaderFunctionArgs } from "react-router";
+
+// Disable SSL certificate verification for backend proxying (e.g. government GeoServers with expired/untrusted SSL certs)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
 export async function loader({ request }: LoaderFunctionArgs) {
     try {
         const url = new URL(request.url);
         
-        // Extract the path after /proxy/geoserver
-        // e.g., /proxy/geoserver/ows -> /ows
-        const pathSuffix = url.pathname.replace(/^\/proxy\/geoserver/, '');
-        const targetUrl = `https://saggaserv.my.id/geoserver${pathSuffix}${url.search}`;
+        const targetParam = url.searchParams.get("target") || url.searchParams.get("url");
+        let targetUrl: string;
+
+        if (targetParam) {
+            const targetUrlObj = new URL(targetParam);
+            // Copy all current query parameters except 'target' and 'url'
+            url.searchParams.forEach((value, key) => {
+                if (key !== 'target' && key !== 'url') {
+                    targetUrlObj.searchParams.append(key, value);
+                }
+            });
+            targetUrl = targetUrlObj.toString();
+        } else {
+            // Extract the path after /proxy/geoserver
+            // e.g., /proxy/geoserver/ows -> /ows
+            const pathSuffix = url.pathname.replace(/^\/proxy\/geoserver/, '');
+            targetUrl = `https://saggaserv.my.id/geoserver${pathSuffix}${url.search}`;
+        }
         
         const response = await fetch(targetUrl, {
             method: request.method,
-            // We omit headers to avoid passing host or origin headers that might block the request
+            headers: {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "*/*"
+            }
         });
         
         if (!response.ok) {
@@ -38,3 +58,4 @@ export async function loader({ request }: LoaderFunctionArgs) {
         return new Response("Geoserver proxy error", { status: 500 });
     }
 }
+

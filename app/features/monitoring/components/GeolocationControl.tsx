@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+﻿import { useEffect, useState, useCallback, useRef } from "react";
 import OLMap from "ol/Map";
 import Geolocation from "ol/Geolocation";
 import VectorSource from "ol/source/Vector";
@@ -15,9 +15,10 @@ import { toast } from "sonner";
 interface GeolocationControlProps {
     map: OLMap | null;
     className?: string;
+    tooltipSide?: "left" | "right" | "top" | "bottom";
 }
 
-export function GeolocationControl({ map, className }: GeolocationControlProps) {
+export function GeolocationControl({ map, className, tooltipSide = "left" }: GeolocationControlProps) {
     const [isTracking, setIsTracking] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [accuracy, setAccuracy] = useState<number | null>(null);
@@ -150,7 +151,10 @@ export function GeolocationControl({ map, className }: GeolocationControlProps) 
         <TooltipProvider>
             <div className={cn("relative flex items-center justify-center", className)}>
                 {isTracking && accuracy !== null && (
-                    <div className="absolute right-full mr-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-2.5 py-1 rounded-lg border border-white/50 dark:border-slate-700/50 shadow-xl text-[10px] font-bold text-blue-600 dark:text-blue-400 animate-in slide-in-from-right-2 fade-in duration-300 whitespace-nowrap">
+                    <div className={cn(
+                        "absolute bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl px-2.5 py-1 rounded-lg border border-white/50 dark:border-slate-700/50 shadow-xl text-[10px] font-bold text-blue-600 dark:text-blue-400 animate-in fade-in duration-300 whitespace-nowrap z-50 pointer-events-none",
+                        tooltipSide === "right" ? "left-full ml-3" : "right-full mr-3"
+                    )}>
                         Akurasi: {accuracy.toFixed(1)}m
                     </div>
                 )}
@@ -161,10 +165,10 @@ export function GeolocationControl({ map, className }: GeolocationControlProps) 
                             variant="ghost"
                             size="icon"
                             className={cn(
-                                "h-9 w-9 rounded-xl transition-all duration-300 relative",
+                                "h-8 w-8 rounded-xl transition-all duration-300 relative cursor-pointer",
                                 isTracking
                                     ? "text-blue-600 bg-blue-50 dark:bg-blue-900/30"
-                                    : "text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                                    : "text-slate-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 dark:text-slate-100"
                             )}
                             onClick={handleToggleTracking}
                             disabled={isLoading}
@@ -179,7 +183,7 @@ export function GeolocationControl({ map, className }: GeolocationControlProps) 
                             )}
                         </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="left" className="bg-slate-900 text-white border-slate-800">
+                    <TooltipContent side={tooltipSide} className="bg-slate-900 text-white border-slate-800">
                         <p className="text-[10px] font-bold uppercase tracking-wider">
                             {isTracking ? "Matikan GPS" : "Lokasi Saya"}
                         </p>

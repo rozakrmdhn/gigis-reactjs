@@ -1,4 +1,4 @@
-import { Info } from 'lucide-react';
+﻿import { Info } from 'lucide-react';
 import { Button } from '~/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
 import { Separator as UISeparator } from '~/components/ui/separator';

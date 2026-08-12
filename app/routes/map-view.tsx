@@ -1,21 +1,42 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import type OLMap from 'ol/Map';
+import { Link, useNavigate } from 'react-router';
 import {
-    ChevronRight,
-    Database,
-    Layers as LayersIcon,
-    Search,
-    Map as MapIcon,
-    ChevronLeft,
-    PanelLeftOpen,
-    Filter,
-    ChevronDown,
-    Info,
-    X,
+  Layers as LayersIcon,
+  Search,
+  Map as MapIcon,
+  ChevronDown,
+  Info,
+  X,
+  ArrowLeft,
+  Filter,
+  SlidersHorizontal,
+  FolderOpen,
+  MapPin,
+  Navigation,
+  Activity,
+  CheckCircle2,
+  AlertCircle,
+  Ruler,
+  Globe,
+  Home,
+  BarChart3 as ChartIcon,
+  Database as DatabaseIcon,
+  Route as RouteIcon,
+  Menu,
 } from 'lucide-react';
-import { PublicNavbar } from "~/components/public-navbar";
+import {
+  IconTopologyComplex,
+  IconMap2,
+  IconLayersSubtract,
+  IconHome,
+  IconRoute,
+  IconChartBar,
+  IconDatabase,
+  IconLogin,
+} from "@tabler/icons-react";
 import { OpenLayersMap, type OpenLayersMapRef, type MapLayerConfig } from "~/features/peta/components/OpenLayersMap";
 import { MapLegend, type LegendItem } from "~/features/peta/components/MapLegend";
-// Removed Input import as it's no longer needed in this file
 import { GeonodeDatasetPanel } from "~/features/peta/components/GeonodeDatasetPanel";
 import { MapLayerControlPanel } from "~/features/peta/components/MapLayerControlPanel";
 import { KecamatanDropdown } from "~/features/peta/components/KecamatanDropdown";
@@ -23,946 +44,980 @@ import { DesaDropdown } from "~/features/peta/components/DesaDropdown";
 import { type Kecamatan } from "~/services/kecamatan";
 import { desaService, type Desa } from "~/services/desa";
 import { jalanService, type RekapDibangun } from "~/services/jalan";
-import { cn } from '~/lib/utils';
+import { cn, getProxiedLayerUrl } from '~/lib/utils';
 import { AddressSearch } from "~/features/peta/components/AddressSearch";
 import { CoordinateInput, type Marker } from "~/features/peta/components/CoordinateInput";
 import { Button } from '~/components/ui/button';
 import { useIsMobile } from "~/hooks/use-mobile";
 import {
-    Sheet,
-    SheetContent,
-    SheetHeader,
-    SheetTitle,
-    SheetTrigger,
-    SheetDescription,
-    SheetFooter,
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
 } from "~/components/ui/sheet";
 import { Badge } from "~/components/ui/badge";
-import { Progress } from "~/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import { Activity, BarChart3, CheckCircle2, Ruler, AlertCircle } from "lucide-react";
 import type { MetaFunction } from "react-router";
 
-
 import {
-    Tabs,
-    TabsContent,
-    TabsList,
-    TabsTrigger,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
 } from "~/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "~/components/ui/dropdown-menu";
+import { ModeToggle } from "~/components/mode-toggle";
 import { CORE_LAYER_COLORS } from '~/lib/map-config';
 import { MapViewSidebar } from "~/features/peta/components/MapViewSidebar";
 import { MapViewMapControls } from "~/features/peta/components/MapViewMapControls";
-import { ScrollArea } from "~/components/ui/scroll-area";
-import { Spinner } from "~/components/ui/spinner";
 import { SegmenMiniMap } from "~/features/peta/components/SegmenMiniMap";
-import { MapPin, Navigation } from 'lucide-react';
 
 export const meta: MetaFunction = () => {
-    return [
-        { title: "Map View - GIGIS Monitoring" },
-        { name: "description", content: "Peta Interaktif Infrastruktur dengan Katalog Dataset Geonode" },
-    ];
+  return [
+    { title: "Peta Interaktif WebGIS — MELAROSA" },
+    { name: "description", content: "Peta Interaktif Spasial Pembangunan Infrastruktur BKK Kabupaten Bojonegoro" },
+  ];
 };
 
 const BASEMAPS = [
-    { id: 'osm', name: 'OpenStreetMap', url: 'osm', thumbnail: 'https://tile.openstreetmap.org/14/13283/8518.png' },
-    { id: 'google-road', name: 'Google Maps', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=m&x=13283&y=8518&z=14' },
-    { id: 'google-sat', name: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
-    { id: 'carto-light', name: 'Positron Light', url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/light_all/14/13283/8518.png' },
-    { id: 'carto-dark', name: 'Dark Matter', url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/dark_all/14/13283/8518.png' },
-    { id: 'satellite', name: 'Esri Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', thumbnail: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/14/8518/13283' },
+  { id: 'carto-light', name: 'Positron Light', url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/light_all/14/13283/8518.png' },
+  { id: 'carto-dark', name: 'Dark Matter', url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/dark_all/14/13283/8518.png' },
+  { id: 'osm', name: 'OpenStreetMap', url: 'osm', thumbnail: 'https://tile.openstreetmap.org/14/13283/8518.png' },
+  { id: 'satellite', name: 'Esri Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', thumbnail: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/14/8518/13283' },
+  { id: 'google-road', name: 'Google Maps', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=m&x=13283&y=8518&z=14' },
+  { id: 'google-sat', name: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
+];
+
+// Public Navigation Links Map
+const PUBLIC_NAV_LINKS = [
+  { name: "Beranda", path: "/", icon: IconHome, desc: "Halaman Utama Portal" },
+  { name: "Peta Spasial", path: "/map-view", icon: IconMap2, desc: "WebGIS Peta Interaktif" },
+  { name: "Ruas Jalan", path: "/jalan-desa", icon: IconRoute, desc: "Daftar Jalan Poros Desa" },
+  { name: "Statistik", path: "/statistik", icon: IconChartBar, desc: "Data Rekap & Capaian" },
+  { name: "Katalog Dataset", path: "/katalog-dataset", icon: IconDatabase, desc: "Dataset GeoNode OGC" },
 ];
 
 export default function MapViewPage() {
-    const mapRef = useRef<OpenLayersMapRef>(null);
-    const isMobile = useIsMobile();
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-    const [isRekapOpen, setIsRekapOpen] = useState(false);
+  const mapRef = useRef<OpenLayersMapRef>(null);
+  const [mapInstance, setMapInstance] = useState<OLMap | null>(null);
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isRekapOpen, setIsRekapOpen] = useState(false);
 
-    // Sidebar state initialization for mobile
-    useEffect(() => {
-        if (isMobile) {
-            setIsSidebarOpen(false);
-        }
-    }, [isMobile]);
+  // Auto-close sidebar on mobile
+  useEffect(() => {
+    if (isMobile) {
+      setIsSidebarOpen(false);
+    }
+  }, [isMobile]);
 
-    // Basemap & Legend State
-    const [activeBasemap, setActiveBasemap] = useState(BASEMAPS[3]);
-    const [isBasemapPanelOpen, setIsBasemapPanelOpen] = useState(false);
-    const [rekapData, setRekapData] = useState<RekapDibangun | null>(null);
-    const [segmentsData, setSegmentsData] = useState<any>(null);
+  // Basemap & Legend State
+  const [activeBasemap, setActiveBasemap] = useState(BASEMAPS[0]);
+  const [rekapData, setRekapData] = useState<RekapDibangun | null>(null);
+  const [segmentsData, setSegmentsData] = useState<any>(null);
 
-    // Administrative Filters State
-    const [selectedKecamatan, setSelectedKecamatan] = useState<Kecamatan | null>(null);
-    const [selectedDesa, setSelectedDesa] = useState<Desa | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [selectedSegmen, setSelectedSegmen] = useState<any>(null);
+  // Administrative Filters State
+  const [selectedKecamatan, setSelectedKecamatan] = useState<Kecamatan | null>(null);
+  const [selectedDesa, setSelectedDesa] = useState<Desa | null>(null);
+  const [loading, setLoading] = useState(false);
 
-    // Monitoring state removed as it is no longer used in the sidebar
+  // Map Layers & Markers State
+  const [activeLayers, setActiveLayers] = useState<MapLayerConfig[]>([]);
+  const [markers, setMarkers] = useState<Marker[]>([]);
 
-    // Map Layers State
-    const [activeLayers, setActiveLayers] = useState<MapLayerConfig[]>([]);
-    const [markers, setMarkers] = useState<Marker[]>([]);
-
-    // Derived layer presence for Legend
-    const hasSegments = useMemo(() => activeLayers.some(l => l.id.startsWith('legacy_segments_') && l.visible !== false), [activeLayers]);
-    const hasAdmin = useMemo(() => activeLayers.some(l => (l.id.startsWith('batas_kecamatan_') || l.id.startsWith('legacy_desa_')) && l.visible !== false), [activeLayers]);
-    const hasCatalog = useMemo(() => activeLayers.some(l => l.id.startsWith('geonode-') && l.visible !== false), [activeLayers]);
-    const hasMainRoads = true; // Always there for now or check map ref
-
-    // Derived info for the panels
-    const activeLayerIds = useMemo(() => activeLayers.map(l => l.id), [activeLayers]);
-
-    // Derived Legend Items (Dynamic based on activeLayers)
-    const legendItems = useMemo<LegendItem[]>(() => {
-        const itemsMap = new Map<string, LegendItem>();
-
-        // 1. Add Core Jalan Utama
-        if (hasMainRoads) {
-            itemsMap.set('Jalan Utama / Kab', { 
-                label: 'Jalan Utama / Kab', 
-                color: CORE_LAYER_COLORS.GENERAL.hex, 
-                active: true 
+  // Load default visible layers from backend API
+  useEffect(() => {
+    const fetchDefaultLayers = async () => {
+      try {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/layers?active_only=true`);
+        if (!response.ok) return;
+        const data = await response.json();
+        if (data.status === 'success' && Array.isArray(data.result)) {
+          const defaultVisibleLayers = data.result
+            .filter((l: any) => l.default_visible)
+            .map((l: any) => {
+              const proxyUrl = getProxiedLayerUrl(l.url);
+              return {
+                id: `layer-${l.id}`,
+                title: l.name,
+                type: l.protocol === 'OGC:WMS' ? 'wms' : (l.protocol === 'XYZ' ? 'tile' : 'vector'),
+                url: proxyUrl,
+                params: {
+                  'LAYERS': l.layer_name,
+                  'VERSION': '1.1.1'
+                },
+                legendUrl: l.protocol === 'OGC:WMS' ? `${proxyUrl}?request=GetLegendGraphic&format=image/png&layer=${l.layer_name}` : undefined,
+                visible: true,
+                opacity: l.opacity ?? 1,
+                zIndex: l.order ?? 50
+              };
             });
+          setActiveLayers(prev => [...defaultVisibleLayers, ...prev]);
         }
+      } catch (err) {
+        console.error("Failed to load default layers:", err);
+      }
+    };
+    fetchDefaultLayers();
+  }, []);
 
-        // 2. Add Dynamic Layers from activeLayers
-        activeLayers.forEach(layer => {
-            if (layer.visible === false) return;
+  const hasMainRoads = true;
+  const activeLayerIds = useMemo(() => activeLayers.map(l => l.id), [activeLayers]);
 
-            if (layer.id.startsWith('legacy_segments_')) {
-                itemsMap.set('Segmen Jalan Desa', { 
-                    label: 'Segmen Jalan Desa', 
-                    color: CORE_LAYER_COLORS.SEGMENTS.hex, 
-                    active: true 
-                });
-            } else if (layer.id.startsWith('batas_kecamatan_') || layer.id.startsWith('legacy_desa_')) {
-                const label = layer.title.replace('KECAMATAN: ', '').replace('Wilayah: ', 'Batas ');
-                itemsMap.set(label, { 
-                    label, 
-                    color: CORE_LAYER_COLORS.ADMIN.hex, 
-                    type: 'dashed', 
-                    active: true 
-                });
-            } else if (layer.type === 'vector' && !layer.id.startsWith('legacy_')) {
-                itemsMap.set(layer.title, {
-                    label: layer.title,
-                    color: layer.style?.stroke || layer.style?.fill || '#666',
-                    type: layer.style?.fill ? 'polygon' : 'line',
-                    active: true
-                });
-            }
+  // Derived Legend Items
+  const legendItems = useMemo<LegendItem[]>(() => {
+    const itemsMap = new Map<string, LegendItem>();
+
+    if (hasMainRoads) {
+      itemsMap.set('Jalan Utama / Kab', {
+        label: 'Jalan Utama / Kab',
+        color: CORE_LAYER_COLORS.GENERAL.hex,
+        active: true
+      });
+    }
+
+    activeLayers.forEach(layer => {
+      if (layer.visible === false) return;
+
+      if (layer.id.startsWith('legacy_segments_')) {
+        itemsMap.set('Segmen Jalan Desa', {
+          label: 'Segmen Jalan Desa',
+          color: CORE_LAYER_COLORS.SEGMENTS.hex,
+          active: true
         });
+      } else if (layer.id.startsWith('batas_kecamatan_') || layer.id.startsWith('legacy_desa_')) {
+        const label = layer.title.replace('KECAMATAN: ', '').replace('Wilayah: ', 'Batas ');
+        itemsMap.set(label, {
+          label,
+          color: CORE_LAYER_COLORS.ADMIN.hex,
+          type: 'dashed',
+          active: true
+        });
+      } else if (layer.type === 'vector' && !layer.id.startsWith('legacy_')) {
+        itemsMap.set(layer.title, {
+          label: layer.title,
+          color: layer.style?.stroke || layer.style?.fill || '#666',
+          type: layer.style?.fill ? 'polygon' : 'line',
+          active: true
+        });
+      }
+    });
 
-        return Array.from(itemsMap.values());
-    }, [activeLayers, hasMainRoads]);
+    return Array.from(itemsMap.values());
+  }, [activeLayers, hasMainRoads]);
 
-    // Find all catalog layers with legend URLs
-    const catalogLegendUrls = useMemo(() => {
-        return activeLayers
-            .filter(l => l.id.startsWith('geonode-') && l.visible !== false && l.legendUrl)
-            .map(l => l.legendUrl!);
-    }, [activeLayers]);
+  const catalogLegendUrls = useMemo(() => {
+    return activeLayers
+      .filter(l => l.id.startsWith('geonode-') && l.visible !== false && l.legendUrl)
+      .map(l => l.legendUrl!);
+  }, [activeLayers]);
 
-    // Handlers
-    const handleAddLayer = (newLayer: MapLayerConfig) => {
+  // Handlers
+  const handleAddLayer = (newLayer: MapLayerConfig) => {
+    setActiveLayers(prev => {
+      const next = [newLayer, ...prev];
+      return next.map((l, i) => ({
+        ...l,
+        zIndex: 100 + (next.length - i) * 10
+      }));
+    });
+  };
+
+  const handleRemoveLayer = (id: string) => {
+    setActiveLayers(prev => prev.filter(l => l.id !== id));
+  };
+
+  const handleReorderLayers = (newOrder: MapLayerConfig[]) => {
+    const updated = newOrder.map((layer, index) => ({
+      ...layer,
+      zIndex: 100 + (newOrder.length - index) * 10
+    }));
+    setActiveLayers(updated);
+  };
+
+  const handleToggleVisibility = (id: string) => {
+    setActiveLayers(prev => prev.map(l =>
+      l.id === id ? { ...l, visible: l.visible === false } : l
+    ));
+  };
+
+  const handleOpacityChange = (id: string, opacity: number) => {
+    setActiveLayers(prev => prev.map(l =>
+      l.id === id ? { ...l, opacity } : l
+    ));
+  };
+
+  const handleUpdateLayerParams = (id: string, params: any) => {
+    setActiveLayers(prev => prev.map(l =>
+      l.id === id ? { ...l, params: { ...l.params, ...params } } : l
+    ));
+  };
+
+  const handleAddMarker = (newMarker: Marker) => {
+    setMarkers(prev => [...prev, newMarker]);
+  };
+
+  const handleRemoveMarker = (id: string) => {
+    setMarkers(prev => prev.filter(m => m.id !== id));
+  };
+
+  const handleUpdateMarker = (updatedMarker: Marker) => {
+    setMarkers(prev => prev.map(m => m.id === updatedMarker.id ? updatedMarker : m));
+  };
+
+  useEffect(() => {
+    if (markers.length > 0) {
+      const timer = setTimeout(() => {
+        mapRef.current?.fitAllMarkers();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [markers.length]);
+
+  const handleSearchSelect = (result: { lat: number, lon: number, display_name: string }) => {
+    const newMarker: Marker = {
+      id: crypto.randomUUID(),
+      lat: result.lat,
+      lon: result.lon,
+      title: result.display_name.split(',')[0]
+    };
+    setMarkers(prev => [...prev, newMarker]);
+  };
+
+  // Administrative selection handlers
+  const handleSelectKecamatan = async (kecamatan: Kecamatan | null) => {
+    setLoading(true);
+    setSelectedKecamatan(kecamatan);
+    setSelectedDesa(null);
+
+    setActiveLayers(prev => prev.filter(l =>
+      !l.id.startsWith('batas_kecamatan_') &&
+      !l.id.startsWith('legacy_desa_') &&
+      !l.id.startsWith('legacy_segments_')
+    ));
+
+    mapRef.current?.zoomToFeature(null);
+
+    if (!kecamatan) {
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const geojson = await desaService.getGeojsonDesa(kecamatan.id);
+
+      if (geojson) {
         setActiveLayers(prev => {
-            const next = [newLayer, ...prev];
-            return next.map((l, i) => ({
-                ...l,
-                zIndex: 100 + (next.length - i) * 10
-            }));
-        });
-    };
-
-    const handleRemoveLayer = (id: string) => {
-        setActiveLayers(prev => prev.filter(l => l.id !== id));
-    };
-
-    const handleReorderLayers = (newOrder: MapLayerConfig[]) => {
-        const updated = newOrder.map((layer, index) => ({
-            ...layer,
-            zIndex: 100 + (newOrder.length - index) * 10
-        }));
-        setActiveLayers(updated);
-    };
-
-    const handleToggleVisibility = (id: string) => {
-        setActiveLayers(prev => prev.map(l =>
-            l.id === id ? { ...l, visible: l.visible === false } : l
-        ));
-    };
-
-    const handleOpacityChange = (id: string, opacity: number) => {
-        setActiveLayers(prev => prev.map(l =>
-            l.id === id ? { ...l, opacity } : l
-        ));
-    };
-
-    const handleUpdateLayerParams = (id: string, params: any) => {
-        setActiveLayers(prev => prev.map(l =>
-            l.id === id ? { ...l, params: { ...l.params, ...params } } : l
-        ));
-    };
-
-    const handleAddMarker = (newMarker: Marker) => {
-        setMarkers(prev => [...prev, newMarker]);
-    };
-
-    const handleRemoveMarker = (id: string) => {
-        setMarkers(prev => prev.filter(m => m.id !== id));
-    };
-
-    const handleUpdateMarker = (updatedMarker: Marker) => {
-        setMarkers(prev => prev.map(m => m.id === updatedMarker.id ? updatedMarker : m));
-    };
-
-    // Auto fit bounds when markers change
-    useEffect(() => {
-        if (markers.length > 0) {
-            const timer = setTimeout(() => {
-                mapRef.current?.fitAllMarkers();
-            }, 100);
-            return () => clearTimeout(timer);
-        }
-    }, [markers.length]);
-
-    const handleSearchSelect = (result: { lat: number, lon: number, display_name: string }) => {
-        const newMarker: Marker = {
-            id: crypto.randomUUID(),
-            lat: result.lat,
-            lon: result.lon,
-            title: result.display_name.split(',')[0]
-        };
-        setMarkers(prev => [...prev, newMarker]);
-    };
-
-    // Administrative selection handlers
-    const handleSelectKecamatan = async (kecamatan: Kecamatan | null) => {
-        setLoading(true);
-        setSelectedKecamatan(kecamatan);
-        setSelectedDesa(null);
-        setSelectedSegmen(null);
-
-        // Immediate layer clearing
-        setActiveLayers(prev => prev.filter(l =>
+          const filtered = prev.filter(l =>
             !l.id.startsWith('batas_kecamatan_') &&
             !l.id.startsWith('legacy_desa_') &&
             !l.id.startsWith('legacy_segments_')
-        ));
+          );
 
-        // Clear vector source for zoomToFeature (e.g. boundaries)
+          const layerId = `batas_kecamatan_${kecamatan.id}`;
+          const layerTitle = `KECAMATAN: ${kecamatan.nama_kecamatan}`;
+          return [{
+            id: layerId,
+            title: layerTitle,
+            type: 'vector',
+            data: geojson,
+            visible: true,
+            opacity: 1.0,
+            style: { stroke: '#2563eb', width: 2, lineDash: [4, 4], fill: 'rgba(37, 99, 235, 0.04)', labelField: 'nama_desa' }
+          }, ...filtered];
+        });
+
+        mapRef.current?.zoomToFeature(geojson);
+      }
+    } catch (error) {
+      console.error("Failed to fetch kecamatan geojson", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectDesa = async (desa: Desa | null) => {
+    setLoading(true);
+    setSelectedDesa(desa);
+
+    setActiveLayers(prev => prev.filter(l =>
+      !l.id.startsWith('legacy_desa_') &&
+      !l.id.startsWith('legacy_poros_') &&
+      !l.id.startsWith('legacy_segments_')
+    ));
+
+    if (!desa) {
+      if (selectedKecamatan) {
+        const geojson = await desaService.getGeojsonDesa(selectedKecamatan.id);
+        if (geojson) mapRef.current?.zoomToFeature(geojson);
+      } else {
         mapRef.current?.zoomToFeature(null);
+      }
+      setLoading(false);
+      return;
+    }
 
-        if (!kecamatan) {
-            setLoading(false);
-            return;
+    try {
+      const [desaGeojson, rawPoros, rawSegments, rekap] = await Promise.all([
+        desaService.getDesaGeojsonById(desa.id),
+        jalanService.getJalanPorosByDesa(desa.id),
+        jalanService.getSegmenByDesa(desa.id),
+        jalanService.getRekapDibangunByDesa(desa.id)
+      ]);
+
+      setRekapData(rekap);
+      setSegmentsData(rawSegments);
+
+      const porosGeojson = rawPoros && rawPoros.features ? {
+        ...rawPoros,
+        features: rawPoros.features.map(f => ({
+          ...f,
+          properties: { ...f.properties, _layer: 'jalan_poros' }
+        }))
+      } : null;
+
+      const segmentsGeojson = rawSegments && rawSegments.features ? {
+        ...rawSegments,
+        features: rawSegments.features.map(f => ({
+          ...f,
+          properties: { ...f.properties, _layer: 'jalan_segmen' }
+        }))
+      } : null;
+
+      setActiveLayers(prev => {
+        let filtered = prev.filter(l =>
+          !l.id.startsWith('legacy_desa_') &&
+          !l.id.startsWith('legacy_poros_') &&
+          !l.id.startsWith('legacy_segments_')
+        );
+
+        if (desaGeojson) {
+          filtered = [{
+            id: `legacy_desa_${desa.id}`,
+            title: `Wilayah: ${desa.nama_desa}`,
+            type: 'vector',
+            data: desaGeojson,
+            visible: true,
+            opacity: 1.0,
+            zIndex: 6
+          }, ...filtered];
         }
 
-        try {
-            const geojson = await desaService.getGeojsonDesa(kecamatan.id);
-
-            if (geojson) {
-                setActiveLayers(prev => {
-                    const filtered = prev.filter(l =>
-                        !l.id.startsWith('batas_kecamatan_') &&
-                        !l.id.startsWith('legacy_desa_') &&
-                        !l.id.startsWith('legacy_segments_')
-                    );
-
-                    const layerId = `batas_kecamatan_${kecamatan.id}`;
-                    const layerTitle = `KECAMATAN: ${kecamatan.nama_kecamatan}`;
-                    return [{
-                        id: layerId,
-                        title: layerTitle,
-                        type: 'vector',
-                        data: geojson,
-                        visible: true,
-                        opacity: 1.0,
-                        style: { stroke: '#2e2e2eff', width: 1, lineDash: [4, 4], fill: 'rgba(150, 147, 145, 0.00)', labelField: 'nama_desa' }
-                    }, ...filtered];
-                });
-
-                mapRef.current?.zoomToFeature(geojson);
-            }
-        } catch (error) {
-            console.error("Failed to fetch kecamatan geojson", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleSelectDesa = async (desa: Desa | null) => {
-        setLoading(true);
-        setSelectedDesa(desa);
-        setSelectedSegmen(null);
-
-        // Immediate layer clearing for desa, poros, and segments
-        setActiveLayers(prev => prev.filter(l =>
-            !l.id.startsWith('legacy_desa_') &&
-            !l.id.startsWith('legacy_poros_') &&
-            !l.id.startsWith('legacy_segments_')
-        ));
-
-        if (!desa) {
-            // Re-zoom to kecamatan if desa is cleared
-            if (selectedKecamatan) {
-                const geojson = await desaService.getGeojsonDesa(selectedKecamatan.id);
-                if (geojson) mapRef.current?.zoomToFeature(geojson);
-            } else {
-                mapRef.current?.zoomToFeature(null);
-            }
-            setLoading(false);
-            return;
+        if (porosGeojson) {
+          filtered = [{
+            id: `legacy_poros_${desa.id}`,
+            title: `Jalan Poros: ${desa.nama_desa}`,
+            type: 'vector',
+            data: porosGeojson,
+            visible: true,
+            opacity: 1,
+            zIndex: 90
+          }, ...filtered];
         }
 
-        try {
-            // Parallel fetching for performance
-            const [desaGeojson, rawPoros, rawSegments, rekap] = await Promise.all([
-                desaService.getDesaGeojsonById(desa.id),
-                jalanService.getJalanPorosByDesa(desa.id),
-                jalanService.getSegmenByDesa(desa.id),
-                jalanService.getRekapDibangunByDesa(desa.id)
-            ]);
-
-            // Diagnostic logs for debugging
-            console.log(`MapView: Selected Desa ID = ${desa.id}`);
-            console.log(`MapView: Poros = ${rawPoros ? 'Found' : 'Failed'}`);
-            console.log(`MapView: Segmen = ${rawSegments ? 'Found' : 'Failed'}`);
-            console.log(`MapView: Rekap = ${rekap ? 'Found' : 'Failed'}`);
-
-            setRekapData(rekap);
-            setSegmentsData(rawSegments);
-
-            // Inject metadata for Master Road
-            const porosGeojson = rawPoros && rawPoros.features ? {
-                ...rawPoros,
-                features: rawPoros.features.map(f => ({
-                    ...f,
-                    properties: { ...f.properties, _layer: 'jalan_poros' }
-                }))
-            } : null;
-
-            // Inject metadata for Segments
-            const segmentsGeojson = rawSegments && rawSegments.features ? {
-                ...rawSegments,
-                features: rawSegments.features.map(f => ({
-                    ...f,
-                    properties: { ...f.properties, _layer: 'jalan_segmen' }
-                }))
-            } : null;
-
-            setActiveLayers(prev => {
-                let filtered = prev.filter(l =>
-                    !l.id.startsWith('legacy_desa_') &&
-                    !l.id.startsWith('legacy_poros_') &&
-                    !l.id.startsWith('legacy_segments_')
-                );
-
-                if (desaGeojson) {
-                    filtered = [{
-                        id: `legacy_desa_${desa.id}`,
-                        title: `Wilayah: ${desa.nama_desa}`,
-                        type: 'vector',
-                        data: desaGeojson,
-                        visible: true,
-                        opacity: 1.0,
-                        zIndex: 6
-                    }, ...filtered];
-                }
-
-                if (porosGeojson) {
-                    filtered = [{
-                        id: `legacy_poros_${desa.id}`,
-                        title: `Jalan Poros: ${desa.nama_desa}`,
-                        type: 'vector',
-                        data: porosGeojson,
-                        visible: true,
-                        opacity: 1,
-                        zIndex: 90
-                    }, ...filtered];
-                }
-
-                if (segmentsGeojson) {
-                    filtered = [{
-                        id: `legacy_segments_${desa.id}`,
-                        title: `Segmen Jalan: ${desa.nama_desa}`,
-                        type: 'vector',
-                        data: segmentsGeojson,
-                        visible: true,
-                        opacity: 1,
-                        zIndex: 100
-                    }, ...filtered];
-                }
-
-                return filtered;
-            });
-
-            if (desaGeojson) {
-                mapRef.current?.zoomToFeature(desaGeojson);
-            }
-        } catch (error) {
-            console.error("Failed to fetch desa data", error);
-        } finally {
-            setLoading(false);
+        if (segmentsGeojson) {
+          filtered = [{
+            id: `legacy_segments_${desa.id}`,
+            title: `Segmen Jalan: ${desa.nama_desa}`,
+            type: 'vector',
+            data: segmentsGeojson,
+            visible: true,
+            opacity: 1,
+            zIndex: 100
+          }, ...filtered];
         }
-    };
 
-    // Tabs State
-    const [activeTab, setActiveTab] = useState<string>('catalog');
+        return filtered;
+      });
 
-    // Sidebar content component/variable for reuse
-    const SidebarContent = (
-        <div className="flex flex-col h-full bg-slate-50/50 dark:bg-slate-950/20 min-h-0">
-            <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val)} className="flex-1 flex flex-col min-h-0 gap-0">
-                <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 px-2 py-2 shrink-0">
-                    <TabsList className="w-full grid grid-cols-3 h-9">
-                        <TabsTrigger value="catalog" className="text-[9px] uppercase font-bold tracking-tight">Katalog</TabsTrigger>
-                        <TabsTrigger value="layers" className="text-[9px] uppercase font-bold tracking-tight">Layer</TabsTrigger>
-                        <TabsTrigger value="filters" className="text-[9px] uppercase font-bold tracking-tight">Filter</TabsTrigger>
-                    </TabsList>
-                </div>
+      if (desaGeojson) {
+        mapRef.current?.zoomToFeature(desaGeojson);
+      }
+    } catch (error) {
+      console.error("Failed to fetch desa data", error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-                <TabsContent value="catalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
-                    <GeonodeDatasetPanel
-                        onAddLayer={handleAddLayer}
-                        activeLayerIds={activeLayerIds}
-                    />
-                </TabsContent>
+  const [activeTab, setActiveTab] = useState<string>('catalog');
 
-                <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
-                    <MapLayerControlPanel
-                        layers={activeLayers}
-                        onRemoveLayer={handleRemoveLayer}
-                        onReorder={handleReorderLayers}
-                        onToggleVisibility={handleToggleVisibility}
-                        onOpacityChange={handleOpacityChange}
-                        onUpdateLayerParams={handleUpdateLayerParams}
-                    />
-                </TabsContent>
+  // Refined Sidebar Content with Single Streamlined Header & Clean Shadcn Tabs
+  const SidebarContent = (
+    <div className="flex flex-col h-full bg-white dark:bg-slate-950 min-h-0">
+      <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val)} className="flex-1 flex flex-col min-h-0 gap-0">
+        {/* Streamlined Unified Header */}
+        <div className="p-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 shrink-0 space-y-2.5">
+          <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-blue-600/10 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                <SlidersHorizontal className="w-4 h-4" />
+              </div>
+              <div className="leading-none">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">Panel Kontrol Spasial</h3>
+                <span className="text-[10px] text-slate-500 font-medium">GIS MELAROSA</span>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+              onClick={() => setIsSidebarOpen(false)}
+              title="Tutup Sidebar"
+            >
+              <X className="w-4 h-4" />
+            </Button>
+          </div>
 
-                <TabsContent value="filters" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden">
-                    <div className="flex-1 overflow-y-auto p-3 space-y-4 custom-scrollbar bg-white dark:bg-slate-950/50">
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Pencarian Alamat</label>
-                            <AddressSearch onSelect={handleSearchSelect} />
-                        </div>
-
-                        <div className="space-y-3 pt-2 border-t dark:border-slate-800">
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Kecamatan</label>
-                                <KecamatanDropdown
-                                    className="w-full h-10 rounded-xl shadow-sm border-slate-200 dark:border-slate-800 font-bold"
-                                    selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
-                                    onSelectKecamatan={handleSelectKecamatan}
-                                />
-                            </div>
-
-                            <div className="space-y-1.5">
-                                <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Desa / Kelurahan</label>
-                                <DesaDropdown
-                                    className="w-full h-10 rounded-xl shadow-sm border-slate-200 dark:border-slate-800 font-bold"
-                                    idKecamatan={selectedKecamatan?.id}
-                                    selectedDesaName={selectedDesa?.nama_desa}
-                                    onSelectDesa={handleSelectDesa}
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-4 pt-4 border-t dark:border-slate-800">
-                            <label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Input Koordinat</label>
-                            <CoordinateInput
-                                markers={markers}
-                                onAdd={handleAddMarker}
-                                onRemove={handleRemoveMarker}
-                                onUpdate={handleUpdateMarker}
-                                onZoomTo={(m) => mapRef.current?.zoomToCoordinate(m.lon, m.lat)}
-                            />
-                        </div>
-                    </div>
-                </TabsContent>
-            </Tabs>
+          <TabsList className="w-full grid grid-cols-3 h-9 bg-white dark:bg-slate-950 p-1 border border-slate-200 dark:border-slate-800 rounded-xl">
+            <TabsTrigger value="catalog" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              <FolderOpen className="w-3.5 h-3.5" />
+              Katalog
+            </TabsTrigger>
+            <TabsTrigger value="layers" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              <LayersIcon className="w-3.5 h-3.5" />
+              Layer
+              {activeLayers.length > 0 && (
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] h-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                  {activeLayers.length}
+                </Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="filters" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+              <Filter className="w-3.5 h-3.5" />
+              Filter
+            </TabsTrigger>
+          </TabsList>
         </div>
-    );
 
-    return (
-        <div className="flex flex-col h-[100dvh] pt-16 overflow-hidden bg-white dark:bg-slate-950">
-            <PublicNavbar />
+        <TabsContent value="catalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950">
+          <GeonodeDatasetPanel
+            onAddLayer={handleAddLayer}
+            activeLayerIds={activeLayerIds}
+          />
+        </TabsContent>
 
-            <main className="flex-1 relative flex overflow-hidden">
-                <MapViewSidebar
-                    isOpen={isSidebarOpen}
-                    onToggle={setIsSidebarOpen}
-                    widthClass="w-[340px]"
-                    className="z-40"
+        <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950">
+          <MapLayerControlPanel
+            layers={activeLayers}
+            onRemoveLayer={handleRemoveLayer}
+            onReorder={handleReorderLayers}
+            onToggleVisibility={handleToggleVisibility}
+            onOpacityChange={handleOpacityChange}
+            onUpdateLayerParams={handleUpdateLayerParams}
+          />
+        </TabsContent>
+
+        <TabsContent value="filters" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden">
+          <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-white dark:bg-slate-950">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                Pencarian Alamat Lokasi
+              </label>
+              <AddressSearch onSelect={handleSearchSelect} />
+            </div>
+
+            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                Filter Wilayah Administrasi
+              </label>
+              <div className="space-y-2.5">
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-500 mb-1 block">Kecamatan</span>
+                  <KecamatanDropdown
+                    className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 text-sm font-semibold"
+                    selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
+                    onSelectKecamatan={handleSelectKecamatan}
+                  />
+                </div>
+                <div>
+                  <span className="text-[11px] font-semibold text-slate-500 mb-1 block">Desa / Kelurahan</span>
+                  <DesaDropdown
+                    className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 text-sm font-semibold"
+                    idKecamatan={selectedKecamatan?.id}
+                    selectedDesaName={selectedDesa?.nama_desa}
+                    onSelectDesa={handleSelectDesa}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                Input Koordinat GPS
+              </label>
+              <CoordinateInput
+                markers={markers}
+                onAdd={handleAddMarker}
+                onRemove={handleRemoveMarker}
+                onUpdate={handleUpdateMarker}
+                onZoomTo={(m) => mapRef.current?.zoomToCoordinate(m.lon, m.lat)}
+              />
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
+
+  return (
+    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none">
+
+      {/* ── 1. FLOATING TOP BAR (HEADER PETA MODERN) ──────────────────── */}
+      {/* Reason: Header melayang translusen menggantikan navbar 64px statis.
+          Integrasi lengkap dengan Dropdown Menu Publik untuk navigasi antar halaman publik. */}
+      <header className="absolute top-3 left-3 right-3 z-30 pointer-events-none flex items-center justify-between gap-3">
+        {/* Kiri: Brand Logo + Menu Publik Dropdown + Sidebar Toggle */}
+        <div className="pointer-events-auto flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-md">
+          {/* Logo Mark */}
+          <Link
+            to="/"
+            className="flex items-center gap-2 group hover:opacity-90 transition-opacity"
+            title="Kembali ke Beranda"
+          >
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-blue-500 to-emerald-500 text-white shadow-sm">
+              <IconTopologyComplex size={18} />
+            </div>
+            <div className="hidden sm:flex flex-col leading-none">
+              <span className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">
+                MELAROSA
+              </span>
+              <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400">
+                Sistem Informasi Geospasial
+              </span>
+            </div>
+          </Link>
+
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
+
+          {/* Menu Publik Dropdown — Solusi Navigasi Halaman Publik dari Peta */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5"
+              >
+                <Menu className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <span className="hidden md:inline">Menu Publik</span>
+                <ChevronDown className="w-3 h-3 text-slate-400" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-56 p-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl">
+              <DropdownMenuLabel className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+                Navigasi Portal Publik
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="my-1" />
+              {PUBLIC_NAV_LINKS.map((link) => (
+                <DropdownMenuItem
+                  key={link.path}
+                  onClick={() => navigate(link.path)}
+                  className="rounded-xl text-xs font-semibold gap-2.5 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
                 >
-                    <div className="h-full flex flex-col">
-                        {SidebarContent}
-                    </div>
-                </MapViewSidebar>
+                  <link.icon size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                  <div className="flex flex-col leading-none">
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{link.name}</span>
+                    <span className="text-[10px] text-slate-400 font-normal mt-0.5">{link.desc}</span>
+                  </div>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-                {/* Map Section */}
-                <div className="flex-1 relative">
-                    {loading && (
-                        <div
-                            className={cn(
-                                "absolute z-50 flex items-center gap-3 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-4 py-2.5 rounded-xl shadow-lg border border-slate-200 dark:border-slate-800 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)]",
-                                isMobile
-                                    ? "top-4 left-[72px]"
-                                    : cn("top-6 transition-all duration-500", isSidebarOpen ? "left-[352px]" : "left-6")
-                            )}
-                        >
-                            <div className="h-4 w-4 border-[2.5px] border-blue-600 border-t-transparent rounded-full animate-spin" />
-                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 uppercase tracking-widest mt-[1px]">Memuat...</span>
-                        </div>
-                    )}
+          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
 
-                    <OpenLayersMap
-                        ref={mapRef}
-                        className="w-full h-full"
-                        layers={activeLayers}
-                        markers={markers}
-                        basemapUrl={activeBasemap.url}
-                    />
-
-                    {/* Bottom Right: Basemap Selector */}
-                    <div className={cn(
-                        "absolute z-20 flex flex-col items-end pointer-events-auto",
-                        isMobile ? "bottom-4 right-4" : "bottom-6 right-6"
-                    )}>
-                        {isBasemapPanelOpen && (
-                            <div className={cn(
-                                "mb-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md p-3 rounded-3xl border border-white dark:border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.3)] grid grid-cols-2 gap-2 animate-in fade-in zoom-in slide-in-from-bottom-10 duration-300 origin-bottom-right max-h-[60vh] overflow-y-auto",
-                                isMobile ? "gap-2" : "gap-3 p-4"
-                            )}>
-                                {BASEMAPS.map((b) => (
-                                    <button
-                                        key={b.id}
-                                        onClick={() => { setActiveBasemap(b); setIsBasemapPanelOpen(false); }}
-                                        className={cn(
-                                            "relative overflow-hidden rounded-xl shadow-sm border-2 transition-all active:scale-95 group",
-                                            isMobile ? "w-16 h-16" : "w-20 h-20 hover:scale-105",
-                                            activeBasemap.id === b.id ? "border-blue-600 shadow-lg shadow-blue-200 dark:shadow-none bg-blue-50 dark:bg-blue-900/20" : "border-slate-100 dark:border-slate-800 hover:border-blue-400"
-                                        )}
-                                    >
-                                        <img src={b.thumbnail} alt={b.name} className="w-full h-full object-cover" />
-                                        <div className={cn(
-                                            "absolute inset-x-0 bottom-0 transition-colors",
-                                            isMobile ? "p-1" : "p-2",
-                                            activeBasemap.id === b.id ? "bg-blue-600/90 backdrop-blur-sm" : "bg-slate-900/60 backdrop-blur-sm group-hover:bg-blue-600/80"
-                                        )}>
-                                            <p className="text-[8px] font-black text-white text-center leading-tight truncate px-0.5 uppercase tracking-tighter">{b.name}</p>
-                                        </div>
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-
-                        <button
-                            onClick={() => setIsBasemapPanelOpen(!isBasemapPanelOpen)}
-                            className={cn(
-                                "overflow-hidden rounded-2xl border-2 border-white dark:border-slate-800 shadow-2xl hover:scale-105 active:scale-95 transition-all group relative",
-                                isMobile ? "w-14 h-14" : "w-20 h-20"
-                            )}
-                            title="Pilih Basemap"
-                        >
-                            <img src={activeBasemap.thumbnail} alt="Active Basemap" className="w-full h-full object-cover" />
-                            <div className="absolute inset-x-0 bottom-0 bg-slate-900/60 backdrop-blur-sm p-1 flex justify-center group-hover:bg-blue-600/90 transition-colors">
-                                <span className="text-[7px] font-black text-white uppercase tracking-tighter truncate px-0.5">{activeBasemap.name}</span>
-                            </div>
-                        </button>
-                    </div>
-
-                    {/* Map Legend (Using Component) */}
-                    <MapLegend
-                        items={legendItems}
-                        legendUrls={catalogLegendUrls}
-                        footer="GIS Melarosa Bojonegoro."
-                        className={cn(
-                            "z-20 transition-all duration-500",
-                            isMobile ? "top-4 left-4" : "top-6",
-                            isSidebarOpen 
-                                ? (isMobile ? "left-4" : "left-[352px]") 
-                                : (isMobile ? "left-4" : "left-6")
-                        )}
-                    />
-
-                    {/* Map Controls (Bottom Left like Draw) */}
-                    <MapViewMapControls
-                        onZoomIn={() => mapRef.current?.zoomIn()}
-                        onZoomOut={() => mapRef.current?.zoomOut()}
-                        onResetBearing={() => mapRef.current?.resetRotation()}
-                        className={cn(
-                            "absolute bottom-6 transition-all duration-500 z-20",
-                            isMobile
-                                ? "left-4"
-                                : isSidebarOpen ? "left-[352px]" : "left-6"
-                        )}
-                    />
-                </div>
-            </main>
-
-            {/* Bottom Center: Rekap Toggle */}
-            {selectedDesa && rekapData && (
-                <div className="absolute bottom-[calc(env(safe-area-inset-bottom,0px)+8px)] left-1/2 -translate-x-1/2 z-20 flex justify-center pointer-events-none">
-                    <Button
-                        onClick={() => setIsRekapOpen(true)}
-                        title="Tampilkan Rekap Pembangunan"
-                        className="pointer-events-auto w-11 h-11 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl shadow-2xl border border-blue-500 transition-all hover:-translate-y-1 active:scale-95 flex items-center justify-center backdrop-blur-md group"
-                    >
-                        <ChevronDown className="w-5 h-5 rotate-180 group-hover:scale-110 transition-transform" />
-                    </Button>
-                </div>
+          {/* Toggle Sidebar */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+            className={cn(
+              "h-8 px-2.5 rounded-xl text-xs font-semibold gap-1.5 transition-all",
+              isSidebarOpen
+                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
+                : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
             )}
-
-            {/* Bottom Sheet for Rekap Data */}
-            <Sheet open={isRekapOpen} onOpenChange={setIsRekapOpen}>
-                <SheetContent side="bottom" className="h-auto max-h-[90dvh] rounded-t-[32px] border-t-0 p-0 overflow-hidden shadow-2xl overflow-y-auto [&>button]:hidden">
-                    <div className="absolute top-2 left-1/2 -translate-x-1/2 w-12 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full" />
-
-                    <SheetTitle className="sr-only">Rekap Pembangunan - {selectedDesa?.name}</SheetTitle>
-                    <SheetDescription className="sr-only">Detail informasi progres pembangunan jalan di Desa {selectedDesa?.name}.</SheetDescription>
-
-                    {/* Modern Close Button */}
-                    <div className="absolute top-6 right-6 z-50">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => setIsRekapOpen(false)}
-                            className="w-10 h-10 rounded-2xl bg-slate-100/50 dark:bg-slate-800/50 backdrop-blur-md hover:bg-red-500 hover:text-white transition-all active:scale-90 shadow-sm"
-                        >
-                            <X size={18} className="stroke-[2.5]" />
-                        </Button>
-                    </div>
-
-                    <div className="flex-1 flex flex-col min-h-0 pt-10 md:px-12 bg-white dark:bg-slate-900">
-                        <SheetHeader className="px-6 pb-2 text-left">
-                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                                        <Activity className="w-4 h-4" />
-                                        <span className="text-[10px] font-black uppercase tracking-[0.2em]">Ringkasan Infrastruktur</span>
-                                    </div>
-                                    <SheetTitle className="text-lg md:text-xl font-black text-slate-900 dark:text-white uppercase tracking-tight">
-                                        {rekapData?.nama_desa}
-                                    </SheetTitle>
-                                    <SheetDescription className="text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                                        Kecamatan {rekapData?.nama_kecamatan} • Kabupaten Bojonegoro
-                                    </SheetDescription>
-                                </div>
-                                <div className="flex flex-col gap-2 items-end">
-                                    {(() => {
-                                        const pemetaan = rekapData?.total_panjang_aset || 0;
-                                        const naikStatus = rekapData?.total_panjang_puk || 0;
-                                        const jalanDesaSekarang = Math.max(0, pemetaan - naikStatus);
-                                        const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
-
-                                        const pct = jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100;
-                                        const isDone = pct >= 100;
-
-                                        return (
-                                            <Badge
-                                                className={cn(
-                                                    "w-fit px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border shadow-lg flex items-center gap-2 transition-all",
-                                                    isDone
-                                                        ? "bg-emerald-500/10 text-emerald-700 border-emerald-200 dark:bg-emerald-500/20 dark:text-emerald-400 dark:border-emerald-800 ring-4 ring-emerald-500/5"
-                                                        : "bg-red-500/10 text-red-700 border-red-200 dark:bg-red-500/20 dark:text-red-400 dark:border-red-800 ring-4 ring-red-500/5"
-                                                )}
-                                            >
-                                                <div className={cn(
-                                                    "w-2 h-2 rounded-full",
-                                                    isDone ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.6)]" : "bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]",
-                                                    !isDone && "animate-pulse"
-                                                )} />
-                                                {isDone ? (
-                                                    <span className="flex items-center gap-1.5">
-                                                        <CheckCircle2 size={12} className="text-emerald-600 dark:text-emerald-400" />
-                                                        Infrastruktur Tuntas
-                                                    </span>
-                                                ) : (
-                                                    <span className="flex items-center gap-1.5">
-                                                        <AlertCircle size={12} className="text-red-600 dark:text-red-400" />
-                                                        Belum Tuntas
-                                                    </span>
-                                                )}
-                                            </Badge>
-                                        );
-                                    })()}
-                                </div>
-                            </div>
-                        </SheetHeader>
-
-                        <Tabs defaultValue="overview" className="flex-1 flex flex-col min-h-0 mt-4">
-                            <div className="px-6">
-                                <TabsList className="w-full max-w-md grid grid-cols-2 h-11 p-1 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl">
-                                    <TabsTrigger value="overview" className="rounded-lg font-bold text-xs uppercase tracking-widest">
-                                        Status Capaian
-                                    </TabsTrigger>
-                                    <TabsTrigger value="segments" className="rounded-lg font-bold text-xs uppercase tracking-widest">
-                                        Segmen List
-                                    </TabsTrigger>
-                                </TabsList>
-                            </div>
-
-                            <TabsContent value="overview" className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar outline-none">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-6">
-                                    <Card className="border-0 shadow-sm bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden">
-                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pemetaan Jalan Desa</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-3 pt-0 text-center">
-                                            <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
-                                                {(rekapData?.total_panjang_aset || 0).toLocaleString('id-ID')}
-                                                <span className="text-[10px] ml-1 text-slate-400 font-bold uppercase tracking-wider">m</span>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card className="border-0 shadow-sm bg-slate-50 dark:bg-slate-800/40 rounded-xl overflow-hidden">
-                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-slate-400">Naik Status Kabupaten</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-3 pt-0 text-center">
-                                            <div className="text-xl font-black text-slate-900 dark:text-white tabular-nums">
-                                                {(rekapData?.total_panjang_puk || 0).toLocaleString('id-ID')}
-                                                <span className="text-[10px] ml-1 text-slate-400 font-bold uppercase tracking-wider">m</span>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card className="border-0 shadow-sm bg-blue-50/50 dark:bg-blue-900/10 rounded-xl overflow-hidden border border-blue-100 dark:border-blue-900/20">
-                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-400">Jalan Desa Sekarang</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-3 pt-0 text-center">
-                                            <div className="text-xl font-black text-blue-700 dark:text-blue-300 tabular-nums">
-                                                {Math.max(0, (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)).toLocaleString('id-ID')}
-                                                <span className="text-[10px] ml-1 text-blue-400 font-bold uppercase tracking-wider">m</span>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    <Card className="border-0 shadow-sm bg-orange-50/50 dark:bg-orange-900/10 rounded-xl overflow-hidden border border-orange-100 dark:border-orange-900/20">
-                                        <CardHeader className="p-3 pb-0.5 space-y-0 text-center">
-                                            <CardTitle className="text-[10px] font-black uppercase tracking-widest text-orange-600 dark:text-orange-400">Belum Tertangani</CardTitle>
-                                        </CardHeader>
-                                        <CardContent className="p-3 pt-0 text-center">
-                                            <div className="text-xl font-black text-orange-700 dark:text-orange-300 tabular-nums">
-                                                {Math.max(0, ((rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)) - (rekapData?.total_panjang_dibangun || 0)).toLocaleString('id-ID')}
-                                                <span className="text-[10px] ml-1 text-orange-400 font-bold uppercase tracking-wider">m</span>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                </div>
-
-                                {(() => {
-                                    const jalanDesaSekarang = (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0);
-                                    const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
-                                    const pct = Math.min(100, Math.round(jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100));
-                                    const isDone = pct >= 100;
-
-                                    return (
-                                        <div className="bg-white dark:bg-slate-900 px-6 py-6 rounded-[32px] mb-6 border border-slate-100 dark:border-slate-800 shadow-xl shadow-slate-200/50 dark:shadow-none relative overflow-hidden group">
-                                            <div className="absolute top-0 right-0 -mr-16 -mt-16 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl group-hover:bg-blue-500/10 transition-colors" />
-
-                                            <div className="flex justify-between items-end mb-6">
-                                                <div className="space-y-1">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className={cn(
-                                                            "w-1.5 h-1.5 rounded-full",
-                                                            isDone ? "bg-emerald-500" : "bg-blue-500 animate-pulse"
-                                                        )} />
-                                                        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 block">Status Capaian</span>
-                                                    </div>
-                                                    <h4 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tight">Progress Pembangunan</h4>
-                                                </div>
-                                                <div className="text-right">
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className={cn(
-                                                            "text-3xl font-black leading-none tabular-nums tracking-tighter",
-                                                            isDone ? "text-emerald-600 dark:text-emerald-400" : "text-blue-600 dark:text-blue-400"
-                                                        )}>
-                                                            {pct}
-                                                        </span>
-                                                        <span className="text-lg font-black text-slate-300 dark:text-slate-600">%</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="relative mb-6">
-                                                <div
-                                                    className="absolute -top-2 transition-all duration-1000 ease-out z-10 hidden md:block"
-                                                    style={{ left: `calc(${pct}% - 20px)` }}
-                                                >
-                                                    <div className="bg-slate-900 text-white text-[8px] font-black px-2 py-1 rounded-md shadow-lg relative after:content-[''] after:absolute after:top-full after:left-1/2 after:-ml-1 after:border-4 after:border-transparent after:border-t-slate-900">
-                                                        {pct}%
-                                                    </div>
-                                                </div>
-
-                                                <div className="h-3 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden p-0.5 shadow-inner">
-                                                    <div
-                                                        className={cn(
-                                                            "h-full rounded-full transition-all duration-1000 ease-out relative overflow-hidden",
-                                                            isDone
-                                                                ? "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.4)]"
-                                                                : "bg-gradient-to-r from-blue-600 via-blue-500 to-indigo-400 shadow-[0_0_12px_rgba(37,99,235,0.3)]"
-                                                        )}
-                                                        style={{ width: `${pct}%` }}
-                                                    >
-                                                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent opacity-50" />
-                                                        {!isDone && (
-                                                            <div
-                                                                className="absolute inset-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white/20 to-transparent skew-x-[-20deg]"
-                                                                style={{
-                                                                    animation: 'shimmer 2s infinite linear',
-                                                                    backgroundSize: '200% 100%'
-                                                                }}
-                                                            />
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-2 gap-4">
-                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-1">
-                                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Sudah Dibangun</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">{jalanDibangun.toLocaleString('id-ID')}</span>
-                                                        <span className="text-[10px] font-bold text-slate-400">m</span>
-                                                    </div>
-                                                </div>
-                                                <div className="p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800 flex flex-col gap-1">
-                                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-400">Target Tersisa</span>
-                                                    <div className="flex items-baseline gap-1">
-                                                        <span className="text-sm font-black text-slate-900 dark:text-white">
-                                                            {Math.max(0, jalanDesaSekarang - jalanDibangun).toLocaleString('id-ID')}
-                                                        </span>
-                                                        <span className="text-[10px] font-bold text-slate-400">m</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-
-                                            <style>{`
-                                                @keyframes shimmer {
-                                                    0% { transform: translateX(-150%) skewX(-20deg); }
-                                                    100% { transform: translateX(250%) skewX(-20deg); }
-                                                }
-                                            `}</style>
-                                        </div>
-                                    );
-                                })()}
-                            </TabsContent>
-
-                            <TabsContent value="segments" className="flex-1 flex flex-col min-h-0 m-0 outline-none">
-                                <div className="py-4 flex-1 flex flex-col gap-4 overflow-hidden">
-                                    <div className="px-6 flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <Navigation size={14} className="text-blue-500" />
-                                            <span className="text-[12px] tracking-widest text-slate-400">Daftar Segmen</span>
-                                        </div>
-                                        <Badge variant="outline" className="text-[12px] px-2 py-0.5 rounded-full bg-slate-50 dark:bg-slate-900">
-                                            {segmentsData?.features?.length} Segmen
-                                        </Badge>
-                                    </div>
-
-                                    <div className="flex-1 overflow-x-auto overflow-y-hidden custom-scrollbar snap-x snap-mandatory pb-10 scroll-px-6">
-                                        <div className="flex flex-nowrap gap-4 px-6 w-max min-w-full">
-                                            {segmentsData?.features?.map((feature: any, idx: number) => {
-                                                const props = feature.properties;
-                                                const isDone = props.status_pembangunan === 'Sudah Tuntas';
-
-                                                return (
-                                                    <Card key={idx} className="w-[280px] md:w-[320px] gap-0 p-0 shrink-0 snap-start border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 rounded-2xl overflow-hidden group bg-white dark:bg-slate-900">
-                                                        <div className="h-[160px] bg-slate-50 dark:bg-slate-950/50 relative overflow-hidden">
-                                                            {/* Background Pattern */}
-                                                            <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05] pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, currentColor 1px, transparent 0)', backgroundSize: '24px 24px' }} />
-
-                                                            <SegmenMiniMap
-                                                                feature={feature}
-                                                                strokeColor={isDone ? '#10b981' : '#3b82f6'}
-                                                                className="w-full h-full p-6 transition-transform duration-500 group-hover:scale-110"
-                                                            />
-
-                                                            <div className="absolute top-4 right-4 flex flex-col gap-2 items-end">
-                                                                <Badge className={cn(
-                                                                    "text-[9px] font-black uppercase px-3 py-1.5 rounded-xl border-0 shadow-xl backdrop-blur-md",
-                                                                    isDone
-                                                                        ? "bg-emerald-500/90 text-white ring-4 ring-emerald-500/10"
-                                                                        : "bg-blue-600/90 text-white ring-4 ring-blue-600/10"
-                                                                )}>
-                                                                    {isDone ? 'Sudah Tuntas' : 'Aktif'}
-                                                                </Badge>
-                                                                {props.tahun_pembangunan && (
-                                                                    <Badge variant="outline" className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm text-[8px] font-black border-slate-200 dark:border-slate-700 rounded-lg">
-                                                                        TA. {props.tahun_pembangunan}
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                        </div>
-
-                                                        <CardContent className="p-4 space-y-4">
-                                                            <div className="space-y-1">
-                                                                <div className="flex items-center gap-1.5 mb-1">
-                                                                    <div className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                                                    <span className="text-[8px] font-black text-slate-400 tracking-widest">Detail Segmen</span>
-                                                                </div>
-                                                                <h5 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-tight line-clamp-1">
-                                                                    {props.nama_segmen || `Segmen ${idx + 1}`}
-                                                                </h5>
-                                                                <p className="text-[10px] font-bold text-slate-400 tracking-tighter truncate">
-                                                                    Kode Ruas : {props.kode_ruas}
-                                                                </p>
-                                                            </div>
-
-                                                            <div className="grid grid-cols-2 gap-3 p-3 bg-slate-50 dark:bg-slate-800/40 rounded-2xl border border-slate-100 dark:border-slate-800/50">
-                                                                <div className="space-y-1">
-                                                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">Dimensi</span>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <div className="flex items-center gap-1">
-                                                                            <Ruler size={10} className="text-blue-500" />
-                                                                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{Math.round(props.panjang || 0)}<span className="text-[8px] text-slate-400 ml-0.5">m</span></span>
-                                                                        </div>
-                                                                        <div className="w-px h-2 bg-slate-200 dark:bg-slate-700" />
-                                                                        <div className="flex items-center gap-1">
-                                                                            <Navigation size={10} className="text-indigo-500" />
-                                                                            <span className="text-[10px] font-black text-slate-700 dark:text-slate-200 tabular-nums">{props.lebar || 0}<span className="text-[8px] text-slate-400 ml-0.5">m</span></span>
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                                <div className="space-y-1 border-l border-slate-200 dark:border-slate-700 pl-3">
-                                                                    <span className="text-[7px] font-black text-slate-400 uppercase tracking-widest block">Spesifikasi</span>
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <LayersIcon size={10} className="text-emerald-500" />
-                                                                        <span className="text-[9px] font-black text-slate-700 dark:text-slate-200 uppercase truncate">
-                                                                            {props.perkerasan || props.jenis_perkerasan || 'Belum Ada'}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-
-                                                            <Button
-                                                                variant="default"
-                                                                size="sm"
-                                                                className="w-full h-10 text-[9px] font-black uppercase tracking-widest rounded-xl bg-slate-900 hover:bg-blue-600 dark:bg-white dark:text-slate-900 dark:hover:bg-blue-500 dark:hover:text-white transition-all shadow-lg shadow-slate-200 dark:shadow-none mt-auto"
-                                                                onClick={() => mapRef.current?.zoomToFeature(feature)}
-                                                            >
-                                                                <MapPin size={12} className="mr-2" /> Fokus Lokasi
-                                                            </Button>
-                                                        </CardContent>
-                                                    </Card>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                </div>
-                            </TabsContent>
-                        </Tabs>
-
-                    </div>
-                </SheetContent>
-            </Sheet>
+            title={isSidebarOpen ? "Sembunyikan Panel Kontrol" : "Tampilkan Panel Kontrol"}
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <span className="hidden md:inline">Panel Kontrol</span>
+            {activeLayers.length > 0 && (
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                {activeLayers.length}
+              </Badge>
+            )}
+          </Button>
         </div>
-    );
+
+        {/* Tengah: Quick Filter Indicator (Desa/Kecamatan terpilih) */}
+        {(selectedKecamatan || selectedDesa) && (
+          <div className="pointer-events-auto hidden lg:flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-blue-200 dark:border-blue-900/60 shadow-md animate-in fade-in slide-in-from-top-2">
+            <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+              {selectedDesa ? `Desa ${selectedDesa.nama_desa}` : `Kecamatan ${selectedKecamatan?.nama_kecamatan}`}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                if (selectedDesa) handleSelectDesa(null);
+                else handleSelectKecamatan(null);
+              }}
+              className="h-5 w-5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600"
+            >
+              <X className="w-3 h-3" />
+            </Button>
+          </div>
+        )}
+
+        {/* Kanan: Mode Toggle & Link Portal */}
+        <div className="pointer-events-auto flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-md">
+          <ModeToggle />
+          <Link to="/login">
+            <Button
+              size="sm"
+              className="h-8 px-3 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-sm"
+            >
+              <IconLogin size={14} />
+              <span className="hidden sm:inline">Portal Admin</span>
+            </Button>
+          </Link>
+        </div>
+      </header>
+
+      {/* ── 2. MAIN MAP CANVAS & OVERLAYS ─────────────────────────────── */}
+      <main className="w-full h-full relative">
+        {/* Sidebar Drawer */}
+        <MapViewSidebar
+          isOpen={isSidebarOpen}
+          onToggle={setIsSidebarOpen}
+          widthClass="w-[340px]"
+          className="top-16 left-3 bottom-3 h-[calc(100vh-76px)] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xl z-30 pt-0 overflow-hidden"
+        >
+          {SidebarContent}
+        </MapViewSidebar>
+
+        {/* Map Canvas */}
+        <OpenLayersMap
+          ref={mapRef}
+          className="w-full h-full"
+          layers={activeLayers}
+          markers={markers}
+          basemapUrl={activeBasemap.url}
+          onMapReady={setMapInstance}
+        />
+
+        {/* Loading Indicator */}
+        {loading && (
+          <div
+            className={cn(
+              "absolute z-40 flex items-center gap-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-2 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 transition-all duration-300",
+              isSidebarOpen ? "top-20 left-[356px]" : "top-20 left-4"
+            )}
+          >
+            <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Memuat layer spasial...</span>
+          </div>
+        )}
+
+        {/* Map Legend (Bawah Kiri) */}
+        <MapLegend
+          items={legendItems}
+          legendUrls={catalogLegendUrls}
+          footer="MELAROSA GIS Bojonegoro"
+          defaultMinimized={true}
+          className={cn(
+            "z-20 transition-all duration-300 pointer-events-auto",
+            isMobile ? "bottom-6 left-4" : "bottom-6",
+            isSidebarOpen
+              ? (isMobile ? "left-4" : "left-[356px]")
+              : "left-4"
+          )}
+        />
+
+        {/* Map Zoom / Geolocation Controls (Kanan Atas) */}
+        <MapViewMapControls
+          map={mapInstance}
+          onZoomIn={() => mapRef.current?.zoomIn()}
+          onZoomOut={() => mapRef.current?.zoomOut()}
+          onResetBearing={() => mapRef.current?.resetRotation()}
+          className="absolute top-20 right-4 z-20"
+        />
+
+        {/* Floating Basemap Selector Popover (Kanan Bawah) */}
+        <div className="absolute bottom-6 right-4 z-20">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-10 px-3 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-slate-200 dark:border-slate-800 shadow-md text-xs font-semibold gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+              >
+                <IconLayersSubtract size={16} className="text-blue-600 dark:text-blue-400" />
+                <span>Peta Dasar: {activeBasemap.name}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              side="top"
+              align="end"
+              className="w-72 p-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl"
+            >
+              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2.5">Pilih Peta Dasar (Basemap)</p>
+              <div className="grid grid-cols-2 gap-2">
+                {BASEMAPS.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setActiveBasemap(b)}
+                    className={cn(
+                      "relative rounded-xl overflow-hidden border-2 transition-all group text-left",
+                      activeBasemap.id === b.id
+                        ? "border-blue-600 ring-2 ring-blue-500/20"
+                        : "border-slate-200 dark:border-slate-800 hover:border-blue-400"
+                    )}
+                  >
+                    <img src={b.thumbnail} alt={b.name} className="w-full h-14 object-cover" />
+                    <div className="p-1.5 bg-slate-900/80 backdrop-blur-xs text-white">
+                      <p className="text-[10px] font-bold truncate leading-tight">{b.name}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+      </main>
+
+      {/* ── 3. BOTTOM REKAP TOGGLE BUTTON ─────────────────────────────── */}
+      {selectedDesa && rekapData && (
+        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex justify-center pointer-events-none">
+          <Button
+            onClick={() => setIsRekapOpen(true)}
+            className="pointer-events-auto px-4 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg border border-blue-500 transition-all font-semibold text-xs gap-2 cursor-pointer"
+          >
+            <Activity className="w-4 h-4" />
+            Rekap Pembangunan Desa {selectedDesa.nama_desa}
+            <ChevronDown className="w-4 h-4 rotate-180" />
+          </Button>
+        </div>
+      )}
+
+      {/* ── 4. BOTTOM SHEET REKAP PEMBANGUNAN ─────────────────────────── */}
+      <Sheet open={isRekapOpen} onOpenChange={setIsRekapOpen}>
+        <SheetContent side="bottom" className="h-auto max-h-[85dvh] rounded-t-3xl border-t-0 p-0 overflow-hidden shadow-2xl overflow-y-auto">
+          <div className="flex flex-col min-h-0 pt-6 px-6 pb-8 bg-white dark:bg-slate-900">
+            {/* Sheet Header */}
+            <SheetHeader className="pb-4 text-left border-b border-slate-100 dark:border-slate-800">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <Activity className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider">Ringkasan Infrastruktur Desa</span>
+                  </div>
+                  <SheetTitle className="text-xl font-extrabold text-slate-900 dark:text-white">
+                    Desa {rekapData?.nama_desa}
+                  </SheetTitle>
+                  <SheetDescription className="text-xs text-slate-500 font-medium">
+                    Kecamatan {rekapData?.nama_kecamatan} • Kabupaten Bojonegoro
+                  </SheetDescription>
+                </div>
+
+                {/* Progress Status Badge */}
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const pemetaan = rekapData?.total_panjang_aset || 0;
+                    const naikStatus = rekapData?.total_panjang_puk || 0;
+                    const jalanDesaSekarang = Math.max(0, pemetaan - naikStatus);
+                    const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
+
+                    const pct = jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100;
+                    const isDone = pct >= 100;
+
+                    return (
+                      <Badge
+                        className={cn(
+                          "px-3.5 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-2",
+                          isDone
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
+                            : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
+                        )}
+                      >
+                        {isDone ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            <span>Infrastruktur Tuntas</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                            <span>Dalam Proses Pembangunan</span>
+                          </>
+                        )}
+                      </Badge>
+                    );
+                  })()}
+                </div>
+              </div>
+            </SheetHeader>
+
+            {/* Sheet Tabs */}
+            <Tabs defaultValue="overview" className="mt-4">
+              <TabsList className="w-full max-w-xs grid grid-cols-2 h-9 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                <TabsTrigger value="overview" className="text-xs font-semibold">Status Capaian</TabsTrigger>
+                <TabsTrigger value="segments" className="text-xs font-semibold">Daftar Segmen</TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="overview" className="py-4 space-y-6">
+                {/* 4 Stat Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <Card className="border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-[11px] font-semibold text-slate-500">Pemetaan Jalan Desa</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-lg font-bold text-slate-900 dark:text-white">
+                        {(rekapData?.total_panjang_aset || 0).toLocaleString('id-ID')} m
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border border-slate-200 dark:border-slate-800 shadow-xs">
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-[11px] font-semibold text-slate-500">Naik Status Kab.</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-lg font-bold text-slate-900 dark:text-white">
+                        {(rekapData?.total_panjang_puk || 0).toLocaleString('id-ID')} m
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs">
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Jalan Desa Sekarang</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
+                        {Math.max(0, (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)).toLocaleString('id-ID')} m
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card className="border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 shadow-xs">
+                    <CardHeader className="p-3 pb-1">
+                      <CardTitle className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Belum Tertangani</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-3 pt-0">
+                      <div className="text-lg font-bold text-amber-700 dark:text-amber-300">
+                        {Math.max(0, ((rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)) - (rekapData?.total_panjang_dibangun || 0)).toLocaleString('id-ID')} m
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Progress Bar Detail */}
+                {(() => {
+                  const jalanDesaSekarang = (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0);
+                  const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
+                  const pct = Math.min(100, Math.round(jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100));
+
+                  return (
+                    <div className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Progress Pembangunan Fisik</span>
+                        <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">{pct}%</span>
+                      </div>
+                      <div className="h-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-blue-600 rounded-full transition-all duration-500"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-xs text-slate-500 pt-1">
+                        <span>Sudah Dibangun: {jalanDibangun.toLocaleString('id-ID')} m</span>
+                        <span>Sisa Target: {Math.max(0, jalanDesaSekarang - jalanDibangun).toLocaleString('id-ID')} m</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </TabsContent>
+
+              {/* Segments List Tab */}
+              <TabsContent value="segments" className="py-4">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Daftar Segmen Jalan ({segmentsData?.features?.length || 0})</span>
+                  </div>
+
+                  <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+                    {segmentsData?.features?.map((feature: any, idx: number) => {
+                      const props = feature.properties;
+                      const isDone = props.status_pembangunan === 'Sudah Tuntas';
+
+                      return (
+                        <Card key={idx} className="w-[280px] shrink-0 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
+                          <div className="h-32 bg-slate-100 dark:bg-slate-800 relative">
+                            <SegmenMiniMap
+                              feature={feature}
+                              strokeColor={isDone ? '#10b981' : '#2563eb'}
+                              className="w-full h-full p-4"
+                            />
+                            <Badge className={cn("absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5", isDone ? "bg-emerald-600" : "bg-blue-600")}>
+                              {isDone ? 'Sudah Tuntas' : 'Aktif'}
+                            </Badge>
+                          </div>
+                          <CardContent className="p-4 space-y-3">
+                            <div>
+                              <p className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">{props.nama_segmen || `Segmen ${idx + 1}`}</p>
+                              <p className="text-[11px] text-slate-500">Kode Ruas: {props.kode_ruas}</p>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                              <div>
+                                <span className="text-slate-400 block text-[10px]">Panjang</span>
+                                <span className="font-bold text-slate-700 dark:text-slate-200">{Math.round(props.panjang || 0)} m</span>
+                              </div>
+                              <div>
+                                <span className="text-slate-400 block text-[10px]">Perkerasan</span>
+                                <span className="font-bold text-slate-700 dark:text-slate-200">{props.perkerasan || 'Belum Ada'}</span>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="w-full h-8 text-xs font-semibold rounded-xl gap-1.5"
+                              onClick={() => mapRef.current?.zoomToFeature(feature)}
+                            >
+                              <MapPin className="w-3.5 h-3.5 text-blue-600" />
+                              Fokus Lokasi
+                            </Button>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+    </div>
+  );
 }

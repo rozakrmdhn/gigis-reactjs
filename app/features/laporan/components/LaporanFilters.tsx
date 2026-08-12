@@ -1,4 +1,4 @@
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
+﻿import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { Button } from "~/components/ui/button";
 import { RotateCw } from "lucide-react";
 import { type Kecamatan } from "~/services/kecamatan";
@@ -33,7 +33,7 @@ export function LaporanFilters({
                 </SelectTrigger>
                 <SelectContent>
                     <SelectItem value="all">Semua Tahun</SelectItem>
-                    {Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i - 1).map((year) => (
+                    {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i).map((year) => (
                         <SelectItem key={year} value={year.toString()}>
                             {year}
                         </SelectItem>

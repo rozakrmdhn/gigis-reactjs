@@ -1,16 +1,19 @@
-import { Plus, Minus, Compass } from "lucide-react";
+﻿import { Plus, Minus, Compass } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "~/components/ui/tooltip";
+import { GeolocationControl } from "~/features/monitoring/components/GeolocationControl";
+import OLMap from "ol/Map";
 
 interface MapViewMapControlsProps {
     onZoomIn: () => void;
     onZoomOut: () => void;
     onResetBearing: () => void;
+    map?: OLMap | null;
     className?: string;
 }
 
-export function MapViewMapControls({ onZoomIn, onZoomOut, onResetBearing, className }: MapViewMapControlsProps) {
+export function MapViewMapControls({ onZoomIn, onZoomOut, onResetBearing, map = null, className }: MapViewMapControlsProps) {
     return (
         <TooltipProvider>
             <div className={cn("flex flex-col gap-1.5 p-1 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border dark:border-slate-800 rounded-xl shadow-xl", className)}>
@@ -45,6 +48,10 @@ export function MapViewMapControls({ onZoomIn, onZoomOut, onResetBearing, classN
                         <p className="text-xs font-semibold">Zoom Out</p>
                     </TooltipContent>
                 </Tooltip>
+
+                <div className="h-px bg-slate-200/60 dark:bg-slate-800/60 mx-1" />
+
+                <GeolocationControl map={map} tooltipSide="right" />
 
                 <div className="h-px bg-slate-200/60 dark:bg-slate-800/60 mx-1" />
 

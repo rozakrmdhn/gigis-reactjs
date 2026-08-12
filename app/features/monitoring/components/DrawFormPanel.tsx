@@ -1,4 +1,4 @@
-import { X, Save, Ruler, HardHat, Calendar, MapPin, Hash, CheckCircle2, FileText, Camera, User, Maximize2 } from "lucide-react";
+import { X, Save, Ruler, HardHat, Calendar, MapPin, Hash, CheckCircle2, FileText, Camera, User, Maximize2, Building2 } from "lucide-react";
 import { monitoringService, type MonitoringJalanResult } from "../services/monitoring.service";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -9,6 +9,9 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { useAuth } from "~/contexts/auth-context";
+import { plottingAnggaranService } from "~/features/monitoring/services/plotting_anggaran.service";
+import { Combobox } from "~/components/ui/combobox";
 
 interface DrawFormPanelProps {
     isVisible: boolean;
@@ -17,21 +20,35 @@ interface DrawFormPanelProps {
     drawnGeoJSON: string | null;
     onSave: (data: any) => void;
     drawnLength?: number;
+    clickedVillageData?: {
+        desaId?: string;
+        desaName?: string;
+        kecamatanId?: string;
+        kecamatanName?: string;
+    } | null;
 }
 
-export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, drawnLength }: DrawFormPanelProps) {
+export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, onSave, drawnLength, clickedVillageData }: DrawFormPanelProps) {
+    const { user } = useAuth();
+    const currentUserName = user?.nama || (user as any)?.nama_user || (user as any)?.name || (user as any)?.username || (user as any)?.email || "Operator Bappeda";
+    const currentUserId = user?.id || null;
+
     const defaultFormData = {
         check_melarosa: false,
         status_jalan: "",
         sumber_data: "",
         tahun_pembangunan: new Date().getFullYear().toString(),
-        verifikator: "",
+        verifikator: currentUserName,
+        user_id: currentUserId,
+        id_user: currentUserId,
+        plotting_id: "",
+        status_aset: "Pemerintah Desa",
         desa: "",
         kecamatan: "",
         panjang: "",
         lebar: "",
         jenis_perkerasan: "",
-        tahun_renovasi_terakhir: new Date().getFullYear().toString(),
+        tahun_renovasi_terakhir: "",
         kondisi: "",
         nama_jalan: "",
         kode_ruas: "",
@@ -48,12 +65,54 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     const [kecamatans, setKecamatans] = useState<any[]>([]);
     const [desas, setDesas] = useState<any[]>([]);
     const [isLoadingLocations, setIsLoadingLocations] = useState(false);
+    const [pendingDesa, setPendingDesa] = useState<{ id?: string; name?: string } | null>(null);
+
+    const [plottingOptions, setPlottingOptions] = useState<{ value: string; label: string }[]>([]);
+    const [isLoadingPlotting, setIsLoadingPlotting] = useState(false);
+
+    useEffect(() => {
+        if (!formData.desa_id) {
+            setPlottingOptions([]);
+            return;
+        }
+        const loadPlotting = async () => {
+            setIsLoadingPlotting(true);
+            try {
+                const res = await plottingAnggaranService.getPlottingList({
+                    id_desa: formData.desa_id,
+                    tahun_anggaran: formData.tahun_pembangunan,
+                    limit: 100
+                });
+                const list = Array.isArray(res) ? res : (res?.result || res?.data || []);
+                setPlottingOptions(list.map((p: any) => ({
+                    value: String(p.id),
+                    label: `${p.jenis_bantuan || 'Bantuan'} (${p.lokasi_kegiatan || p.nama_kegiatan || '-'})`
+                })));
+            } catch (err) {
+                console.error("Error loading plotting list:", err);
+            } finally {
+                setIsLoadingPlotting(false);
+            }
+        };
+        loadPlotting();
+    }, [formData.desa_id, formData.tahun_pembangunan]);
+
+    useEffect(() => {
+        if (currentUserName) {
+            setFormData(prev => ({
+                ...prev,
+                verifikator: currentUserName,
+                user_id: currentUserId,
+                id_user: currentUserId
+            }));
+        }
+    }, [currentUserName, currentUserId]);
 
     useEffect(() => {
         if (drawnLength) {
             setFormData(prev => ({
                 ...prev,
-                panjang: drawnLength.toFixed(1)
+                panjang: drawnLength.toFixed(2)
             }));
         }
     }, [drawnLength]);
@@ -85,11 +144,56 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
     }, [formData.kecamatan_id]);
 
     useEffect(() => {
+        console.log("DrawFormPanel clickedVillageData change:", clickedVillageData, "kecamatans count:", kecamatans.length);
+        if (isVisible && clickedVillageData && kecamatans.length > 0) {
+            const findKec = kecamatans.find(k =>
+                (clickedVillageData.kecamatanId && k.id.toString() === clickedVillageData.kecamatanId.toString()) ||
+                (clickedVillageData.kecamatanName && k.nama_kecamatan.toLowerCase() === clickedVillageData.kecamatanName.toLowerCase())
+            );
+
+            if (findKec) {
+                setFormData(prev => ({
+                    ...prev,
+                    kecamatan_id: findKec.id.toString(),
+                    kecamatan: findKec.nama_kecamatan,
+                    desa_id: "",
+                    desa: ""
+                }));
+                setPendingDesa({
+                    id: clickedVillageData.desaId,
+                    name: clickedVillageData.desaName
+                });
+            }
+        }
+    }, [clickedVillageData, kecamatans, isVisible]);
+
+    useEffect(() => {
+        if (pendingDesa && desas.length > 0) {
+            const findDesa = desas.find(d =>
+                (pendingDesa.id && d.id.toString() === pendingDesa.id.toString()) ||
+                (pendingDesa.name && d.nama_desa.toLowerCase() === pendingDesa.name.toLowerCase())
+            );
+            if (findDesa) {
+                setFormData(prev => ({
+                    ...prev,
+                    desa_id: findDesa.id.toString(),
+                    desa: findDesa.nama_desa
+                }));
+                setPendingDesa(null); // Clear pending
+            }
+        }
+    }, [pendingDesa, desas]);
+
+    useEffect(() => {
         if (!isVisible) return;
+        setPendingDesa(null);
 
         if (selectedRoad) {
             setFormData(prev => ({
                 ...prev,
+                verifikator: prev.verifikator || currentUserName,
+                user_id: currentUserId,
+                id_user: currentUserId,
                 desa: selectedRoad.jalan.desa || "",
                 kecamatan: selectedRoad.jalan.kecamatan || "",
                 kode_ruas: selectedRoad.jalan.kode_ruas?.toString() || "0",
@@ -102,17 +206,20 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
         } else {
             setFormData(prev => ({
                 ...prev,
-                desa: "",
-                kecamatan: "",
+                verifikator: prev.verifikator || currentUserName,
+                user_id: currentUserId,
+                id_user: currentUserId,
+                desa: clickedVillageData ? (prev.desa || "") : "",
+                kecamatan: clickedVillageData ? (prev.kecamatan || "") : "",
                 kode_ruas: "0",
-                kecamatan_id: "",
-                desa_id: "",
+                kecamatan_id: clickedVillageData ? (prev.kecamatan_id || "") : "",
+                desa_id: clickedVillageData ? (prev.desa_id || "") : "",
                 nama_jalan: "Jalan Lingkungan",
                 lebar: "",
                 check_melarosa: false
             }));
         }
-    }, [selectedRoad, isVisible]);
+    }, [selectedRoad, isVisible, currentUserName, currentUserId]);
 
     // if (!selectedRoad) return null; (Removed to allow Free Draw)
 
@@ -123,8 +230,21 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
             return;
         }
 
+        if (formData.check_melarosa && (!formData.kode_ruas || formData.kode_ruas === "0")) {
+            toast.error("Kode ruas (data master) wajib dipilih jika Check Melarosa bernilai true.");
+            return;
+        }
+
+        const isUUID = (str: any) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        const resolvedPlottingId = isUUID(formData.plotting_id) ? formData.plotting_id : (formData.plotting_id && formData.plotting_id !== "none" ? formData.plotting_id : null);
+
         const payload = {
             ...formData,
+            plotting_id: resolvedPlottingId,
+            status_aset: formData.status_aset || "Pemerintah Desa",
+            verifikator: formData.verifikator || currentUserName,
+            user_id: currentUserId,
+            id_user: currentUserId,
             geom: drawnGeoJSON ? JSON.parse(drawnGeoJSON).geometry : undefined,
             tahun_pembangunan: parseInt(formData.tahun_pembangunan) || 0,
             tahun_renovasi_terakhir: formData.tahun_renovasi_terakhir ? parseInt(formData.tahun_renovasi_terakhir) : null,
@@ -132,8 +252,18 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
             lebar: parseFloat(formData.lebar) || 0,
             kecamatan_id: parseInt(formData.kecamatan_id) || null,
             desa_id: parseInt(formData.desa_id) || null,
+            parent_id: formData.check_melarosa && formData.kode_ruas && formData.kode_ruas !== "0" ? formData.kode_ruas : null,
             kode_ruas: formData.check_melarosa ? formData.kode_ruas : "0",
-            check_melarosa: formData.check_melarosa ? "Ya" : "Tidak"
+            status_parent: Boolean(formData.check_melarosa),
+            check_melarosa: formData.check_melarosa ? "Ya" : "Tidak",
+            sumber_data: formData.sumber_data || "Survey Desa",
+            atribut: {
+                ...((formData as any).atribut || {}),
+                status_aset: formData.status_aset || "Pemerintah Desa",
+                plotting_id: resolvedPlottingId,
+                sumber_data: formData.sumber_data || "Survey Desa",
+                verifikator: formData.verifikator || currentUserName
+            }
         };
 
         onSave(payload);
@@ -187,7 +317,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                         });
                                     }}
                                 >
-                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                    <SelectTrigger className="h-9.5 text-xs font-bold">
                                         <SelectValue placeholder="Pilih Kecamatan" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -217,7 +347,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                     }}
                                     disabled={!formData.kecamatan_id || isLoadingLocations}
                                 >
-                                    <SelectTrigger className="h-8 text-xs font-bold">
+                                    <SelectTrigger className="h-9.5 text-xs font-bold">
                                         <SelectValue placeholder={isLoadingLocations ? "Loading..." : "Pilih Desa"} />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -238,29 +368,31 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                 <Input
                                     value={formData.nama_jalan}
                                     onChange={(e) => setFormData({ ...formData, nama_jalan: e.target.value })}
-                                    className="h-8 text-base md:text-xs font-bold"
+                                    className="h-9.5 text-base md:text-xs font-bold"
                                     placeholder="Isi nama jalan lingkungan"
                                 />
                             )}
                         </div>
                     </div>
 
-                    <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
-                        <Checkbox
-                            id="melarosa-new"
-                            checked={formData.check_melarosa}
-                            onCheckedChange={(c) => setFormData({ ...formData, check_melarosa: c as boolean })}
-                        />
-                        <Label htmlFor="melarosa-new" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
-                            Check Melarosa
-                        </Label>
-                    </div>
+                    {selectedRoad && (
+                        <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
+                            <Checkbox
+                                id="melarosa-new"
+                                checked={formData.check_melarosa}
+                                onCheckedChange={(c) => setFormData({ ...formData, check_melarosa: c as boolean })}
+                            />
+                            <Label htmlFor="melarosa-new" className="text-xs font-bold text-slate-700 dark:text-slate-300 cursor-pointer">
+                                Check Melarosa
+                            </Label>
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status Jalan</Label>
                             <Select value={formData.status_jalan} onValueChange={(v) => setFormData({ ...formData, status_jalan: v })}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="w-full h-9.5 text-xs rounded-xl"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Jalan Kabupaten">Jalan Kabupaten</SelectItem>
                                     <SelectItem value="Jalan Desa">Jalan Desa</SelectItem>
@@ -269,13 +401,79 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Data</Label>
-                            <Input value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
+                            <Input className="w-full h-9.5 text-xs rounded-xl" value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
                         </div>
                     </div>
 
                     <div className="space-y-2">
                         <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Dana</Label>
-                        <Input value={formData.sumber_dana} onChange={(e) => setFormData({ ...formData, sumber_dana: e.target.value })} />
+                        <Select
+                            value={formData.sumber_dana}
+                            onValueChange={(val) => setFormData({ ...formData, sumber_dana: val })}
+                        >
+                            <SelectTrigger className="w-full h-9.5 text-xs rounded-xl">
+                                <SelectValue placeholder="Pilih Sumber Dana" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="BKK">BKK</SelectItem>
+                                <SelectItem value="Sektoral">Sektoral</SelectItem>
+                                <SelectItem value="Lainnya">Lainnya</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                        <div className="space-y-1.5">
+                            <div className="flex items-center h-5">
+                                <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider whitespace-nowrap">Status Aset</Label>
+                            </div>
+                            <Select
+                                value={
+                                    formData.status_aset === "Pemerintah Desa" || formData.status_aset === "Pemerintah Kabupaten"
+                                        ? formData.status_aset
+                                        : "custom"
+                                }
+                                onValueChange={(val) => {
+                                    if (val === "custom") {
+                                        setFormData({ ...formData, status_aset: "" });
+                                    } else {
+                                        setFormData({ ...formData, status_aset: val });
+                                    }
+                                }}
+                            >
+                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl focus:ring-1 focus:ring-blue-500">
+                                    <SelectValue placeholder="Pilih Status Aset" />
+                                </SelectTrigger>
+                                <SelectContent className="bg-popover border-border">
+                                    <SelectItem value="Pemerintah Desa">Pemerintah Desa</SelectItem>
+                                    <SelectItem value="Pemerintah Kabupaten">Pemerintah Kabupaten</SelectItem>
+                                    <SelectItem value="custom">Custom (Ketik Manual)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {formData.status_aset !== "Pemerintah Desa" && formData.status_aset !== "Pemerintah Kabupaten" && (
+                                <Input
+                                    type="text"
+                                    placeholder="Ketik status aset manual..."
+                                    value={formData.status_aset}
+                                    onChange={(e) => setFormData({ ...formData, status_aset: e.target.value })}
+                                    className="h-9.5 text-xs bg-background border-input rounded-xl mt-1.5 focus:border-blue-500 animate-in fade-in-50 duration-200"
+                                />
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <div className="flex items-center h-5">
+                                <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider whitespace-nowrap">Plotting Anggaran</Label>
+                            </div>
+                            <Combobox
+                                options={plottingOptions}
+                                value={formData.plotting_id}
+                                onSelect={(val) => setFormData({ ...formData, plotting_id: val })}
+                                placeholder={isLoadingPlotting ? "Memuat..." : (plottingOptions.length > 0 ? "Pilih Plotting..." : "Tidak ada data")}
+                                emptyText="Data plotting tidak ditemukan"
+                                className="w-full h-9.5 text-xs rounded-xl"
+                            />
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -295,15 +493,9 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Bangun</Label>
-                            <Input type="number" value={formData.tahun_pembangunan} onChange={(e) => setFormData({ ...formData, tahun_pembangunan: e.target.value })} />
-                        </div>
-                        <div className="space-y-2">
-                            <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Renovasi</Label>
-                            <Input type="number" placeholder="-" value={formData.tahun_renovasi_terakhir} onChange={(e) => setFormData({ ...formData, tahun_renovasi_terakhir: e.target.value })} />
-                        </div>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Tahun Bangun</Label>
+                        <Input type="number" value={formData.tahun_pembangunan} onChange={(e) => setFormData({ ...formData, tahun_pembangunan: e.target.value })} />
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -345,10 +537,10 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                     </div>
 
                     <div className="space-y-2">
-                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Verifikator</Label>
+                        <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Verifikator (User Login)</Label>
                         <div className="relative">
                             <User className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
-                            <Input className="pl-9" value={formData.verifikator} onChange={(e) => setFormData({ ...formData, verifikator: e.target.value })} />
+                            <Input className="pl-9 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-semibold cursor-not-allowed" value={formData.verifikator || currentUserName} readOnly />
                         </div>
                     </div>
 
@@ -374,12 +566,8 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
             </form>
 
             <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900 grid grid-cols-2 gap-2">
-                <Button 
-                    variant="outline" 
-                    className="h-10 text-xs font-bold uppercase tracking-wider dark:border-slate-700 dark:text-slate-300"
-                    onClick={onClose}
-                >
-                    Batal
+                <Button type="button" variant="outline" className="h-10 text-xs font-bold uppercase tracking-wider dark:border-slate-700 dark:text-slate-300" onClick={onClose}>
+                    Ulangi
                 </Button>
                 <Button className="bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-700 h-10 text-xs font-bold uppercase tracking-wider shadow-lg shadow-blue-200 dark:shadow-blue-900/40" onClick={handleSubmit}>
                     <Save className="w-4 h-4 mr-2" />

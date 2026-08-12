@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
+﻿import { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { type GeoJSONFeatureCollection } from '~/features/peta/types';
+import { getProxiedLayerUrl } from '~/lib/utils';
 
 interface UseMonitoringMapProps {
     mapboxToken: string;
@@ -42,7 +43,7 @@ export function useMonitoringMap({ mapboxToken, containerRef }: UseMonitoringMap
             map.addSource('wms-bojonegoro-source', {
                 type: 'raster',
                 tiles: [
-                    'https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=palapa:jalan_ln_2021_ruasporosdesa&SRS=EPSG:3857&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}'
+                    getProxiedLayerUrl('https://geoportal.bojonegorokab.go.id/geoserver/palapa/wms') + '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetMap&FORMAT=image/png&TRANSPARENT=true&LAYERS=palapa:jalan_ln_2021_ruasporosdesa&SRS=EPSG:3857&STYLES=&WIDTH=256&HEIGHT=256&BBOX={bbox-epsg-3857}'
                 ],
                 tileSize: 256
             });

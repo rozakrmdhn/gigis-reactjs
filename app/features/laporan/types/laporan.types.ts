@@ -1,4 +1,4 @@
-export interface RekapDibangun {
+﻿export interface RekapDibangun {
     id_kecamatan: number;
     id_desa: number;
     nama_desa: string;

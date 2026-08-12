@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+﻿import { useState, useEffect, useRef } from 'react';
 import { usePetaMap } from '../hooks/usePetaMap';
 import { infoPanelService } from '../services/info-panel.service';
 import { InfoPanel } from '../components/InfoPanel';

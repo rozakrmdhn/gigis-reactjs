@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import {
     AlertDialog,
@@ -10,28 +10,24 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
-import { LogOut, Clock, RefreshCw } from "lucide-react";
-import { authService } from "~/services/auth.service";
+import { Clock } from "lucide-react";
 
 export function SessionExpiredAlert() {
-    const [isOpen, setIsOpen] = useState(false);
     const [isWarning, setIsWarning] = useState(false);
     const [remainingSeconds, setRemainingSeconds] = useState(0);
     const navigate = useNavigate();
 
     useEffect(() => {
         const handleSessionExpired = () => {
-            console.log("SessionExpiredAlert: Caught expired event");
-            setIsWarning(false); // Tutup warning jika ada
-            setIsOpen(true);
+            setIsWarning(false);
+            // Redirect immediately to login on session expiry
+            navigate("/login");
         };
 
         const handleSessionWarning = (event: CustomEvent) => {
             const { remainingMs } = event.detail;
             setRemainingSeconds(Math.ceil(remainingMs / 1000));
-
-            // Tampilkan warning dialog hanya sekali
-            if (!isWarning && !isOpen) {
+            if (!isWarning) {
                 setIsWarning(true);
             }
         };
@@ -43,9 +39,9 @@ export function SessionExpiredAlert() {
             window.removeEventListener("auth-session-expired", handleSessionExpired);
             window.removeEventListener("auth-session-warning", handleSessionWarning as EventListener);
         };
-    }, [isWarning, isOpen]);
+    }, [isWarning, navigate]);
 
-    // Update countdown setiap detik
+    // Update countdown every second
     useEffect(() => {
         if (!isWarning) return;
 
@@ -63,7 +59,6 @@ export function SessionExpiredAlert() {
     }, [isWarning]);
 
     const handleLoginRedirect = () => {
-        setIsOpen(false);
         setIsWarning(false);
         navigate("/login");
     };
@@ -72,7 +67,7 @@ export function SessionExpiredAlert() {
         setIsWarning(false);
     };
 
-    // Format detik ke "M:SS"
+    // Format seconds to "M:SS"
     const formatTime = (seconds: number) => {
         const m = Math.floor(seconds / 60);
         const s = seconds % 60;
@@ -80,71 +75,32 @@ export function SessionExpiredAlert() {
     };
 
     return (
-        <>
-            {/* Warning Dialog — Sesi Hampir Habis */}
-            <AlertDialog open={isWarning} onOpenChange={setIsWarning}>
-                <AlertDialogContent className="sm:max-w-[425px]">
-                    <AlertDialogHeader className="flex flex-col items-center gap-4 text-center">
-                        <div className="p-3 bg-amber-100 rounded-full text-amber-600">
-                            <Clock className="w-8 h-8" />
-                        </div>
-                        <div className="space-y-2">
-                            <AlertDialogTitle className="text-2xl font-bold text-slate-900">
-                                Sesi Hampir Habis
-                            </AlertDialogTitle>
-                            <AlertDialogDescription className="text-slate-500 font-medium text-center">
-                                Sesi Anda akan berakhir dalam{" "}
-                                <span className="font-bold text-amber-600 text-lg">
-                                    {formatTime(remainingSeconds)}
-                                </span>
-                                . Silakan simpan pekerjaan Anda atau login kembali untuk memperpanjang sesi.
-                            </AlertDialogDescription>
-                        </div>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="sm:flex-col gap-2 mt-4">
-                        <AlertDialogAction
-                            onClick={handleLoginRedirect}
-                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-bold h-11"
-                        >
-                            <RefreshCw className="w-4 h-4 mr-2" />
-                            Login Ulang Sekarang
-                        </AlertDialogAction>
-                        <AlertDialogCancel
-                            onClick={handleDismissWarning}
-                            className="w-full font-bold h-11"
-                        >
-                            Lanjutkan Bekerja
-                        </AlertDialogCancel>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-
-            {/* Expired Dialog — Sesi Sudah Habis */}
-            <AlertDialog open={isOpen} onOpenChange={setIsOpen}>
-                <AlertDialogContent className="sm:max-w-[425px]">
-                    <AlertDialogHeader className="flex flex-col items-center gap-4 text-center">
-                        <div className="p-3 bg-red-100 rounded-full text-red-600">
-                            <LogOut className="w-8 h-8" />
-                        </div>
-                        <div className="space-y-2">
-                            <AlertDialogTitle className="text-2xl font-bold text-slate-900">
-                                Sesi Berakhir
-                            </AlertDialogTitle>
-                            <AlertDialogDescription className="text-slate-500 font-medium text-center">
-                                Sesi Anda telah berakhir atau tidak valid. Silakan masuk kembali untuk melanjutkan akses ke aplikasi.
-                            </AlertDialogDescription>
-                        </div>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="sm:flex-col gap-2 mt-4">
-                        <AlertDialogAction
-                            onClick={handleLoginRedirect}
-                            className="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-11"
-                        >
-                            Masuk Kembali
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
-        </>
+        <AlertDialog open={isWarning} onOpenChange={setIsWarning}>
+            <AlertDialogContent className="max-w-xs sm:max-w-sm p-5 gap-3">
+                <AlertDialogHeader className="space-y-1 text-center">
+                    <AlertDialogTitle className="text-base font-semibold text-slate-900 dark:text-slate-100 flex items-center justify-center gap-1.5">
+                        <Clock className="w-4 h-4 text-amber-500 animate-pulse" />
+                        Sesi Hampir Habis
+                    </AlertDialogTitle>
+                    <AlertDialogDescription className="text-xs text-muted-foreground text-center">
+                        Sesi Anda akan berakhir dalam <span className="font-semibold text-amber-600 dark:text-amber-400">{formatTime(remainingSeconds)}</span>.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter className="flex flex-row justify-center gap-2 mt-2">
+                    <AlertDialogCancel
+                        onClick={handleDismissWarning}
+                        className="h-8 text-[11px] px-3 font-medium mt-0 flex-1 border-slate-200"
+                    >
+                        Lanjutkan
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                        onClick={handleLoginRedirect}
+                        className="h-8 text-[11px] px-3 font-medium flex-1 bg-amber-500 hover:bg-amber-600 text-white shadow-sm"
+                    >
+                        Login Ulang
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
     );
 }

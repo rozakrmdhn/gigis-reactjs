@@ -1,10 +1,10 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useLoaderData, useSearchParams, useNavigation, useRevalidator, type LoaderFunctionArgs } from "react-router";
 import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Peta Monitoring - GIGIS Monitoring" },
+        { title: "Peta Monitoring - MELAROSA" },
         { name: "description", content: "Peta Monitoring Infrastruktur Jalan Poros Desa Bojonegoro" },
     ];
 };

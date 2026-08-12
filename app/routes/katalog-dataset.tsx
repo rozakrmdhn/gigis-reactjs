@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+﻿import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router";
 import { PublicNavbar } from "~/components/public-navbar";
 import { geonodeService, type GeoNodeResource } from "~/features/katalog/services/geonode.service";
@@ -23,7 +23,7 @@ import type { MetaFunction } from "react-router";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Katalog Dataset - GIGIS Monitoring" },
+        { title: "Katalog Dataset - MELAROSA" },
         { name: "description", content: "Katalog data spasial dan dataset infrastruktur." },
     ];
 };
@@ -61,7 +61,7 @@ function DatasetCard({ resource }: { resource: GeoNodeResource }) {
             {/* Content */}
             <div className="p-5 space-y-3">
                 <div className="space-y-1">
-                    <h3 className="font-extrabold text-slate-900 dark:text-white text-sm line-clamp-2 leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                    <h3 className="font-semibold text-slate-900 dark:text-white text-sm line-clamp-2 leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                         {resource.title}
                     </h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5">

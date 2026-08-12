@@ -1,4 +1,4 @@
-import { X, Save, Activity, LayoutList, Plus, Trash2, Calendar, FileText, CheckCircle2, Pencil } from "lucide-react";
+﻿import { X, Save, Activity, LayoutList, Plus, Trash2, Calendar, FileText, CheckCircle2, Pencil } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import { toast } from "sonner";
 import { Button } from "~/components/ui/button";
@@ -116,7 +116,7 @@ export function MonitoringProgressPanel({
 
     const handleDelete = async (id: string) => {
         try {
-            await monitoringService.deleteMonitoringProgress(id);
+            await monitoringService.deleteMonitoringProgress(id, id_segmen);
             fetchHistory();
         } catch (error) {
             // Error toast handled by apiClient
@@ -271,7 +271,12 @@ export function MonitoringProgressPanel({
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-[11px] text-slate-600 dark:text-slate-400 py-3 whitespace-normal max-w-[150px]">
-                                                {item.catatan || "-"}
+                                                <div>{item.catatan || "-"}</div>
+                                                {item.Creator?.nama && (
+                                                    <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 block mt-0.5">
+                                                        Oleh: {item.Creator.nama}
+                                                    </span>
+                                                )}
                                             </TableCell>
                                             <TableCell className="py-3">
                                                 <div className="flex justify-end gap-1">

@@ -1,4 +1,4 @@
-import * as React from "react"
+﻿import * as React from "react"
 import {
     closestCenter,
     DndContext,
@@ -83,6 +83,12 @@ interface DataTableProps<TData, TValue> {
     onSearchSubmit?: (value: string) => void
     defaultPageSize?: number
     pageSizeOptions?: number[]
+    manualPagination?: boolean
+    pageCount?: number
+    pageIndex?: number
+    pageSize?: number
+    onPageChange?: (pageIndex: number) => void
+    onPageSizeChange?: (pageSize: number) => void
 }
 
 function DraggableRow<TData>({ row }: { row: Row<TData> }) {
@@ -122,6 +128,12 @@ export function DataTable<TData, TValue>({
     onSearchSubmit,
     defaultPageSize = 10,
     pageSizeOptions = [10, 20, 30, 40, 50],
+    manualPagination = false,
+    pageCount,
+    pageIndex,
+    pageSize,
+    onPageChange,
+    onPageSizeChange,
 }: DataTableProps<TData, TValue>) {
     const [data, setData] = React.useState(() => initialData)
 
@@ -157,7 +169,9 @@ export function DataTable<TData, TValue>({
             columnVisibility,
             rowSelection,
             columnFilters,
-            pagination,
+            pagination: manualPagination
+                ? { pageIndex: pageIndex ?? 0, pageSize: pageSize ?? defaultPageSize }
+                : pagination,
         },
         getRowId: getRowId,
         enableRowSelection: true,
@@ -165,10 +179,28 @@ export function DataTable<TData, TValue>({
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
         onColumnVisibilityChange: setColumnVisibility,
-        onPaginationChange: setPagination,
+        onPaginationChange: (updater) => {
+            if (manualPagination) {
+                if (typeof updater === "function") {
+                    const nextVal = updater({
+                        pageIndex: pageIndex ?? 0,
+                        pageSize: pageSize ?? defaultPageSize,
+                    });
+                    onPageChange?.(nextVal.pageIndex);
+                    onPageSizeChange?.(nextVal.pageSize);
+                } else {
+                    onPageChange?.(updater.pageIndex);
+                    onPageSizeChange?.(updater.pageSize);
+                }
+            } else {
+                setPagination(updater);
+            }
+        },
+        manualPagination,
+        pageCount,
         getCoreRowModel: getCoreRowModel(),
         getFilteredRowModel: getFilteredRowModel(),
-        getPaginationRowModel: getPaginationRowModel(),
+        getPaginationRowModel: !manualPagination ? getPaginationRowModel() : undefined,
         getSortedRowModel: getSortedRowModel(),
         getFacetedRowModel: getFacetedRowModel(),
         getFacetedUniqueValues: getFacetedUniqueValues(),
@@ -265,7 +297,7 @@ export function DataTable<TData, TValue>({
                 </div>
             </div>
 
-            <div className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6">
+            <div className="relative flex flex-col gap-4 overflow-auto custom-scrollbar px-4 lg:px-6">
                 <div className="overflow-hidden rounded-lg border">
                     <DndContext
                         collisionDetection={closestCenter}

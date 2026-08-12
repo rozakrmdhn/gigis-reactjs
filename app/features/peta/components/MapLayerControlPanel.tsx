@@ -204,7 +204,7 @@ function SortableLayerItem({
                             </span>
                         )}
                     </div>
-                    <h4 className="text-[11px] font-extrabold text-slate-900 dark:text-slate-100 truncate uppercase tracking-tight">
+                    <h4 className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 truncate">
                         {layer.title}
                     </h4>
                 </div>
@@ -414,20 +414,13 @@ export function MapLayerControlPanel({
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-950/50 overflow-hidden">
-            {/* Header */}
-            <div className="p-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="p-2 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-200 dark:shadow-none">
-                        <Layers size={18} />
-                    </div>
-                    <div className="text-left">
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight uppercase">MANAJEMEN LAYER</h3>
-                        <p className="text-[10px] text-slate-500 font-medium uppercase tracking-widest italic">{layers.length} Layer Aktif</p>
-                    </div>
-                </div>
-
+            {/* Header / Info bar */}
+            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                    {layers.length} Layer Terpasang di Peta
+                </span>
                 {onReset && (
-                    <Button variant="ghost" size="sm" onClick={onReset} className="h-8 px-2 text-[10px] font-bold text-slate-500 hover:text-blue-600 rounded-lg gap-1.5 uppercase transition-all">
+                    <Button variant="ghost" size="sm" onClick={onReset} className="h-7 px-2 text-xs font-semibold text-slate-500 hover:text-blue-600 rounded-lg gap-1.5 transition-all">
                         <RotateCcw size={12} /> Reset
                     </Button>
                 )}

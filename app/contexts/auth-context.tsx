@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+﻿import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 import { authService } from '../services/auth.service';
@@ -8,7 +8,8 @@ interface AuthContextType {
     user: User | null;
     isAuthenticated: boolean;
     signin: (email: string, password: string) => Promise<void>;
-    signout: () => void;
+    signout: () => Promise<void>;
+    updateUser: (updatedData: Partial<User>) => void;
     isLoading: boolean;
 }
 
@@ -31,40 +32,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setIsLoading(false);
     }, []);
 
-    // Listen for session expiry event
+    // Listen for session expiry event dispatched by api-client
     useEffect(() => {
         const handleSessionExpired = () => {
-            console.log("Session expired");
             setUser(null);
             navigate('/login');
         };
 
         window.addEventListener("auth-session-expired", handleSessionExpired);
-
-        // Global watchdog check every 1 second
-        const interval = setInterval(() => {
-            const expiry = authService.getExpiry();
-            const now = Date.now();
-
-            if (expiry && user) {
-                const remainingMs = expiry - now;
-
-                // Peringatan 2 menit sebelum expired
-                if (remainingMs > 0 && remainingMs <= 2 * 60 * 1000) {
-                    window.dispatchEvent(new CustomEvent("auth-session-warning", {
-                        detail: { remainingMs }
-                    }));
-                }
-            }
-
-            authService.checkSession();
-        }, 1000);
-
         return () => {
             window.removeEventListener("auth-session-expired", handleSessionExpired);
-            clearInterval(interval);
         };
-    }, [user, navigate]);
+    }, [navigate]);
 
     const signin = async (email: string, password: string) => {
         const response = await authService.signin(email, password);
@@ -73,10 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
     };
 
-    const signout = () => {
-        authService.signout();
+    const signout = async () => {
+        await authService.signout();
         setUser(null);
         navigate('/login');
+    };
+
+    const updateUser = (updatedData: Partial<User>) => {
+        const updatedUser = authService.setUser(updatedData);
+        if (updatedUser) {
+            setUser(updatedUser);
+        }
     };
 
     return (
@@ -86,6 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isAuthenticated: !!user,
                 signin,
                 signout,
+                updateUser,
                 isLoading,
             }}
         >

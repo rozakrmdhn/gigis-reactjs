@@ -1,4 +1,4 @@
-import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
+﻿import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
 import { apiClient } from '~/lib/api-client';
 
 export interface RekapDibangun {
@@ -31,10 +31,9 @@ export const jalanService = {
      */
     getSegmenByDesa: async (idDesa: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         try {
-            // Added format=geojson to segments as well
-            const url = getUrl(`/jalan/segmen?id_desa=${encodeURIComponent(idDesa.toString())}&format=geojson`);
+            const url = getUrl(`/v1/infrastruktur/jalan/segmen?id_desa=${encodeURIComponent(idDesa.toString())}&format=geojson`);
             const response = await apiClient.get<any>(url, {
-                errorMessage: "Gagal mengambil data segmen jalan"
+                showErrorToast: false
             }) as any;
 
             if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
@@ -53,9 +52,9 @@ export const jalanService = {
      */
     getJalanPorosByDesa: async (idDesa: string | number): Promise<FeatureCollection<Geometry, GeoJsonProperties> | null> => {
         try {
-            const url = getUrl(`/jalan?id_desa=${encodeURIComponent(idDesa.toString())}&format=geojson`);
+            const url = getUrl(`/v1/infrastruktur/jalan?id_desa=${encodeURIComponent(idDesa.toString())}&format=geojson`);
             const response = await apiClient.get<any>(url, {
-                errorMessage: "Gagal mengambil data jalan poros desa"
+                showErrorToast: false
             }) as any;
 
             if (response.type === 'FeatureCollection' || response.type === 'Feature') return response;
@@ -73,7 +72,7 @@ export const jalanService = {
      */
     getRekapDibangunByDesa: async (idDesa: string | number): Promise<RekapDibangun | null> => {
         try {
-            const url = getUrl(`/rekap/dibangun?id_desa=${encodeURIComponent(idDesa.toString())}&check_melarosa=Ya`);
+            const url = getUrl(`/v1/rekap/dibangun?id_desa=${encodeURIComponent(idDesa.toString())}&check_melarosa=Ya`);
             const response = await apiClient.get<any>(url, {
                 errorMessage: "Gagal mengambil data rekap pembangunan"
             }) as any;

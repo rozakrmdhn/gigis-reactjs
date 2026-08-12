@@ -1,4 +1,4 @@
-import { Layers } from "lucide-react";
+﻿import { Layers } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
@@ -19,7 +19,7 @@ export function LayerToggle({
             size="icon"
             onClick={onClick}
             className={cn(
-                "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-all rounded-xl h-10 w-10 cursor-pointer overflow-hidden group",
+                "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-all rounded-xl h-10 w-10 cursor-pointer overflow-hidden group",
                 isActive && "ring-2 ring-blue-500 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-900/30",
                 className
             )}

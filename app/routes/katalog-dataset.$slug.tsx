@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+﻿import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router";
 import { geonodeService, type GeoNodeResource } from "~/features/katalog/services/geonode.service";
 import { OpenLayersMap, type OpenLayersMapRef, type MapLayerConfig } from "~/features/peta/components/OpenLayersMap";
@@ -41,7 +41,7 @@ import { GeolocationControl } from "~/features/monitoring/components/Geolocation
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Preview Dataset - GIGIS Monitoring" },
+        { title: "Preview Dataset - MELAROSA" },
     ];
 };
 
@@ -557,7 +557,7 @@ export default function DatasetPreviewPage() {
 
                                     {/* Title */}
                                     <div>
-                                        <h2 className="text-base font-bold text-slate-900 dark:text-white leading-snug">
+                                        <h2 className="text-base font-semibold text-slate-900 dark:text-white leading-snug">
                                             {dataset?.title}
                                         </h2>
                                     </div>
