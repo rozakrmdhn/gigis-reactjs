@@ -6,6 +6,7 @@ import {
     Plus,
     Search,
     RotateCw,
+    RotateCcw,
     Trash2,
     CheckCircle,
     Building2,
@@ -24,7 +25,10 @@ import {
     Filter,
     Check,
     Edit3,
-    Download
+    Download,
+    Loader2,
+    AlertCircle,
+    AlertTriangle
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Card, CardContent } from "~/components/ui/card";
@@ -56,14 +60,17 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
 } from "~/components/ui/dialog";
 import { UsulanDesaPagination } from "~/features/usulan-desa/components/UsulanDesaPagination";
 import { monitoringLaporanService } from "~/features/monitoring/services/monitoring_laporan.service";
 import { monitoringService } from "~/features/monitoring/services/monitoring.service";
+import { plottingAnggaranService } from "~/features/monitoring/services/plotting_anggaran.service";
 import { kecamatanService } from "~/services/kecamatan";
 import { desaService } from "~/services/desa";
 import { useAuth } from "~/contexts/auth-context";
+import { useNavigate } from "react-router";
 import type { MetaFunction } from "react-router";
 
 // OpenLayers imports for map attachment rendering
@@ -88,8 +95,25 @@ export const meta: MetaFunction = () => {
 };
 
 export default function DokumenInfrastrukturPage() {
+    const navigate = useNavigate();
     const { user } = useAuth();
     const currentUserName = React.useMemo(() => user?.nama || (user as any)?.nama_user || (user as any)?.name || (user as any)?.username || (user as any)?.email || "Operator Bappeda", [user]);
+
+    const handleNavigateToPeta = (lap: any) => {
+        if (!lap) return;
+        const idKec = lap.id_kecamatan || lap.Kecamatan?.id || lap.Desa?.id_kecamatan || "";
+        const idDesa = lap.id_desa || lap.Desa?.id || "";
+        const tahun = lap.tahun_anggaran || "";
+        const tipe = lap.tipe_kode || (Array.isArray(lap.tipe_kode) ? lap.tipe_kode[0] : "") || "jalan";
+        const params = new URLSearchParams();
+        if (idKec) params.append("id_kecamatan", idKec.toString());
+        if (idDesa) params.append("id_desa", idDesa.toString());
+        if (tahun) params.append("tahun", tahun.toString());
+        if (tipe) params.append("tipe", tipe.toString());
+        params.append("mode", "revisi");
+
+        navigate(`/admin/monitoring/realisasi-infrastruktur?${params.toString()}`);
+    };
 
     const [laporanList, setLaporanList] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
@@ -137,6 +161,7 @@ export default function DokumenInfrastrukturPage() {
 
     const statusFilterOptions: ComboboxOption[] = React.useMemo(() => [
         { value: "all", label: "Semua Status" },
+        { value: "Draft", label: "Draft / Revisi" },
         { value: "Submitted", label: "Submitted" },
         { value: "Final", label: "Final" }
     ], []);
@@ -151,6 +176,12 @@ export default function DokumenInfrastrukturPage() {
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [mapElement, setMapElement] = useState<HTMLDivElement | null>(null);
 
+    // Revert to Draft Modal State
+    const [revertDialogOpen, setRevertDialogOpen] = useState(false);
+    const [selectedLaporanToRevert, setSelectedLaporanToRevert] = useState<any>(null);
+    const [catatanRevisiInput, setCatatanRevisiInput] = useState("");
+    const [isSubmittingRevert, setIsSubmittingRevert] = useState(false);
+
     // OpenLayers detail map refs
     const mapDetailContainerRef = useRef<HTMLDivElement | null>(null);
     const detailMapRef = useRef<OLMap | null>(null);
@@ -163,6 +194,9 @@ export default function DokumenInfrastrukturPage() {
     const [createNomorBa, setCreateNomorBa] = useState<string>("050/XXX/412.302/2026");
     const [createSumberDana, setCreateSumberDana] = useState<string>("BKK");
     const [createRencanaPanjang, setCreateRencanaPanjang] = useState<string>("0");
+    const [createPlottingList, setCreatePlottingList] = useState<any[]>([]);
+    const [createPlottingId, setCreatePlottingId] = useState<string>("none");
+    const [loadingPlottingList, setLoadingPlottingList] = useState(false);
     const [createSubmitting, setCreateSubmitting] = useState(false);
 
     // Inline Edit Nomor Dokumen State
@@ -182,6 +216,53 @@ export default function DokumenInfrastrukturPage() {
             return `050/XXX/412.302/${createTahun}`;
         });
     }, [createTahun]);
+
+    // Fetch Plotting Anggaran when desa or modal opens to link plotting_id & derive tahun anggaran
+    useEffect(() => {
+        if (!createDesa || !isCreateOpen) {
+            setCreatePlottingList([]);
+            setCreatePlottingId("none");
+            return;
+        }
+        const fetchPlotting = async () => {
+            setLoadingPlottingList(true);
+            try {
+                const res = await plottingAnggaranService.getPlottingList({
+                    id_desa: createDesa,
+                    id_kecamatan: selectedKec !== "all" ? selectedKec : undefined
+                });
+                const list = Array.isArray(res?.result) ? res.result : (Array.isArray(res?.data) ? res.data : []);
+                setCreatePlottingList(list);
+                if (list.length > 0) {
+                    const first = list[0];
+                    setCreatePlottingId(first.id.toString());
+                    if (first.tahun_anggaran) setCreateTahun(first.tahun_anggaran.toString());
+                    if (first.sumber_dana) setCreateSumberDana(first.sumber_dana);
+                    if (first.target_panjang_m) setCreateRencanaPanjang(first.target_panjang_m.toString());
+                } else {
+                    setCreatePlottingId("none");
+                }
+            } catch (err) {
+                console.warn("Failed to fetch plotting for create draft:", err);
+                setCreatePlottingList([]);
+                setCreatePlottingId("none");
+            } finally {
+                setLoadingPlottingList(false);
+            }
+        };
+        fetchPlotting();
+    }, [createDesa, isCreateOpen, selectedKec]);
+
+    const handleSelectPlotting = (plottingId: string) => {
+        setCreatePlottingId(plottingId);
+        if (plottingId === "none") return;
+        const selected = createPlottingList.find(p => p.id.toString() === plottingId);
+        if (selected) {
+            if (selected.tahun_anggaran) setCreateTahun(selected.tahun_anggaran.toString());
+            if (selected.sumber_dana) setCreateSumberDana(selected.sumber_dana);
+            if (selected.target_panjang_m) setCreateRencanaPanjang(selected.target_panjang_m.toString());
+        }
+    };
 
     // Load kecamatan list on mount & set default for operator_kecamatan
     useEffect(() => {
@@ -541,42 +622,71 @@ export default function DokumenInfrastrukturPage() {
             return;
         }
         setCreateSubmitting(true);
-        const toastId = toast.loading("Membuat Berita Acara...");
+        const toastId = toast.loading("Menerbitkan Draft Dokumen Monitoring...");
         try {
             const res = await monitoringLaporanService.createLaporan({
                 id_desa: createDesa,
+                id_kecamatan: selectedKec !== "all" ? selectedKec : undefined,
                 tahun_anggaran: createTahun,
                 sumber_dana: createSumberDana,
                 rencana_panjang: createRencanaPanjang,
                 nomor_ba: createNomorBa,
-                status: "Final"
+                plotting_id: (createPlottingId && createPlottingId !== 'none') ? createPlottingId : null,
+                status: "Draft"
             });
-            if (res.status === "success") {
-                toast.success(`Berita Acara (${res.result?.nomor_ba || 'Resmi'}) berhasil dibuat!`, { id: toastId });
+            if (res.status === "success" || res.data || res.result) {
+                const nomorDoc = res.result?.nomor_ba || res.data?.nomor_ba || createNomorBa;
+                toast.success(`Draft Dokumen Monitoring (${nomorDoc}) berhasil diterbitkan! Akses digitasi untuk Operator Kecamatan telah terbuka.`, { id: toastId });
                 setIsCreateOpen(false);
                 await fetchLaporan();
             } else {
-                toast.error("Gagal membuat Berita Acara", { id: toastId });
+                toast.error("Gagal membuat Draft Dokumen Monitoring", { id: toastId });
             }
         } catch (err: any) {
             console.error("Create BA error:", err);
-            toast.error("Terjadi kesalahan saat membuat Berita Acara", { id: toastId });
+            toast.error(err?.message || "Terjadi kesalahan saat membuat Draft Dokumen Monitoring", { id: toastId });
         } finally {
             setCreateSubmitting(false);
         }
     };
 
     const handleDeleteLaporan = async (id: string) => {
-        if (!confirm("Apakah Anda yakin ingin menghapus Berita Acara ini?")) return;
-        const toastId = toast.loading("Menghapus Berita Acara...");
+        if (!confirm("Apakah Anda yakin ingin menghapus Dokumen Berita Acara ini beserta seluruh segmen realisasi yang terikat?")) return;
+        const toastId = toast.loading("Menghapus Berita Acara dan segmen terkait...");
         try {
-            await monitoringLaporanService.deleteLaporan(id);
-            toast.success("Berita Acara berhasil dihapus", { id: toastId });
+            await monitoringLaporanService.deleteLaporan(id, true);
+            toast.success("Berita Acara dan seluruh segmen yang terikat berhasil dihapus", { id: toastId });
             setLaporanList(prev => prev.filter(item => item.id !== id));
             await fetchLaporan();
         } catch (err) {
             console.error("Delete error:", err);
             toast.error("Gagal menghapus Berita Acara", { id: toastId });
+        }
+    };
+
+    const handleRevertToDraft = async () => {
+        if (!selectedLaporanToRevert) return;
+        setIsSubmittingRevert(true);
+        const toastId = toast.loading("Mengembalikan status dokumen ke Draft...");
+        try {
+            await monitoringLaporanService.revertToDraft(selectedLaporanToRevert.id, {
+                catatan: catatanRevisiInput.trim(),
+                unlock_segments: true,
+                target_segment_status: "verifikasi_kecamatan"
+            });
+            toast.success("Dokumen berhasil dikembalikan ke status Draft. Kunci segmen telah dibuka untuk revisi kecamatan.", { id: toastId });
+            setRevertDialogOpen(false);
+            setLaporanList(prev => prev.map(item =>
+                item.id === selectedLaporanToRevert.id
+                    ? { ...item, status: "Draft", catatan_revisi: catatanRevisiInput.trim() }
+                    : item
+            ));
+            await fetchLaporan();
+        } catch (err: any) {
+            console.error("Revert to draft error:", err);
+            toast.error(err?.message || "Gagal mengembalikan status dokumen ke Draft", { id: toastId });
+        } finally {
+            setIsSubmittingRevert(false);
         }
     };
 
@@ -1503,12 +1613,52 @@ export default function DokumenInfrastrukturPage() {
                         </div>
                     </div>
 
+                    {/* Quick Status Filter Tabs */}
+                    <div className="flex flex-wrap items-center gap-1.5 px-6 py-2.5 border-b border-border bg-slate-50/50 dark:bg-slate-900/30">
+                        {[
+                            { value: "all", label: "Semua Dokumen", count: totalItems, color: "slate" },
+                            { value: "Draft", label: "Perlu Revisi", count: laporanList.filter(l => l.status === 'Draft' || l.status === 'draft' || l.status === 'Revisi').length, color: "amber" },
+                            { value: "Submitted", label: "Menunggu Bappeda", count: laporanList.filter(l => l.status === 'Submitted' || l.status === 'submitted').length, color: "blue" },
+                            { value: "Final", label: "Final / Disahkan", count: laporanList.filter(l => l.status === 'Final' || l.status === 'final' || !l.status).length, color: "emerald" },
+                        ].map((tab) => (
+                            <button
+                                key={tab.value}
+                                onClick={() => {
+                                    setSelectedStatus(tab.value);
+                                    setPage(1);
+                                }}
+                                className={cn(
+                                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border",
+                                    selectedStatus === tab.value
+                                        ? tab.color === 'amber'
+                                            ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                            : tab.color === 'blue'
+                                                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                                : tab.color === 'emerald'
+                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                                    : "bg-foreground text-background border-foreground shadow-xs"
+                                        : "bg-background text-muted-foreground border-border hover:bg-muted"
+                                )}
+                            >
+                                <span>{tab.label}</span>
+                                {tab.value !== "all" && tab.count > 0 && (
+                                    <span className={cn(
+                                        "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-extrabold",
+                                        selectedStatus === tab.value ? "bg-white/20 text-white" : "bg-muted-foreground/15 text-foreground"
+                                    )}>
+                                        {tab.count}
+                                    </span>
+                                )}
+                            </button>
+                        ))}
+                    </div>
+
                     {/* Table Area matching bataswilayah-desa & ploting-anggaran */}
                     <CardContent className="p-0 overflow-auto custom-scrollbar flex-1 min-h-0 [&_[data-slot=table-container]]:overflow-visible">
                         <Table>
                             <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 border-b border-border shadow-[0_1px_1px_rgba(0,0,0,0.1)]">
                                 <TableRow>
-                                    <TableHead className="text-center font-semibold sticky top-0 left-0 z-30 bg-slate-50 dark:bg-slate-900 border-r shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] w-[110px] min-w-[110px] md:w-[110px] md:min-w-[110px]">Aksi</TableHead>
+                                    <TableHead className="text-center font-semibold sticky top-0 left-0 z-30 bg-slate-50 dark:bg-slate-900 border-r shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] w-[155px] min-w-[155px] md:w-[155px] md:min-w-[155px]">Aksi</TableHead>
                                     <TableHead className="w-12 text-center font-semibold">No</TableHead>
                                     <TableHead className="font-semibold">Nomor Dokumen</TableHead>
                                     <TableHead className="font-semibold">Desa / Kecamatan</TableHead>
@@ -1541,7 +1691,7 @@ export default function DokumenInfrastrukturPage() {
                                     paginatedList.map((lap, idx) => (
                                         <TableRow key={lap.id} className="group transition-colors">
                                             {/* Action Column matching UsulanDesaTable pattern */}
-                                            <TableCell className="w-[110px] min-w-[110px] md:w-[110px] md:min-w-[110px] p-0 relative sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] z-10 transition-colors">
+                                            <TableCell className="w-[155px] min-w-[155px] md:w-[155px] md:min-w-[155px] p-0 relative sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] z-10 transition-colors">
                                                 {/* Desktop Actions Layout */}
                                                 <div className="hidden md:flex flex-row items-center justify-center gap-1.5 h-12 w-full px-2">
                                                     <Button
@@ -1552,10 +1702,38 @@ export default function DokumenInfrastrukturPage() {
                                                             e.stopPropagation();
                                                             handleOpenDetail(lap.id);
                                                         }}
-                                                        title="Detail & Peta"
+                                                        title="Detail & Peta Dokumen"
                                                     >
                                                         <Eye className="h-3.5 w-3.5" />
                                                     </Button>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 w-7 p-0 border-indigo-200 dark:border-indigo-800 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 shrink-0"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleNavigateToPeta(lap);
+                                                        }}
+                                                        title="Buka di Peta Realisasi & Revisi"
+                                                    >
+                                                        <MapPin className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    {user?.role !== 'operator_kecamatan' && (lap.status === 'Final' || lap.status === 'Submitted' || !lap.status) && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 shrink-0"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSelectedLaporanToRevert(lap);
+                                                                setCatatanRevisiInput(lap.catatan_revisi || "");
+                                                                setRevertDialogOpen(true);
+                                                            }}
+                                                            title="Kembalikan Status ke Draft (Buka Kunci untuk Revisi)"
+                                                        >
+                                                            <RotateCcw className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
                                                     {user?.role !== 'operator_kecamatan' && (
                                                         <Button
                                                             variant="outline"
@@ -1585,7 +1763,7 @@ export default function DokumenInfrastrukturPage() {
 
                                                 {/* Mobile Sliding Actions Panel */}
                                                 <div className={cn(
-                                                    "md:hidden absolute top-0 bottom-0 left-0 z-20 flex items-center justify-center gap-1.5 bg-blue-50/95 dark:bg-blue-950/95 backdrop-blur-xs transition-all duration-300 ease-in-out px-2 border-r border-slate-200 dark:border-slate-800 rounded-r-xl w-[120px]",
+                                                    "md:hidden absolute top-0 bottom-0 left-0 z-20 flex items-center justify-center gap-1 bg-blue-50/95 dark:bg-blue-950/95 backdrop-blur-xs transition-all duration-300 ease-in-out px-1.5 border-r border-slate-200 dark:border-slate-800 rounded-r-xl w-[175px]",
                                                     activeRowId === lap.id ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0 pointer-events-none"
                                                 )}>
                                                     <Button
@@ -1604,6 +1782,30 @@ export default function DokumenInfrastrukturPage() {
                                                     >
                                                         <Eye className="h-3.5 w-3.5" />
                                                     </Button>
+                                                    <Button
+                                                        variant="outline" size="sm"
+                                                        className="h-7 w-7 p-0 border-slate-200 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 shrink-0"
+                                                        onClick={(e) => { e.stopPropagation(); handleNavigateToPeta(lap); setActiveRowId(null); }}
+                                                        title="Buka di Peta Realisasi"
+                                                    >
+                                                        <MapPin className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    {user?.role !== 'operator_kecamatan' && (lap.status === 'Final' || lap.status === 'Submitted' || !lap.status) && (
+                                                        <Button
+                                                            variant="outline" size="sm"
+                                                            className="h-7 w-7 p-0 border-slate-200 text-amber-600 hover:text-amber-700 hover:bg-amber-50 shrink-0"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setActiveRowId(null);
+                                                                setSelectedLaporanToRevert(lap);
+                                                                setCatatanRevisiInput(lap.catatan_revisi || "");
+                                                                setRevertDialogOpen(true);
+                                                            }}
+                                                            title="Kembalikan ke Draft"
+                                                        >
+                                                            <RotateCcw className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
                                                     {user?.role !== 'operator_kecamatan' && (
                                                         <Button
                                                             variant="outline" size="sm"
@@ -1684,6 +1886,14 @@ export default function DokumenInfrastrukturPage() {
                                                         📌 {lap.PlottingAnggaran.nama_kegiatan}
                                                     </div>
                                                 )}
+                                                {lap.catatan_revisi && (lap.status === 'Draft' || lap.status === 'draft' || lap.status === 'Revisi') && (
+                                                    <div className="mt-1 p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-900 dark:text-amber-300 font-sans flex items-start gap-1 max-w-xs">
+                                                        <RotateCcw className="size-3 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                        <div className="truncate" title={lap.catatan_revisi}>
+                                                            <strong className="font-semibold">Catatan Bappeda:</strong> {lap.catatan_revisi}
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-center text-xs font-medium font-mono">
                                                 {lap.tahun_anggaran}
@@ -1697,10 +1907,29 @@ export default function DokumenInfrastrukturPage() {
                                                 {parseFloat(lap.realisasi_panjang || 0).toFixed(1)} m
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                {lap.status === 'Submitted' || lap.status === 'submitted' ? (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                                        <FileText className="w-3 h-3" />
-                                                        SUBMITTED
+                                                {lap.status === 'Draft' || lap.status === 'draft' || lap.status === 'Revisi' ? (
+                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20" title={lap.catatan_revisi ? `Catatan: ${lap.catatan_revisi}` : "Status Draft (Dapat diedit kecamatan)"}>
+                                                        <RotateCcw className="w-3 h-3" />
+                                                        DRAFT / REVISI
+                                                    </span>
+                                                ) : lap.status === 'Submitted' || lap.status === 'submitted' ? (
+                                                    <span className={cn(
+                                                        "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
+                                                        lap.catatan_revisi || (Array.isArray(lap.history_revisi) && lap.history_revisi.length > 0)
+                                                            ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30"
+                                                            : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
+                                                    )}>
+                                                        {lap.catatan_revisi || (Array.isArray(lap.history_revisi) && lap.history_revisi.length > 0) ? (
+                                                            <>
+                                                                <CheckCircle className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
+                                                                <span>REVISI TERKIRIM</span>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <FileText className="w-3 h-3" />
+                                                                <span>SUBMITTED</span>
+                                                            </>
+                                                        )}
                                                     </span>
                                                 ) : (
                                                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
@@ -1862,6 +2091,37 @@ export default function DokumenInfrastrukturPage() {
                                     </div>
                                 )}
 
+                                {/* REVISION AUDIT TRAIL / CATATAN REVISI */}
+                                {(selectedDetailLaporan.catatan_revisi || (Array.isArray(selectedDetailLaporan.history_revisi) && selectedDetailLaporan.history_revisi.length > 0)) && (
+                                    <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 space-y-2">
+                                        <div className="flex items-center gap-2">
+                                            <RotateCcw className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                                            <span className="font-bold text-xs">Catatan Revisi & Riwayat Pengembalian dari Bappeda</span>
+                                        </div>
+                                        {selectedDetailLaporan.catatan_revisi && (
+                                            <p className="text-xs bg-background/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-amber-200/60 dark:border-amber-800/40 text-foreground font-mono leading-relaxed">
+                                                {selectedDetailLaporan.catatan_revisi}
+                                            </p>
+                                        )}
+                                        {Array.isArray(selectedDetailLaporan.history_revisi) && selectedDetailLaporan.history_revisi.length > 0 && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <span className="text-[10px] font-bold uppercase text-muted-foreground block">Log Riwayat Siklus ({selectedDetailLaporan.history_revisi.length}x Revisi):</span>
+                                                <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
+                                                    {selectedDetailLaporan.history_revisi.map((hist: any, hIdx: number) => (
+                                                        <div key={hIdx} className="text-[11px] p-2 rounded-md bg-muted/40 border border-border/60 flex flex-col gap-0.5">
+                                                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                                                <span>Oleh: <strong className="text-foreground">{hist.reverted_by_name || 'Operator Bappeda'}</strong></span>
+                                                                <span className="font-mono">{hist.reverted_at ? new Date(hist.reverted_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : '-'}</span>
+                                                            </div>
+                                                            <p className="text-[10.5px] text-foreground font-sans mt-0.5">"{hist.catatan || '-'}"</p>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* INTERACTIVE OPENLAYERS MAP */}
                                 <div className="space-y-1.5">
                                     <div className="flex justify-between items-center">
@@ -1933,9 +2193,21 @@ export default function DokumenInfrastrukturPage() {
                         );
                     })()}
 
-                    <DialogFooter className="px-6 py-4 border-t border-border bg-popover shrink-0 flex gap-2 justify-end">
+                    <DialogFooter className="px-6 py-4 border-t border-border bg-popover shrink-0 flex flex-wrap gap-2 justify-end">
                         <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="h-9 text-xs">
                             Tutup
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => {
+                                setIsDetailOpen(false);
+                                handleNavigateToPeta(selectedDetailLaporan);
+                            }}
+                            className="h-9 px-4 text-xs font-bold rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 gap-1.5 cursor-pointer"
+                        >
+                            <MapPin className="w-3.5 h-3.5" />
+                            <span>Buka di Peta Realisasi (TA {selectedDetailLaporan?.tahun_anggaran})</span>
                         </Button>
                         {user?.role === 'operator_kecamatan' && (
                             <Button
@@ -1961,12 +2233,15 @@ export default function DokumenInfrastrukturPage() {
 
             {/* Create Dialog */}
             <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-[450px]">
+                <DialogContent className="sm:max-w-[480px]">
                     <DialogHeader>
                         <DialogTitle className="text-sm font-bold flex items-center gap-2">
                             <Sparkles className="w-4 h-4 text-blue-600" />
-                            <span>Buat Snapshot Berita Acara Baru</span>
+                            <span>Terbitkan Draft Dokumen Monitoring Baru</span>
                         </DialogTitle>
+                        <p className="text-xs text-muted-foreground pt-1">
+                            Inisiasi dokumen monitoring sebagai dasar perencanaan & target fisik bagi Operator Kecamatan untuk melakukan digitasi spasial.
+                        </p>
                     </DialogHeader>
                     <form onSubmit={handleCreateLaporan} className="space-y-4 py-2">
                         <div className="space-y-1.5">
@@ -1994,8 +2269,64 @@ export default function DokumenInfrastrukturPage() {
                             />
                         </div>
 
+                        {createDesa && (
+                            <div className="space-y-1.5 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-bold uppercase text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
+                                        <Layers className="w-3.5 h-3.5" />
+                                        <span>Plotting Anggaran / Kegiatan Terkait</span>
+                                    </Label>
+                                    {loadingPlottingList && (
+                                        <span className="text-[9px] text-muted-foreground flex items-center gap-1">
+                                            <Loader2 className="w-2.5 h-2.5 animate-spin" /> Memuat...
+                                        </span>
+                                    )}
+                                </div>
+                                <Combobox
+                                    options={[
+                                        { value: "none", label: "-- Tanpa Plotting (Input Manual) --" },
+                                        ...createPlottingList.map(p => ({
+                                            value: p.id.toString(),
+                                            label: `${p.nama_kegiatan} (${p.sumber_dana || 'BKK'} TA ${p.tahun_anggaran} - Target: ${p.target_panjang_m || 0}m)`
+                                        }))
+                                    ]}
+                                    value={createPlottingId}
+                                    onChange={handleSelectPlotting}
+                                    placeholder="Pilih Plotting Kegiatan"
+                                    searchPlaceholder="Cari kegiatan plotting..."
+                                    className="w-full"
+                                />
+                                {createPlottingId !== "none" && (() => {
+                                    const p = createPlottingList.find(item => item.id.toString() === createPlottingId);
+                                    if (!p) return null;
+                                    return (
+                                        <div className="text-[10.5px] bg-background/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-500/20 space-y-1 mt-1.5">
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Nama Kegiatan:</span>
+                                                <span className="font-semibold text-foreground truncate max-w-[240px]">{p.nama_kegiatan}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Pagu Anggaran:</span>
+                                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                                                    Rp {Number(p.target_pagu_anggaran || 0).toLocaleString('id-ID')}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Tahun Anggaran Terpilih:</span>
+                                                <span className="font-bold text-amber-600 dark:text-amber-400">TA {p.tahun_anggaran}</span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Target Rencana Fisik:</span>
+                                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{p.target_panjang_m || 0} meter</span>
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+                        )}
+
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nomor Dokumen</Label>
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nomor Dokumen Penugasan / BA</Label>
                             <Input
                                 value={createNomorBa}
                                 onChange={(e) => setCreateNomorBa(e.target.value)}
@@ -2003,12 +2334,17 @@ export default function DokumenInfrastrukturPage() {
                                 className="h-9 text-xs font-mono bg-background"
                                 required
                             />
-                            <p className="text-[9.5px] text-muted-foreground">Default: 050/XXX/412.302/{createTahun}. Ganti XXX dengan nomor urut dokumen Anda.</p>
+                            <p className="text-[9.5px] text-muted-foreground">Default: 050/XXX/412.302/{createTahun}. Ganti XXX dengan nomor urut dokumen.</p>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Tahun Anggaran</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Tahun Anggaran</Label>
+                                    {createPlottingId !== "none" && (
+                                        <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400">Dari Plotting</span>
+                                    )}
+                                </div>
                                 <Combobox
                                     options={tahunFilterOptions.filter(o => o.value !== "Semua")}
                                     value={createTahun}
@@ -2020,7 +2356,12 @@ export default function DokumenInfrastrukturPage() {
                             </div>
 
                             <div className="space-y-1.5">
-                                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Sumber Dana</Label>
+                                <div className="flex items-center justify-between">
+                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Sumber Dana</Label>
+                                    {createPlottingId !== "none" && (
+                                        <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400">Dari Plotting</span>
+                                    )}
+                                </div>
                                 <Combobox
                                     options={[
                                         { value: "BKK", label: "BKK" },
@@ -2037,25 +2378,116 @@ export default function DokumenInfrastrukturPage() {
                         </div>
 
                         <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Rencana Panjang (Meter)</Label>
+                            <div className="flex items-center justify-between">
+                                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Rencana Panjang (Meter)</Label>
+                                {createPlottingId !== "none" && (
+                                    <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400">Dari Plotting</span>
+                                )}
+                            </div>
                             <Input
                                 type="number"
                                 placeholder="Target perencanaan..."
                                 value={createRencanaPanjang}
                                 onChange={e => setCreateRencanaPanjang(e.target.value)}
-                                className="h-9 text-xs rounded-lg"
+                                className="h-9 text-xs rounded-lg font-mono font-bold"
                             />
                         </div>
 
                         <DialogFooter className="pt-2">
-                            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="h-9 text-xs">
+                            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="h-9 text-xs cursor-pointer">
                                 Batal
                             </Button>
-                            <Button type="submit" disabled={createSubmitting} className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white">
-                                {createSubmitting ? "Menyimpan..." : "Buat Berita Acara"}
+                            <Button type="submit" disabled={createSubmitting} className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5 shadow-sm cursor-pointer">
+                                {createSubmitting ? (
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                ) : (
+                                    <Sparkles className="w-3.5 h-3.5" />
+                                )}
+                                <span>{createSubmitting ? "Menerbitkan..." : "Terbitkan Draft Penugasan"}</span>
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* REVERT TO DRAFT / BUKA REVISI MODAL */}
+            <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
+                <DialogContent className="sm:max-w-md bg-background border-border rounded-2xl shadow-2xl p-0 overflow-hidden">
+                    <DialogHeader className="px-6 py-4 border-b border-border/80 bg-amber-500/10 dark:bg-amber-950/20">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                                <RotateCcw className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-base font-bold text-foreground">
+                                    Kembalikan Dokumen ke Draft
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                    Membuka kunci segmen agar Operator Kecamatan dapat merevisi data
+                                </DialogDescription>
+                            </div>
+                        </div>
+                    </DialogHeader>
+
+                    <div className="p-6 space-y-4 text-xs">
+                        {selectedLaporanToRevert && (
+                            <div className="p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 space-y-1.5">
+                                <p className="font-bold text-xs">Informasi Dokumen Berita Acara:</p>
+                                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                    <div>No. BA: <strong className="font-mono">{selectedLaporanToRevert.nomor_ba || '-'}</strong></div>
+                                    <div>Tahun: <strong className="font-mono">{selectedLaporanToRevert.tahun_anggaran}</strong></div>
+                                    <div className="col-span-2">
+                                        Wilayah: <strong>{selectedLaporanToRevert.Desa?.nama_desa} (Kec. {selectedLaporanToRevert.Kecamatan?.nama_kecamatan})</strong>
+                                    </div>
+                                    <div className="col-span-2 text-muted-foreground pt-1">
+                                        Realisasi Panjang: <strong className="font-mono text-foreground">{parseFloat(selectedLaporanToRevert.realisasi_panjang || 0).toFixed(1)} m</strong>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="p-3 rounded-xl bg-muted/40 border border-border/80 flex items-start gap-2.5 text-muted-foreground">
+                            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                            <p className="text-[11px] leading-relaxed">
+                                Setelah status dikembalikan ke <strong>Draft</strong>, kunci snapshot akan dilepas sehingga Operator Kecamatan dapat mengedit geometri, mengubah atribut, dan menambahkan segmen baru pada desa dan tahun anggaran terkait.
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <Label htmlFor="catatanRevisi" className="text-xs font-bold text-foreground">
+                                Catatan Revisi untuk Kecamatan <span className="text-muted-foreground font-normal text-[10px]">(opsional)</span>
+                            </Label>
+                            <textarea
+                                id="catatanRevisi"
+                                rows={3}
+                                value={catatanRevisiInput}
+                                onChange={(e) => setCatatanRevisiInput(e.target.value)}
+                                placeholder="Tuliskan catatan perbaikan atau arahan untuk operator kecamatan..."
+                                className="w-full text-xs p-2.5 rounded-xl border border-input bg-background focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="px-6 py-4 border-t border-border/80 bg-muted/20 flex flex-row gap-2 justify-end">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setRevertDialogOpen(false)}
+                            disabled={isSubmittingRevert}
+                            className="h-9 px-4 text-xs font-semibold rounded-xl cursor-pointer"
+                        >
+                            Batal
+                        </Button>
+                        <Button
+                            type="button"
+                            onClick={handleRevertToDraft}
+                            disabled={isSubmittingRevert}
+                            className="h-9 px-5 text-xs font-bold rounded-xl bg-amber-600 hover:bg-amber-700 text-white shadow-md shadow-amber-500/20 gap-1.5 cursor-pointer"
+                        >
+                            {isSubmittingRevert ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+                            <span>Konfirmasi Buka Revisi</span>
+                        </Button>
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </div>

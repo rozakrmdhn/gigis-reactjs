@@ -15,7 +15,6 @@ export interface ClickedLayerItem {
 export type StatusVerifikasi =
     | 'verifikasi_kecamatan'
     | 'verifikasi_bappeda'
-    | 'dikembalikan'
     | 'terverifikasi';
 
 export interface RealisasiSegmen {

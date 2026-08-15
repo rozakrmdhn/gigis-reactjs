@@ -45,7 +45,7 @@ export function KirimDigitasiDialog({
                 {/* Header */}
                 <DialogHeader className="px-6 py-4 border-b border-border/80 bg-indigo-500/5 dark:bg-indigo-950/20">
                     <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20">
+                        <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20">
                             <Send className="w-5 h-5" />
                         </div>
                         <div>
@@ -76,18 +76,29 @@ export function KirimDigitasiDialog({
                     <div className="p-4 rounded-2xl bg-muted/40 border border-border/70 space-y-3">
                         <div className="flex items-start justify-between gap-2 border-b border-border/60 pb-2.5">
                             <div className="space-y-0.5">
-                                <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">Nama Segmen / Jalan</span>
-                                <h4 className="font-bold text-sm text-foreground leading-tight">{segment.nama_jalan || "Tanpa Nama Segmen"}</h4>
+                                <span className="text-[10px] uppercase tracking-wider font-extrabold text-muted-foreground">NAMA SEGMEN / JALAN</span>
+                                <h4 className="font-bold text-sm text-foreground leading-tight">{segment.nama_jalan || segment.namobj || "Tanpa Nama Segmen"}</h4>
                             </div>
-                            <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 shrink-0">
-                                {tipeNama}
-                            </span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 shrink-0" />
+                                    <span>{tipeNama || "Jalan Desa"}</span>
+                                </span>
+                                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                                    Belum Dikirim
+                                </span>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-3 pt-0.5">
                             <div className="space-y-0.5">
                                 <span className="text-[10px] text-muted-foreground font-medium">Panjang / Volume</span>
-                                <p className="font-bold text-xs text-foreground font-mono">{segment.panjang_m || 0} meter</p>
+                                <p className="font-bold text-xs text-foreground font-mono">
+                                    {segment.panjang_m !== undefined && segment.panjang_m !== null
+                                        ? `${parseFloat(segment.panjang_m.toString()).toFixed(1)} meter`
+                                        : "0 meter"}
+                                </p>
                             </div>
                             <div className="space-y-0.5">
                                 <span className="text-[10px] text-muted-foreground font-medium">Kondisi Fisik</span>

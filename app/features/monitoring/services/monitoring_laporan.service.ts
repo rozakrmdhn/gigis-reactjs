@@ -1,4 +1,4 @@
-﻿import { apiClient } from "~/lib/api-client";
+import { apiClient } from "~/lib/api-client";
 
 export interface MonitoringLaporanPayload {
     id_desa: number | string;
@@ -56,9 +56,46 @@ export const monitoringLaporanService = {
         });
     },
 
-    deleteLaporan: async (id: string): Promise<any> => {
-        return await apiClient.delete(`${import.meta.env.VITE_API_BASE_URL}/v1/laporan/${id}`, {
+    submitLaporan: async (id: string, payload?: any): Promise<any> => {
+        try {
+            return await apiClient.post(`${import.meta.env.VITE_API_BASE_URL}/v1/laporan/${id}/submit`, payload || {}, {
+                showErrorToast: false
+            });
+        } catch {
+            return await apiClient.patch(`${import.meta.env.VITE_API_BASE_URL}/v1/laporan/${id}`, {
+                status: "Submitted",
+                ...(payload || {})
+            }, {
+                showErrorToast: true
+            });
+        }
+    },
+
+    deleteLaporan: async (id: string, deleteSegments: boolean = true): Promise<any> => {
+        return await apiClient.delete(`${import.meta.env.VITE_API_BASE_URL}/v1/laporan/${id}?delete_segments=${deleteSegments}`, {
             showErrorToast: true
         });
+    },
+
+    revertToDraft: async (id: string, payload?: { catatan?: string; unlock_segments?: boolean; target_segment_status?: string }): Promise<any> => {
+        try {
+            return await apiClient.post(`${import.meta.env.VITE_API_BASE_URL}/v1/laporan/${id}/revert-to-draft`, {
+                catatan: payload?.catatan || "",
+                unlock_segments: payload?.unlock_segments ?? true,
+                target_segment_status: payload?.target_segment_status || "verifikasi_kecamatan"
+            }, {
+                showErrorToast: false
+            });
+        } catch (err: any) {
+            // Fallback for transition phase before backend custom endpoint is deployed
+            console.warn("revert-to-draft endpoint failed or not yet available, falling back to patchLaporan:", err);
+            return await apiClient.patch(`${import.meta.env.VITE_API_BASE_URL}/v1/laporan/${id}`, {
+                status: "Draft",
+                catatan: payload?.catatan || "",
+                keterangan: payload?.catatan ? `Revisi: ${payload.catatan}` : undefined
+            }, {
+                showErrorToast: true
+            });
+        }
     }
 };

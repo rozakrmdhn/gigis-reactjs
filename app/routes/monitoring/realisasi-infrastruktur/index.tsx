@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
     Plus,
@@ -291,18 +291,20 @@ export default function RoadRealizationInfrastrukturPage() {
     const routeParams = useParams();
     const { tipes, activeTipe, setActiveTipe } = useInfrastrukturTipe();
 
-    // Auto-select active infrastructure type from URL parameter /admin/monitoring/:kode
+    const [searchParams] = useSearchParams();
+    const params = useParams();
+    const activeDesaIdParam = params.desaId;
+
+    // Auto-select active infrastructure type from URL parameter /admin/monitoring/:kode OR query param ?tipe=...
     useEffect(() => {
-        if (routeParams.kode && tipes.length > 0) {
-            const found = tipes.find(t => t.kode === routeParams.kode);
+        const targetKode = routeParams.kode || searchParams.get("tipe") || searchParams.get("tipe_kode") || (searchParams.get("mode") ? "jalan" : undefined);
+        if (targetKode && tipes.length > 0) {
+            const found = tipes.find(t => t.kode === targetKode);
             if (found && found.kode !== activeTipe?.kode) {
                 setActiveTipe(found);
             }
         }
-    }, [routeParams.kode, tipes, activeTipe, setActiveTipe]);
-
-    const params = useParams();
-    const activeDesaIdParam = params.desaId;
+    }, [routeParams.kode, searchParams, tipes, activeTipe, setActiveTipe]);
 
     const [kecamatanList, setKecamatanList] = useState<{ id: string; nama_kecamatan: string }[]>([]);
     const [desaList, setDesaList] = useState<{ id: string; nama_desa: string }[]>([]);
@@ -1347,6 +1349,28 @@ export default function RoadRealizationInfrastrukturPage() {
         }
     }, [user, desaList]);
 
+    // Auto-select from URL search parameters (deep-linking from dokumen-infrastruktur)
+    useEffect(() => {
+        const paramKec = searchParams.get("id_kecamatan") || searchParams.get("kecamatan_id");
+        const paramDesa = searchParams.get("id_desa") || searchParams.get("desa_id") || searchParams.get("desaId");
+        const paramTahun = searchParams.get("tahun") || searchParams.get("tahun_anggaran");
+        const paramMode = searchParams.get("mode");
+
+        if (paramKec) {
+            setSelectedKec(String(paramKec));
+        }
+        if (paramDesa) {
+            setSelectedDesa(String(paramDesa));
+        }
+        if (paramTahun) {
+            selectedTahunFilterRef.current = String(paramTahun);
+            setSelectedTahunFilter(String(paramTahun));
+        }
+        if (paramMode === "revisi") {
+            setIsSidebarOpen(true);
+        }
+    }, [searchParams]);
+
     // Fetch Desa list when Kecamatan changes
     useEffect(() => {
         const fetchDesa = async () => {
@@ -1355,7 +1379,17 @@ export default function RoadRealizationInfrastrukturPage() {
                 const resp = await monitoringService.getDesa(selectedKec);
                 if (resp.status === "success" && resp.result) {
                     setDesaList(resp.result);
-                    setSelectedDesa("");
+                    const paramDesa = searchParams.get("id_desa") || searchParams.get("desa_id") || searchParams.get("desaId");
+                    if (paramDesa && resp.result.some((d: any) => String(d.id) === String(paramDesa))) {
+                        setSelectedDesa(String(paramDesa));
+                    } else {
+                        setSelectedDesa(prev => {
+                            if (prev && resp.result.some((d: any) => String(d.id) === String(prev))) {
+                                return prev;
+                            }
+                            return "";
+                        });
+                    }
                 }
             } catch (err) {
                 console.error("Desa load error:", err);
@@ -1363,7 +1397,7 @@ export default function RoadRealizationInfrastrukturPage() {
             }
         };
         fetchDesa();
-    }, [selectedKec]);
+    }, [selectedKec, searchParams]);
 
     // Generate and refresh STA (Stasioning) start/end points on the staLayer
     const refreshStaLayer = useCallback(() => {
@@ -1588,9 +1622,15 @@ export default function RoadRealizationInfrastrukturPage() {
     useEffect(() => {
         if (selectedDesa) {
             loadDesaData(selectedDesa, activeTipe?.kode);
-            setSelectedTahunFilter("Semua");
+            const paramTahun = searchParams.get("tahun") || searchParams.get("tahun_anggaran");
+            if (paramTahun) {
+                selectedTahunFilterRef.current = String(paramTahun);
+                setSelectedTahunFilter(String(paramTahun));
+            } else {
+                setSelectedTahunFilter("Semua");
+            }
         }
-    }, [selectedDesa, activeTipe?.kode]);
+    }, [selectedDesa, activeTipe?.kode, searchParams]);
 
     // Force re-render reference layer when hoveredRoad changes
     useEffect(() => {
@@ -5869,6 +5909,17 @@ export default function RoadRealizationInfrastrukturPage() {
         const toastId = toast.loading("Mengirimkan hasil digitasi ke Operator Bappeda...");
         try {
             await infrastrukturService.submitSegmenToBappeda(activeTipe?.kode || 'jalan', segmentToKirim.id);
+
+            // Auto-submit parent report if currently in Draft/Revisi
+            if (activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi')) {
+                try {
+                    await monitoringLaporanService.submitLaporan(activeSnapshotLaporan.id);
+                    checkSnapshotLock(selectedDesa, selectedTahunFilter);
+                } catch (errLap) {
+                    console.warn("Auto-submit draft report warning:", errLap);
+                }
+            }
+
             toast.success("Hasil digitasi segmen berhasil dikirimkan ke Operator Bappeda!", { id: toastId });
             loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
             setIsKirimDialogOpen(false);
@@ -5878,6 +5929,20 @@ export default function RoadRealizationInfrastrukturPage() {
             toast.error(err?.message || "Gagal mengirim digitasi ke Bappeda", { id: toastId });
         } finally {
             setIsSubmittingKirim(false);
+        }
+    };
+
+    const handleSubmitLaporanRevisi = async () => {
+        if (!activeSnapshotLaporan?.id) return;
+        const toastId = toast.loading("Mengirimkan seluruh hasil revisi ke Bappeda...");
+        try {
+            await monitoringLaporanService.submitLaporan(activeSnapshotLaporan.id);
+            toast.success("Laporan Berita Acara & seluruh segmen berhasil dikirimkan ke Bappeda untuk diverifikasi!", { id: toastId });
+            checkSnapshotLock(selectedDesa, selectedTahunFilter);
+            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+        } catch (err: any) {
+            console.error("Gagal submit laporan revisi:", err);
+            toast.error(err?.message || "Gagal mengirimkan laporan revisi ke Bappeda", { id: toastId });
         }
     };
 
@@ -5922,20 +5987,45 @@ export default function RoadRealizationInfrastrukturPage() {
                 console.warn("Failed to patch desa pimpinan details:", errPatchDesa);
             }
 
-            const createRes = await monitoringLaporanService.createLaporan({
-                id_desa: printParams.desaId,
-                id_kecamatan: selectedKec,
-                tahun_anggaran: printParams.tahun,
-                plotting_id: (selectedPlottingId && selectedPlottingId !== 'none') ? selectedPlottingId : null,
-                nomor_ba: nomorBaInput.trim() || `050/XXX/412.302/${printParams.tahun}`,
-                sumber_dana: sumberDanaPrintInput,
-                rencana_panjang: rencanaPanjangInput,
-                status: "Submitted",
-                tipe_kode: selectedPrintTipeKodes.length === 0 ? "semua" : selectedPrintTipeKodes
-            });
+            let generatedNomorBA = "";
 
-            const generatedNomorBA = createRes?.result?.nomor_ba;
-            toast.success(`Snapshot Berita Acara (${generatedNomorBA || 'Resmi'}) berhasil disimpan!`, { id: toastId });
+            if (activeSnapshotLaporan?.id) {
+                // Re-snapshot: Update existing report record and re-sync physical targets
+                const updateRes = await monitoringLaporanService.patchLaporan(activeSnapshotLaporan.id, {
+                    id_desa: printParams.desaId,
+                    id_kecamatan: selectedKec,
+                    tahun_anggaran: printParams.tahun,
+                    plotting_id: (selectedPlottingId && selectedPlottingId !== 'none') ? selectedPlottingId : null,
+                    nomor_ba: nomorBaInput.trim() || activeSnapshotLaporan.nomor_ba || `050/XXX/412.302/${printParams.tahun}`,
+                    sumber_dana: sumberDanaPrintInput,
+                    rencana_panjang: rencanaPanjangInput,
+                    status: "Final",
+                    tipe_kode: selectedPrintTipeKodes.length === 0 ? "semua" : selectedPrintTipeKodes,
+                    sync_target: true
+                });
+                try {
+                    await monitoringLaporanService.syncTargetFisik(activeSnapshotLaporan.id);
+                } catch (e) {
+                    console.warn("Sync target fisik warning:", e);
+                }
+                generatedNomorBA = updateRes?.result?.nomor_ba || activeSnapshotLaporan.nomor_ba;
+            } else {
+                // First-time snapshot: Create new report record
+                const createRes = await monitoringLaporanService.createLaporan({
+                    id_desa: printParams.desaId,
+                    id_kecamatan: selectedKec,
+                    tahun_anggaran: printParams.tahun,
+                    plotting_id: (selectedPlottingId && selectedPlottingId !== 'none') ? selectedPlottingId : null,
+                    nomor_ba: nomorBaInput.trim() || `050/XXX/412.302/${printParams.tahun}`,
+                    sumber_dana: sumberDanaPrintInput,
+                    rencana_panjang: rencanaPanjangInput,
+                    status: "Final",
+                    tipe_kode: selectedPrintTipeKodes.length === 0 ? "semua" : selectedPrintTipeKodes
+                });
+                generatedNomorBA = createRes?.result?.nomor_ba;
+            }
+
+            toast.success(`Snapshot Berita Acara (${generatedNomorBA || 'Resmi'}) berhasil disimpan & disahkan!`, { id: toastId });
 
             // Refresh lock status immediately
             checkSnapshotLock(printParams.desaId, printParams.tahun);
@@ -5953,11 +6043,24 @@ export default function RoadRealizationInfrastrukturPage() {
             toast.error("Fitur Snapshot / Cetak Berita Acara hanya dapat diakses oleh Operator Bappeda dan Super Admin.");
             return;
         }
-        if (isYearLocked || activeSnapshotLaporan) {
+        if (isYearLocked && activeSnapshotLaporan?.status === 'Final') {
             const nomorBA = activeSnapshotLaporan?.nomor_ba ? ` (No. BA: ${activeSnapshotLaporan.nomor_ba})` : "";
-            toast.warning(`Snapshot digitasi TA ${tahun} untuk Desa ini sudah pernah dilakukan${nomorBA}. Snapshot hanya dapat dilakukan 1 kali.`);
+            toast.warning(`Berita Acara TA ${tahun} untuk Desa ini sudah FINAL${nomorBA}. Jika ingin merevisi atau snapshot ulang, silakan kembalikan ke status Draft terlebih dahulu.`);
             return;
         }
+
+        // Guard: Validasi bahwa seluruh segmen pada tahun ini telah diverifikasi & disetujui oleh Bappeda
+        const targetSegments = realisasiList.filter(r => (tahun === "Semua" || String(r.tahun_anggaran) === String(tahun)));
+        if (targetSegments.length === 0) {
+            toast.warning(`Tidak ada segmen realisasi yang terdata untuk TA ${tahun}.`);
+            return;
+        }
+        const unverifiedSegmens = targetSegments.filter(r => r.status_verifikasi !== 'terverifikasi');
+        if (unverifiedSegmens.length > 0) {
+            toast.warning(`Snapshot Berita Acara hanya dapat dilakukan jika seluruh segmen realisasi TA ${tahun} telah disetujui (Status: Terverifikasi). Masih terdapat ${unverifiedSegmens.length} segmen yang belum disetujui.`);
+            return;
+        }
+
         // Sync map filter and boundaries with selected print year
         selectedTahunFilterRef.current = tahun;
         setSelectedTahunFilter(tahun);
@@ -5968,7 +6071,7 @@ export default function RoadRealizationInfrastrukturPage() {
 
         const toastId = toast.loading("Mengambil data berita acara...");
         try {
-            const defaultSumberDana = "BKK";
+            const defaultSumberDana = activeSnapshotLaporan?.sumber_dana || "BKK";
             const currentTipe = activeTipe?.kode || "semua";
             setPrintTipeInput(currentTipe);
 
@@ -6022,7 +6125,10 @@ export default function RoadRealizationInfrastrukturPage() {
                 setPrintTotalLength(total);
                 setPrintParams({ desaId, tahun });
                 setSumberDanaPrintInput(defaultSumberDana);
-                setNomorBaInput(`050/XXX/412.302/${tahun}`);
+                setNomorBaInput(activeSnapshotLaporan?.nomor_ba || `050/XXX/412.302/${tahun}`);
+                if (activeSnapshotLaporan?.rencana_panjang) {
+                    setRencanaPanjangInput(activeSnapshotLaporan.rencana_panjang.toString());
+                }
                 setIsPrintDialogOpen(true);
                 toast.dismiss(toastId);
             } else {
@@ -6573,6 +6679,7 @@ export default function RoadRealizationInfrastrukturPage() {
                             setSegmentToKirim(segment);
                             setIsKirimDialogOpen(true);
                         }}
+                        onSubmitLaporanRevisi={handleSubmitLaporanRevisi}
                     />
 
                     {/* Right Panel: OpenLayers Map Component */}
@@ -6592,6 +6699,62 @@ export default function RoadRealizationInfrastrukturPage() {
                                     >
                                         <X className="size-3.5" />
                                     </button>
+                                </div>
+                            )}
+
+                            {/* Floating Active Digitizing HUD */}
+                            {isFormOpen && (
+                                <div className="pointer-events-auto absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-2.5 
+                                                bg-slate-900/90 dark:bg-slate-950/95 text-white text-xs font-semibold px-4 py-2 rounded-2xl shadow-2xl border border-white/10
+                                                backdrop-blur-md transition-all animate-in fade-in slide-in-from-top-3 z-30">
+                                    <div className="flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                                        <span className="font-bold text-emerald-400">
+                                            {digitizeMode === "otomatis"
+                                                ? "Auto-Trace Jalan"
+                                                : digitizeMode === "dimensions"
+                                                ? "Area Dimensi"
+                                                : isReshaping
+                                                ? "Ubah Bentuk Geometri"
+                                                : `Digitasi ${activeTipe?.nama || "Segmen"}`}
+                                        </span>
+                                    </div>
+
+                                    <div className="h-3.5 w-px bg-white/20" />
+
+                                    <div className="flex items-center gap-2 font-mono text-[11px]">
+                                        <span className="text-slate-300">
+                                            Panjang: <strong className="text-white font-bold">{drawnLength > 0 ? `${Number(drawnLength).toFixed(1)}m` : "0m"}</strong>
+                                        </span>
+                                        <span className="text-slate-500">•</span>
+                                        <span className="text-slate-300">
+                                            Node: <strong className="text-white font-bold">{coordsCount}</strong>
+                                        </span>
+                                    </div>
+
+                                    <div className="h-3.5 w-px bg-white/20" />
+
+                                    <div className="flex items-center gap-1.5">
+                                        {drawnCoords && drawnCoords.length >= 2 && (
+                                            <Button
+                                                size="sm"
+                                                onClick={() => setIsAttributeDialogOpen(true)}
+                                                className="h-7 px-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-lg shadow-sm gap-1 cursor-pointer"
+                                            >
+                                                <Check className="size-3" />
+                                                <span>Selesai</span>
+                                            </Button>
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={closeForm}
+                                            className="h-7 px-2 text-slate-300 hover:text-white hover:bg-white/10 text-[11px] rounded-lg gap-1 cursor-pointer"
+                                        >
+                                            <X className="size-3" />
+                                            <span>Batal</span>
+                                        </Button>
+                                    </div>
                                 </div>
                             )}
                         </div>

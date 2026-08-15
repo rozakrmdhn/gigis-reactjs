@@ -1,4 +1,4 @@
-﻿import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { monitoringLaporanService } from "~/features/monitoring/services/monitoring_laporan.service";
 
 export interface UseSnapshotLockReturn {
@@ -34,9 +34,16 @@ export function useSnapshotLock(
             });
             const reports = Array.isArray(res?.result) ? res.result : (Array.isArray(res?.data) ? res.data : []);
             if (reports.length > 0) {
-                const finalReports = reports.filter((lap: any) =>
-                    lap.status === "Final" || (queryTahun && String(lap.tahun_anggaran) === String(queryTahun))
-                );
+                // Filter reports matching the queried year if specific year is selected
+                const matchingReports = queryTahun
+                    ? reports.filter((lap: any) => String(lap.tahun_anggaran) === String(queryTahun))
+                    : reports;
+
+                // Only reports with status "Final" lock segments and year
+                const finalReports = matchingReports.filter((lap: any) => lap.status === "Final");
+                // Draft or in-revision reports
+                const draftReports = matchingReports.filter((lap: any) => lap.status === "Draft" || lap.status === "Revisi");
+
                 if (finalReports.length > 0) {
                     setIsYearLocked(true);
                     setActiveSnapshotLaporan(finalReports[0]);
@@ -60,9 +67,14 @@ export function useSnapshotLock(
                         });
                     }
                     setLockedSegmenIds(newLockedIds);
+                } else if (draftReports.length > 0) {
+                    // Draft / Revisi report exists: UNLOCK year and segments for revision, and keep activeSnapshotLaporan for banner
+                    setIsYearLocked(false);
+                    setActiveSnapshotLaporan(draftReports[0]);
+                    setLockedSegmenIds(new Set());
                 } else {
                     setIsYearLocked(false);
-                    setActiveSnapshotLaporan(null);
+                    setActiveSnapshotLaporan(matchingReports[0] || null);
                     setLockedSegmenIds(new Set());
                 }
             } else {

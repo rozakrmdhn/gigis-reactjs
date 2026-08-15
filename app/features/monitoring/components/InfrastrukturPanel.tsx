@@ -36,6 +36,7 @@ import {
     Send,
     RotateCcw,
     CheckCircle2,
+    Clock,
     AlertTriangle,
     XCircle,
     PanelLeftClose
@@ -55,11 +56,13 @@ import {
     SelectValue,
 } from "~/components/ui/select";
 import { Switch } from "~/components/ui/switch";
+import { Checkbox } from "~/components/ui/checkbox";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
+    DialogDescription,
     DialogFooter,
 } from "~/components/ui/dialog";
 import {
@@ -83,6 +86,7 @@ import { InfrastrukturCardSelector } from "./InfrastrukturCardSelector";
 import { InfrastrukturTipeCard } from "./InfrastrukturTipeCard";
 import type { RealisasiEntry } from "~/features/monitoring/services/realisasi.service";
 import { monitoringService } from "~/features/monitoring/services/monitoring.service";
+import { monitoringLaporanService } from "~/features/monitoring/services/monitoring_laporan.service";
 import {
     Tooltip,
     TooltipContent,
@@ -179,6 +183,7 @@ export interface InfrastrukturPanelProps {
     handleGenerateDimensionArea?: (panjangM: number, lebarM: number) => void;
     lockedSegmenIds?: Set<string>;
     onToggleSidebar?: () => void;
+    onSubmitLaporanRevisi?: () => void;
 }
 
 const getKondisiBadge = (kondisi: string) => {
@@ -285,7 +290,8 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
     setInputLebar,
     handleGenerateDimensionArea,
     lockedSegmenIds = new Set(),
-    onToggleSidebar
+    onToggleSidebar,
+    onSubmitLaporanRevisi
 }) => {
     const { user } = useAuth();
     const hookState = useInfrastrukturTipe();
@@ -295,15 +301,28 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
     const [kecOpen, setKecOpen] = React.useState(false);
     const [desaOpen, setDesaOpen] = React.useState(false);
 
-    // Helper: Determine if a specific segment ID is locked via monitoring_laporan_segmen or verifikasi_bappeda status
-    // Note: 'dikembalikan' is NOT locked — operator_kecamatan can edit the segment again
+    // Helper: Determine if a specific segment ID is locked
     const isSegmentLocked = (segmentId: string, segmentStatus?: string) => {
-        if (segmentStatus === 'verifikasi_bappeda' || segmentStatus === 'terverifikasi') {
+        // If the report for this year/village is in Draft or Revisi, UNLOCK all segments for operator kecamatan to revise!
+        if (activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi')) {
+            return false;
+        }
+
+        // If the year is locked via Final Berita Acara or segment is in lockedSegmenIds
+        if (isYearLocked || (lockedSegmenIds && lockedSegmenIds.has(segmentId.toString()))) {
             return true;
         }
-        if (lockedSegmenIds && lockedSegmenIds.size > 0) {
-            return lockedSegmenIds.has(segmentId.toString());
+
+        // If segment is submitted to Bappeda
+        if (segmentStatus === 'verifikasi_bappeda') {
+            return true;
         }
+
+        // If segment is terverifikasi
+        if (segmentStatus === 'terverifikasi') {
+            return true;
+        }
+
         return false;
     };
 
@@ -319,6 +338,7 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
     const [parsedCoordCount, setParsedCoordCount] = React.useState(0);
     const [isPrinting, setIsPrinting] = React.useState(false);
     const [isKirimDialogOpen, setIsKirimDialogOpen] = React.useState(false);
+    const [selectedKirimIds, setSelectedKirimIds] = React.useState<string[]>([]);
     const [isSubmittingKirim, setIsSubmittingKirim] = React.useState(false);
 
     // State for Bappeda Kembalikan Segmen ke Kecamatan Dialog
@@ -418,7 +438,7 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
         return listFilteredByYear.filter(r =>
             isBappedaOrAdminUser
                 ? r.status_verifikasi === 'verifikasi_bappeda'
-                : r.status_verifikasi === 'dikembalikan'
+                : (r.status_verifikasi === 'verifikasi_kecamatan' || !r.status_verifikasi) && !!r.catatan_verifikasi
         ).length;
     }, [listFilteredByYear, isBappedaOrAdminUser]);
 
@@ -743,43 +763,67 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                         </TooltipTrigger>
                         <TooltipContent>Zoom peta ke semua segmen berdasarkan filter tahun</TooltipContent>
                     </Tooltip>
-                    {(user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin') ? (
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={async () => {
-                                        if (selectedTahunFilter === "Semua") {
-                                            toast.warning("Pilih tahun anggaran terlebih dahulu.");
-                                            return;
-                                        }
-                                        setIsPrinting(true);
-                                        try {
-                                            await onPrintBeritaAcara(selectedDesa, selectedTahunFilter);
-                                        } finally {
-                                            setIsPrinting(false);
-                                        }
-                                    }}
-                                    disabled={isFormOpen || selectedTahunFilter === "Semua" || isPrinting || isYearLocked}
-                                    className="h-8 w-8 shrink-0 rounded-lg border-input bg-background hover:bg-violet-500/10 hover:text-violet-600 hover:border-violet-500/30 transition-colors disabled:opacity-40"
-                                >
-                                    {isPrinting ? (
-                                        <Loader2 className="size-3.5 animate-spin text-violet-600" />
-                                    ) : (
-                                        <Sparkles className="size-3.5 text-violet-600" />
-                                    )}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                                {selectedTahunFilter === "Semua"
-                                    ? "Pilih tahun anggaran untuk finalisasi digitasi"
-                                    : isYearLocked
-                                        ? `Snapshot TA ${selectedTahunFilter} telah dilakukan (Sudah Final)`
-                                        : `Finalisasi & Snapshot Digitasi TA ${selectedTahunFilter}`}
-                            </TooltipContent>
-                        </Tooltip>
-                    ) : (
+                    {(user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin') ? (() => {
+                        const hasSegments = listFilteredByYear.length > 0;
+                        const unverifiedCount = listFilteredByYear.filter(r => r.status_verifikasi !== 'terverifikasi').length;
+                        const allVerified = hasSegments && unverifiedCount === 0;
+                        const isFinalLocked = isYearLocked && activeSnapshotLaporan?.status === 'Final';
+
+                        return (
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={async () => {
+                                            if (selectedTahunFilter === "Semua") {
+                                                toast.warning("Pilih tahun anggaran terlebih dahulu.");
+                                                return;
+                                            }
+                                            if (!hasSegments) {
+                                                toast.warning(`Belum ada segmen realisasi pada TA ${selectedTahunFilter}.`);
+                                                return;
+                                            }
+                                            if (!allVerified) {
+                                                toast.warning(`Snapshot Berita Acara hanya dapat dilakukan jika seluruh segmen telah disetujui (Status: Terverifikasi). Masih terdapat ${unverifiedCount} segmen yang belum disetujui.`);
+                                                return;
+                                            }
+                                            setIsPrinting(true);
+                                            try {
+                                                await onPrintBeritaAcara(selectedDesa, selectedTahunFilter);
+                                            } finally {
+                                                setIsPrinting(false);
+                                            }
+                                        }}
+                                        disabled={isFormOpen || selectedTahunFilter === "Semua" || isPrinting || isFinalLocked}
+                                        className={cn(
+                                            "h-8 w-8 shrink-0 rounded-lg border-input bg-background transition-colors",
+                                            allVerified && !isFinalLocked
+                                                ? "hover:bg-emerald-500/10 text-emerald-600 hover:text-emerald-700 hover:border-emerald-500/30 border-emerald-500/30 shadow-xs"
+                                                : "hover:bg-violet-500/10 hover:text-violet-600 hover:border-violet-500/30"
+                                        )}
+                                    >
+                                        {isPrinting ? (
+                                            <Loader2 className="size-3.5 animate-spin text-violet-600" />
+                                        ) : (
+                                            <Sparkles className={cn("size-3.5", allVerified && !isFinalLocked ? "text-emerald-600 dark:text-emerald-400" : "text-violet-600")} />
+                                        )}
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    {selectedTahunFilter === "Semua"
+                                        ? "Pilih tahun anggaran untuk finalisasi digitasi"
+                                        : isFinalLocked
+                                            ? `Berita Acara TA ${selectedTahunFilter} telah disahkan (Final)`
+                                            : !hasSegments
+                                                ? `Belum ada segmen digitasi pada TA ${selectedTahunFilter}`
+                                                : !allVerified
+                                                    ? `Belum bisa snapshot: ${unverifiedCount} segmen belum disetujui (Status harus Terverifikasi)`
+                                                    : `Finalisasi & Snapshot Digitasi TA ${selectedTahunFilter} (Semua segmen sudah terverifikasi)`}
+                                </TooltipContent>
+                            </Tooltip>
+                        );
+                    })() : (
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
@@ -790,10 +834,12 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                             toast.warning("Silakan pilih wilayah desa terlebih dahulu.");
                                             return;
                                         }
-                                        if (listFilteredByYear.length === 0) {
-                                            toast.warning("Tidak ada segmen digitasi untuk dikirimkan.");
+                                        const toKirim = listFilteredByYear.filter(r => (r as any).status_verifikasi === 'verifikasi_kecamatan' || !(r as any).status_verifikasi);
+                                        if (toKirim.length === 0) {
+                                            toast.warning("Tidak ada segmen digitasi dengan status Belum Dikirim untuk dikirimkan.");
                                             return;
                                         }
+                                        setSelectedKirimIds(toKirim.map(s => s.id));
                                         setIsKirimDialogOpen(true);
                                     }}
                                     disabled={isFormOpen || !selectedDesa || listFilteredByYear.length === 0}
@@ -1124,6 +1170,130 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                             )}
                         </div>
 
+                        {/* Top-Down Assignment Banners & Progress Card */}
+                        {(() => {
+                            const isKecamatanUser = !isBappedaOrAdminUser;
+                            const isSpecificYear = selectedTahunFilter !== "Semua";
+                            const totalRealizedLength = listFilteredByYear.reduce((sum, r) => sum + (parseFloat(String(r.panjang_m || (r as any).panjang || 0)) || 0), 0);
+                            const targetLength = parseFloat(activeSnapshotLaporan?.rencana_panjang || 0);
+                            const percentage = targetLength > 0 ? ((totalRealizedLength / targetLength) * 100).toFixed(1) : "0.0";
+
+                            // Case 1: Kecamatan membuka peta tapi Bappeda belum membuat Draft Dokumen
+                            if (isKecamatanUser && isSpecificYear && !activeSnapshotLaporan) {
+                                return (
+                                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 dark:text-amber-200 text-xs space-y-1.5 mx-0.5 shadow-2xs">
+                                        <div className="flex items-center gap-1.5 font-bold text-[11px] text-amber-700 dark:text-amber-300">
+                                            <Lock className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+                                            <span>Akses Digitasi Belum Dibuka oleh Bappeda</span>
+                                        </div>
+                                        <p className="text-[10.5px] text-muted-foreground leading-relaxed font-sans">
+                                            Operator Bappeda belum menerbitkan <strong>Draft Dokumen Monitoring</strong> untuk wilayah ini pada <strong>TA {selectedTahunFilter}</strong>. Silakan hubungi Bappeda untuk inisiasi dokumen target fisik.
+                                        </p>
+                                    </div>
+                                );
+                            }
+
+                            // Case 2: Draft / Revisi Dokumen Aktif (Kecamatan aktif mendigitasi berbasis target Bappeda)
+                            if (activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi' || activeSnapshotLaporan.catatan_revisi)) {
+                                return (
+                                    <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-xs space-y-2.5 mx-0.5 shadow-2xs">
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-1.5 font-bold text-[11px] text-indigo-700 dark:text-indigo-300">
+                                                <Sparkles className="size-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
+                                                <span>Draft Penugasan Bappeda (TA {selectedTahunFilter})</span>
+                                            </div>
+                                            <span className="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 border border-indigo-500/30 uppercase tracking-wider">
+                                                {activeSnapshotLaporan.sumber_dana || "BKK"}
+                                            </span>
+                                        </div>
+
+                                        {/* Target Rencana vs Realisasi Progress */}
+                                        <div className="space-y-1.5 bg-background/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-500/20">
+                                            <div className="flex items-center justify-between text-[11px]">
+                                                <span className="text-muted-foreground">Target Rencana Bappeda:</span>
+                                                <span className="font-bold text-foreground">
+                                                    {targetLength > 0 ? `${targetLength.toLocaleString('id-ID')} m` : "Belum ditentukan"}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center justify-between text-[11px]">
+                                                <span className="text-muted-foreground">Realisasi Terdigitasi:</span>
+                                                <span className="font-extrabold text-indigo-600 dark:text-indigo-400">
+                                                    {totalRealizedLength.toLocaleString('id-ID', { maximumFractionDigits: 1 })} m
+                                                    {targetLength > 0 && (
+                                                        <span className="text-[9.5px] font-semibold text-muted-foreground ml-1">
+                                                            ({percentage}%)
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            {targetLength > 0 && (
+                                                <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1.5">
+                                                    <div
+                                                        className={cn(
+                                                            "h-full rounded-full transition-all duration-300",
+                                                            parseFloat(percentage) >= 100 ? "bg-emerald-500" : "bg-indigo-600"
+                                                        )}
+                                                        style={{ width: `${Math.min(100, parseFloat(percentage))}%` }}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {activeSnapshotLaporan.catatan_revisi && (
+                                            <p className="text-[10.5px] bg-amber-500/10 p-2 rounded-lg border border-amber-500/20 text-amber-900 dark:text-amber-200 font-sans leading-relaxed">
+                                                <strong className="font-semibold text-amber-600 dark:text-amber-400">Catatan Bappeda:</strong> {activeSnapshotLaporan.catatan_revisi}
+                                            </p>
+                                        )}
+
+                                        {isKecamatanUser && onSubmitLaporanRevisi && (
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={onSubmitLaporanRevisi}
+                                                disabled={listFilteredByYear.length === 0}
+                                                className="w-full h-7 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
+                                            >
+                                                <Send className="w-3 h-3" />
+                                                <span>Kirim Hasil Digitasi ke Bappeda</span>
+                                            </Button>
+                                        )}
+                                    </div>
+                                );
+                            }
+
+                            // Case 3: Dokumen Sedang Disubmit ke Bappeda
+                            if (activeSnapshotLaporan && activeSnapshotLaporan.status === 'Submitted') {
+                                return (
+                                    <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-900 dark:text-blue-200 text-xs space-y-1.5 mx-0.5 shadow-2xs">
+                                        <div className="flex items-center gap-1.5 font-bold text-[11px] text-blue-700 dark:text-blue-300">
+                                            <Clock className="size-3.5 shrink-0 text-blue-600 dark:text-blue-400" />
+                                            <span>Hasil Digitasi Sedang Diverifikasi oleh Bappeda</span>
+                                        </div>
+                                        <p className="text-[10.5px] text-muted-foreground leading-relaxed font-sans">
+                                            Dokumen dan {listFilteredByYear.length} segmen TA {selectedTahunFilter} telah dikirimkan ke Bappeda. Digitasi dikunci sementara menunggu verifikasi.
+                                        </p>
+                                    </div>
+                                );
+                            }
+
+                            // Case 4: Dokumen Berita Acara Final
+                            if (activeSnapshotLaporan && activeSnapshotLaporan.status === 'Final') {
+                                return (
+                                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-900 dark:text-emerald-200 text-xs space-y-1.5 mx-0.5 shadow-2xs">
+                                        <div className="flex items-center gap-1.5 font-bold text-[11px] text-emerald-700 dark:text-emerald-300">
+                                            <CheckCircle2 className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                                            <span>Berita Acara TA {selectedTahunFilter} Telah Final & Sah</span>
+                                        </div>
+                                        <p className="text-[10.5px] text-muted-foreground leading-relaxed font-sans">
+                                            No. BA: <strong>{activeSnapshotLaporan.nomor_ba || '-'}</strong>. Seluruh data segmen realisasi telah disahkan secara resmi.
+                                        </p>
+                                    </div>
+                                );
+                            }
+
+                            return null;
+                        })()}
+
                         {/* Tab filter status verifikasi */}
                         {listFilteredByYear.length > 0 && (
                             <div className="flex flex-wrap items-center gap-1 px-0.5 pt-1">
@@ -1169,16 +1339,45 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                         )}
 
                         {listFilteredByYear.length === 0 ? (
-                            <div className="text-center py-10 text-slate-500 space-y-3 bg-muted/10 rounded-2xl border border-dashed border-border/80 mx-2">
-                                <Database className="size-8 mx-auto text-muted-foreground/60" />
-                                <p className="text-xs font-medium">
-                                    {realisasiList.length === 0
-                                        ? "Belum ada data realisasi segmen di desa ini."
-                                        : `Belum ada data realisasi segmen untuk TA ${selectedTahunFilter}.`}
-                                </p>
+                            <div className="text-center py-10 px-4 text-slate-500 space-y-3 bg-muted/10 rounded-2xl border border-dashed border-border/80 mx-2">
+                                <div className="size-12 rounded-2xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto shadow-xs">
+                                    <Route className="size-6" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h4 className="text-xs font-bold text-foreground">
+                                        {realisasiList.length === 0
+                                            ? "Belum ada segmen digitasi"
+                                            : `Tidak ada data TA ${selectedTahunFilter}`}
+                                    </h4>
+                                    <p className="text-[11px] text-muted-foreground max-w-xs mx-auto leading-relaxed">
+                                        {realisasiList.length === 0
+                                            ? "Wilayah ini belum memiliki segmen realisasi. Mulai digitasi garis atau polygon pada peta sekarang."
+                                            : `Pilih tahun anggaran lain atau buat segmen baru untuk TA ${selectedTahunFilter}.`}
+                                    </p>
+                                </div>
+                                {selectedDesa && !isFormOpen && !(!isBappedaOrAdminUser && selectedTahunFilter !== "Semua" && !activeSnapshotLaporan) && !(activeSnapshotLaporan?.status === 'Submitted' || activeSnapshotLaporan?.status === 'Final' || isYearLocked) && (
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (!activeTipe) return;
+                                            if (activeTipe.kode === 'jalan_lingkungan') {
+                                                setTipeJalanDigitasi?.('lingkungan');
+                                            } else {
+                                                setTipeJalanDigitasi?.('poros');
+                                            }
+                                            setIsFormOpen?.(true);
+                                            startDraw?.();
+                                        }}
+                                        className="h-8 px-3.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg gap-1.5 shadow-sm mt-2 cursor-pointer"
+                                    >
+                                        <Plus className="size-3.5" />
+                                        <span>Mulai Digitasi {activeTipe?.nama || "Segmen"}</span>
+                                    </Button>
+                                )}
                             </div>
                         ) : listFilteredByVerifikasi.length === 0 ? (
-                            <div className="text-center py-8 text-slate-500 space-y-2 bg-muted/10 rounded-2xl border border-dashed border-border/80 mx-2">
+                            <div className="text-center py-8 px-4 text-slate-500 space-y-2 bg-muted/10 rounded-2xl border border-dashed border-border/80 mx-2">
                                 <Database className="size-7 mx-auto text-muted-foreground/60" />
                                 <p className="text-xs font-medium">Tidak ada segmen dengan status ini.</p>
                                 <button onClick={() => setFilterVerifikasi("all")} className="text-[10px] font-bold text-indigo-500 hover:underline cursor-pointer">Tampilkan semua</button>
@@ -1189,7 +1388,7 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                     <div
                                         key={r.id}
                                         className={cn(
-                                            "group p-2.5 border border-border/80 rounded-xl bg-card hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all duration-200 relative",
+                                            "group p-3 border border-border/80 rounded-xl bg-card hover:bg-indigo-500/5 dark:hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all duration-200 relative shadow-2xs",
                                             r.kondisi === "BAIK" && "border-l-[3px] border-l-emerald-500",
                                             r.kondisi === "SEDANG" && "border-l-[3px] border-l-sky-500",
                                             r.kondisi === "RUSAK_RINGAN" && "border-l-[3px] border-l-amber-500",
@@ -1201,31 +1400,48 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                         <div className="flex justify-between items-start gap-2">
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-1.5 flex-wrap">
-                                                    <h3 className="text-xs font-semibold leading-snug text-foreground/90 break-words" title={r.namobj || r.nama_jalan}>
+                                                    <h3
+                                                        onClick={() => zoomToSegment(r.id)}
+                                                        className="text-xs font-semibold leading-snug text-foreground/90 break-words cursor-pointer hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                                        title={`Klik untuk fokus peta: ${r.namobj || r.nama_jalan}`}
+                                                    >
                                                         {r.namobj || r.nama_jalan}
                                                     </h3>
                                                     {/* Verifikasi Status Badge */}
                                                     {(() => {
                                                         const sv = r.status_verifikasi;
-                                                        const badgeCfg: Record<string, { label: string; cls: string }> = {
-                                                            verifikasi_bappeda: { label: "Menunggu Verifikasi", cls: "bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700" },
-                                                            dikembalikan: { label: "Dikembalikan", cls: "bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700" },
-                                                            terverifikasi: { label: "Disetujui", cls: "bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700" },
-                                                        };
-                                                        const cfg = sv ? badgeCfg[sv] : null;
-                                                        if (!cfg) return null;
-                                                        return (
-                                                            <span className={cn("inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[8.5px] font-bold shrink-0", cfg.cls)}>
-                                                                {sv === 'verifikasi_bappeda' && <span>🕐</span>}
-                                                                {sv === 'dikembalikan' && <RotateCcw className="w-2 h-2" />}
-                                                                {sv === 'terverifikasi' && <CheckCircle2 className="w-2 h-2" />}
-                                                                {cfg.label}
-                                                            </span>
-                                                        );
+                                                        const hasCatatan = Boolean(r.catatan_verifikasi && r.catatan_verifikasi.trim());
+                                                        const isReturned = (sv === 'verifikasi_kecamatan' || !sv) && hasCatatan;
+
+                                                        if (isReturned) {
+                                                            return (
+                                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[8.5px] font-bold shrink-0 bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-700">
+                                                                    <RotateCcw className="w-2 h-2" />
+                                                                    Dikembalikan
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (sv === 'verifikasi_bappeda') {
+                                                            return (
+                                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[8.5px] font-bold shrink-0 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700">
+                                                                    <span>🕐</span>
+                                                                    Menunggu Verifikasi
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (sv === 'terverifikasi') {
+                                                            return (
+                                                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[8.5px] font-bold shrink-0 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-300 dark:border-emerald-700">
+                                                                    <CheckCircle2 className="w-2 h-2" />
+                                                                    Disetujui
+                                                                </span>
+                                                            );
+                                                        }
+                                                        return null;
                                                     })()}
                                                     {(() => {
-                                                         const isBoundToBa = !!(lockedSegmenIds && lockedSegmenIds.size > 0 && lockedSegmenIds.has(r.id.toString()));
-                                                         const isBaFinal = (r as any).status_verifikasi === "terverifikasi" && isBoundToBa;
+                                                         const isBoundToBa = isYearLocked && !!(lockedSegmenIds && lockedSegmenIds.size > 0 && lockedSegmenIds.has(r.id.toString()));
+                                                         const isBaFinal = isYearLocked && (r as any).status_verifikasi === "terverifikasi" && isBoundToBa;
                                                          const isLocked = isSegmentLocked(r.id.toString(), (r as any).status_verifikasi);
 
                                                          if (!isLocked) return null;
@@ -1286,41 +1502,72 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                              )}>
                                                  {r.status_jalan || "Status: —"}
                                              </span>
-                                             {isBappedaOrAdminUser && (
-                                                 <>
-                                                     <span className="text-border">|</span>
-                                                     <span className={cn(
-                                                         "font-semibold px-1 rounded text-[8.5px] uppercase font-sans",
-                                                         isMasterConnected(r)
-                                                             ? "bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
-                                                             : "bg-emerald-500/10 text-emerald-700 dark:text-emerald-450"
-                                                     )}>
-                                                         {isMasterConnected(r) ? `Master: ${r.snapped_road_id || 'Terikat'}` : "Segmen Non-Master"}
-                                                     </span>
-                                                 </>
-                                             )}
+                                             {/* Badge Master Poros / No. Ruas / Di Luar Basis Data */}
+                                             {(() => {
+                                                 const isMaster = isMasterConnected(r);
+                                                 const rawRuasId = (r.snapped_road_id && r.snapped_road_id !== "0" && r.snapped_road_id !== "Terikat")
+                                                     ? r.snapped_road_id
+                                                     : (r as any).kode_ruas || (r as any).parent_id || (r.atribut as any)?.kode_ruas || (r.atribut as any)?.no_ruas;
+
+                                                 const ruasBadgeLabel = isMaster
+                                                     ? (rawRuasId && rawRuasId !== "0"
+                                                         ? `No. ${rawRuasId.toString().replace(/^(no\.?|ruas)\s*/i, '')}`
+                                                         : "Jalan Poros")
+                                                     : "Di Luar Basis Data";
+
+                                                 return (
+                                                     <>
+                                                         <span className="text-border">|</span>
+                                                         <Tooltip>
+                                                             <TooltipTrigger asChild>
+                                                                 <span className={cn(
+                                                                     "font-semibold px-1.5 py-0.5 rounded text-[8.5px] uppercase font-sans inline-flex items-center gap-1 border cursor-help transition-colors",
+                                                                     isMaster
+                                                                         ? "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/25"
+                                                                         : "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20"
+                                                                 )}>
+                                                                     <span className={cn(
+                                                                         "w-1.5 h-1.5 rounded-full shrink-0",
+                                                                         isMaster ? "bg-indigo-500" : "bg-slate-400"
+                                                                     )} />
+                                                                     <span>{ruasBadgeLabel}</span>
+                                                                 </span>
+                                                             </TooltipTrigger>
+                                                             <TooltipContent className="text-xs">
+                                                                 {isMaster
+                                                                     ? `Terdaftar dalam Master Jalan Poros (${ruasBadgeLabel})`
+                                                                     : "Segmen berada di luar basis data Master Jalan Poros"}
+                                                             </TooltipContent>
+                                                         </Tooltip>
+                                                     </>
+                                                 );
+                                             })()}
                                              <span className="text-border">|</span>
                                              <span className="text-slate-400 dark:text-slate-500">
                                                  TA {r.tahun_anggaran}
                                              </span>
                                          </div>
 
-                                         {/* Catatan Verifikasi Bappeda */}
-                                         {r.status_verifikasi === 'dikembalikan' && r.catatan_verifikasi && (
-                                             <div className="mt-2 p-2 rounded-lg bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-[10px] text-rose-900 dark:text-rose-200 font-sans flex items-start gap-1.5">
-                                                 <RotateCcw className="size-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                         {/* Catatan Verifikasi / Pengembalian Bappeda */}
+                                         {r.catatan_verifikasi && (
+                                             <div className={cn(
+                                                 "mt-2 p-2 rounded-lg border text-[10px] font-sans flex items-start gap-1.5",
+                                                 (r.status_verifikasi === 'verifikasi_kecamatan' || !r.status_verifikasi)
+                                                     ? "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800 text-rose-900 dark:text-rose-200"
+                                                     : "bg-amber-500/10 border-amber-500/25 text-amber-900 dark:text-amber-300"
+                                             )}>
+                                                 {(r.status_verifikasi === 'verifikasi_kecamatan' || !r.status_verifikasi) ? (
+                                                     <RotateCcw className="size-3.5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                                 ) : (
+                                                     <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                                 )}
                                                  <div>
-                                                     <span className="font-bold block mb-0.5">Catatan Pengembalian dari Bappeda:</span>
+                                                     <span className="font-bold block mb-0.5">
+                                                         {(r.status_verifikasi === 'verifikasi_kecamatan' || !r.status_verifikasi)
+                                                             ? "Catatan Pengembalian dari Bappeda:"
+                                                             : "Catatan Verifikasi Bappeda:"}
+                                                     </span>
                                                      <span className="opacity-90 block font-mono text-[9.5px] leading-relaxed">{r.catatan_verifikasi}</span>
-                                                 </div>
-                                             </div>
-                                         )}
-                                         {r.status_verifikasi !== 'dikembalikan' && r.catatan_verifikasi && (
-                                             <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] text-amber-900 dark:text-amber-300 font-sans flex items-start gap-1.5">
-                                                 <AlertTriangle className="size-3.5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                                 <div>
-                                                     <span className="font-bold block">Catatan Verifikasi Bappeda:</span>
-                                                     <span className="opacity-90 block font-mono text-[9.5px]">{r.catatan_verifikasi}</span>
                                                  </div>
                                              </div>
                                          )}
@@ -1333,12 +1580,12 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                                          onClick={() => zoomToSegment(r.id)}
                                                          variant="ghost"
                                                          size="icon"
-                                                         className="h-6 w-6 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors"
+                                                         className="h-7 w-7 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors"
                                                      >
-                                                         <Maximize2 className="size-3" />
+                                                         <Maximize2 className="size-3.5" />
                                                      </Button>
                                                  </TooltipTrigger>
-                                                 <TooltipContent>Zoom ke Segmen</TooltipContent>
+                                                 <TooltipContent>Zoom & Sorot Segmen di Peta</TooltipContent>
                                              </Tooltip>
                                              {(() => {
                                                   const isBappedaOrAdmin = user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin';
@@ -1350,10 +1597,10 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                                                   onClick={() => handleEditAttributesOnly(r)}
                                                                   variant="ghost"
                                                                   size="icon"
-                                                                  className="h-6 w-6 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-md transition-colors"
+                                                                  className="h-7 w-7 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 rounded-lg transition-colors"
                                                                   disabled={!canEditAttributes}
                                                               >
-                                                                  <FileEdit className="size-3" />
+                                                                  <FileEdit className="size-3.5" />
                                                               </Button>
                                                           </TooltipTrigger>
                                                           <TooltipContent>
@@ -1370,9 +1617,9 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                                                  onClick={() => handleEditGeometryAndAttributes(r)}
                                                                  variant="ghost"
                                                                  size="icon"
-                                                                 className="h-6 w-6 text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-md transition-colors"
+                                                                 className="h-7 w-7 text-blue-600 dark:text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg transition-colors"
                                                              >
-                                                                 <PinIcon className="size-3" />
+                                                                 <PinIcon className="size-3.5" />
                                                              </Button>
                                                          </TooltipTrigger>
                                                          <TooltipContent>Edit Geometri & Atribut</TooltipContent>
@@ -1383,12 +1630,12 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                                                  onClick={() => handleSplitSegmen && handleSplitSegmen(r)}
                                                                  variant="ghost"
                                                                  size="icon"
-                                                                 className="h-6 w-6 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 rounded-md transition-colors"
+                                                                 className="h-7 w-7 text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 rounded-lg transition-colors"
                                                              >
-                                                                 <Scissors className="size-3" />
+                                                                 <Scissors className="size-3.5" />
                                                              </Button>
                                                          </TooltipTrigger>
-                                                         <TooltipContent>Split Segmen</TooltipContent>
+                                                         <TooltipContent>Split / Potong Segmen</TooltipContent>
                                                      </Tooltip>
                                                      {user?.role === 'operator_kecamatan' && (
                                                          <Tooltip>
@@ -1397,7 +1644,7 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                                                      onClick={() => onKirimDigitasi && onKirimDigitasi(r)}
                                                                      variant="ghost"
                                                                      size="sm"
-                                                                     className="h-6 px-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-md transition-colors gap-1"
+                                                                     className="h-7 px-2 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 hover:bg-indigo-500/20 rounded-lg transition-colors gap-1"
                                                                  >
                                                                      <Send className="size-3" />
                                                                      <span>Kirim Bappeda</span>
@@ -1413,9 +1660,9 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                                                  onClick={() => handleDelete(r.id)}
                                                                  variant="ghost"
                                                                  size="icon"
-                                                                 className="h-6 w-6 text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-md transition-colors"
+                                                                 className="h-7 w-7 text-rose-600 dark:text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 rounded-lg transition-colors"
                                                              >
-                                                                 <Trash2 className="size-3" />
+                                                                 <Trash2 className="size-3.5" />
                                                              </Button>
                                                          </TooltipTrigger>
                                                          <TooltipContent>Hapus Segmen</TooltipContent>
@@ -1565,149 +1812,316 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                         <span>Batal Digitasi</span>
                     </Button>
                 </div>
-            ) : !activeTipe ? null : (
-                <div className="p-4 border-t border-border bg-card sticky bottom-0 z-20">
-                    <Button
-                        onClick={() => {
-                            if (activeTipe.kode === 'jalan_lingkungan') {
-                                setTipeJalanDigitasi('lingkungan');
-                            } else {
-                                setTipeJalanDigitasi('poros');
-                            }
-                            setIsFormOpen(true);
-                            startDraw();
-                        }}
-                        style={{
-                            backgroundColor: activeTipe?.warna || undefined
-                        }}
-                        className={cn(
-                            "w-full h-9 text-xs font-bold rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-all text-white",
-                            !activeTipe?.warna && "bg-emerald-600 hover:bg-emerald-700"
-                        )}
-                        disabled={!selectedDesa}
-                    >
-                        <Plus className="size-3.5" />
-                        <span>Mulai Digitasi {activeTipe?.nama || "Segmen Baru"}</span>
-                    </Button>
-                </div>
-            )}
+            ) : !activeTipe ? null : (() => {
+                const isKecamatanUser = !isBappedaOrAdminUser;
+                const noDraftLaporan = isKecamatanUser && selectedTahunFilter !== "Semua" && !activeSnapshotLaporan;
+                const isSubmittedLocked = isKecamatanUser && activeSnapshotLaporan?.status === 'Submitted';
+                const isFinalLocked = isYearLocked || (activeSnapshotLaporan?.status === 'Final');
+                const isTahunSemua = selectedTahunFilter === "Semua";
+
+                let disabledReason = "";
+                if (!selectedDesa) disabledReason = "Pilih Desa terlebih dahulu";
+                else if (isTahunSemua) disabledReason = "Pilih Tahun Anggaran untuk Digitasi";
+                else if (noDraftLaporan) disabledReason = `Draft Penugasan TA ${selectedTahunFilter} belum diterbitkan Bappeda`;
+                else if (isSubmittedLocked) disabledReason = "Sedang diverifikasi Bappeda (Terkunci)";
+                else if (isFinalLocked) disabledReason = `Berita Acara TA ${selectedTahunFilter} telah Final (Terkunci)`;
+
+                const isDisabled = !selectedDesa || isTahunSemua || noDraftLaporan || isSubmittedLocked || isFinalLocked;
+
+                return (
+                    <div className="p-4 border-t border-border bg-card sticky bottom-0 z-20">
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <div>
+                                    <Button
+                                        onClick={() => {
+                                            if (isDisabled) return;
+                                            if (activeTipe.kode === 'jalan_lingkungan') {
+                                                setTipeJalanDigitasi('lingkungan');
+                                            } else {
+                                                setTipeJalanDigitasi('poros');
+                                            }
+                                            setIsFormOpen(true);
+                                            startDraw();
+                                        }}
+                                        style={{
+                                            backgroundColor: !isDisabled && activeTipe?.warna ? activeTipe.warna : undefined
+                                        }}
+                                        className={cn(
+                                            "w-full h-9 text-xs font-bold rounded-lg shadow-md flex items-center justify-center gap-1.5 transition-all text-white",
+                                            !isDisabled && !activeTipe?.warna && "bg-emerald-600 hover:bg-emerald-700",
+                                            isDisabled && "bg-muted text-muted-foreground hover:bg-muted cursor-not-allowed shadow-none border border-border"
+                                        )}
+                                        disabled={isDisabled}
+                                    >
+                                        {isDisabled ? (
+                                            <Lock className="size-3.5 shrink-0" />
+                                        ) : (
+                                            <Plus className="size-3.5 shrink-0" />
+                                        )}
+                                        <span className="truncate">
+                                            {isDisabled 
+                                                ? disabledReason
+                                                : `Mulai Digitasi ${activeTipe?.nama || "Segmen Baru"}`}
+                                        </span>
+                                    </Button>
+                                </div>
+                            </TooltipTrigger>
+                            {disabledReason && (
+                                <TooltipContent>
+                                    <span>{disabledReason}</span>
+                                </TooltipContent>
+                            )}
+                        </Tooltip>
+                    </div>
+                );
+            })()}
 
             {/* Dialog Konfirmasi & Daftar Segmen yang Dikirim ke Bappeda */}
             <Dialog open={isKirimDialogOpen} onOpenChange={setIsKirimDialogOpen}>
-                <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col overflow-hidden p-0 gap-0 border dark:border-slate-800 bg-white dark:bg-slate-950">
-                    <DialogHeader className="px-6 py-4 border-b border-border bg-slate-50/50 dark:bg-slate-900/50">
-                        <DialogTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                            <Send className="size-4 text-indigo-600 dark:text-indigo-400" />
-                            <span>Kirim Hasil Digitasi Segmen ke Operator Bappeda</span>
-                        </DialogTitle>
+                <DialogContent className="sm:max-w-2xl bg-background border-border rounded-2xl shadow-2xl p-0 overflow-hidden">
+                    {/* Header */}
+                    <DialogHeader className="px-6 py-4 border-b border-border/80 bg-indigo-500/5 dark:bg-indigo-950/20">
+                        <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-indigo-500/20">
+                                <Send className="w-5 h-5" />
+                            </div>
+                            <div>
+                                <DialogTitle className="text-base font-bold text-foreground">
+                                    Kirim Geometri Segmen
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                    Konfirmasi pengiriman hasil digitasi segmen ke Operator Bappeda
+                                </DialogDescription>
+                            </div>
+                        </div>
                     </DialogHeader>
 
-                    <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                    {/* Body Content */}
+                    <div className="px-6 py-4 space-y-3.5 text-xs max-h-[70vh] flex flex-col">
                         {(() => {
                             const listToKirim = listFilteredByYear.filter(r => (r as any).status_verifikasi === 'verifikasi_kecamatan' || !(r as any).status_verifikasi);
+                            const currentDesaName = desaList.find(d => d.id.toString() === selectedDesa)?.nama_desa || "Desa";
+                            const currentKecName = kecamatanList.find(k => k.id.toString() === selectedKec)?.nama_kecamatan || "Kecamatan";
+                            const totalPanjang = listToKirim.reduce((acc, r) => acc + (r.panjang_m || 0), 0);
 
                             return (
                                 <>
-                                    {/* Info Summary Banner */}
-                                    <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl text-xs space-y-1">
-                                        <div className="flex items-center justify-between">
-                                            <span className="font-bold text-indigo-900 dark:text-indigo-200">
-                                                Target Wilayah: Desa {desaList.find(d => d.id.toString() === selectedDesa)?.nama_desa || "Desa"} (Kec. {kecamatanList.find(k => k.id.toString() === selectedKec)?.nama_kecamatan || "Kecamatan"})
-                                            </span>
-                                            <span className="font-bold text-indigo-700 dark:text-indigo-300">
-                                                TA {selectedTahunFilter}
-                                            </span>
+                                    {/* Notice Box with Target & Total Summary */}
+                                    <div className="p-3.5 rounded-2xl bg-indigo-50/80 dark:bg-indigo-950/30 border border-indigo-200/80 dark:border-indigo-800/50 flex items-start gap-2.5 text-indigo-900 dark:text-indigo-200">
+                                        <AlertCircle className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0 mt-0.5" />
+                                        <div className="space-y-1.5 flex-1">
+                                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                                <p className="font-bold text-xs">Informasi Pengiriman Data Geometri</p>
+                                                <div className="flex items-center gap-1.5 font-bold text-[11px] text-indigo-700 dark:text-indigo-300">
+                                                    <span>TA {selectedTahunFilter}</span>
+                                                    <span>•</span>
+                                                    <span>{currentDesaName} ({currentKecName})</span>
+                                                </div>
+                                            </div>
+                                            <p className="text-[11px] leading-relaxed opacity-90">
+                                                Setelah dikirim, data geometri segmen akan masuk ke daftar verifikasi Operator Bappeda dan status segmen akan diperbarui secara otomatis.
+                                            </p>
                                         </div>
-                                        <p className="text-slate-600 dark:text-slate-400 text-[11px]">
-                                            {listToKirim.length > 0 ? (
-                                                <>Sebanyak <strong>{listToKirim.length} segmen</strong> dengan status <em>Belum Dikirim</em> (total panjang <strong>{listToKirim.reduce((s, r) => s + (r.panjang_m || 0), 0).toFixed(2)} m</strong>) akan dikirimkan ke Operator Bappeda.</>
-                                            ) : (
-                                                <span className="text-amber-600 dark:text-amber-400 font-semibold">Tidak ada segmen dengan status <em>Belum Dikirim</em> pada wilayah/tahun ini. Semua segmen sudah dikirim atau diverifikasi.</span>
-                                            )}
-                                        </p>
                                     </div>
 
-                                    {/* List Table of Segments to be sent */}
-                                    <div className="border border-border rounded-xl overflow-hidden text-xs">
-                                        <table className="w-full text-left border-collapse">
-                                            <thead className="bg-slate-100 dark:bg-slate-900 font-bold border-b border-border text-slate-700 dark:text-slate-300">
-                                                <tr>
-                                                    <th className="p-2.5 text-center w-10">No</th>
-                                                    <th className="p-2.5">Nama Objek / Segmen</th>
-                                                    <th className="p-2.5 text-right">Panjang</th>
-                                                    <th className="p-2.5 text-center">Perkerasan</th>
-                                                    <th className="p-2.5 text-center">Kondisi</th>
-                                                    <th className="p-2.5 text-center">Status Verifikasi</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border/60 font-mono text-[11px]">
-                                                {listToKirim.length === 0 ? (
+                                    {/* Tabular List of Segments */}
+                                    <div className="border border-border/80 rounded-xl overflow-hidden shadow-xs bg-card flex-1 flex flex-col min-h-0">
+                                        <div className="overflow-y-auto max-h-[280px]">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead className="bg-muted/60 dark:bg-muted/20 font-bold border-b border-border/70 text-muted-foreground text-[11px] sticky top-0 backdrop-blur-xs z-10">
                                                     <tr>
-                                                        <td colSpan={6} className="p-4 text-center text-muted-foreground font-sans italic">
-                                                            Tidak ada segmen berstatus Belum Dikirim
-                                                        </td>
+                                                        <th className="p-2.5 text-center w-10">
+                                                            <Checkbox
+                                                                checked={listToKirim.length > 0 && selectedKirimIds.length === listToKirim.length}
+                                                                onCheckedChange={(checked) => {
+                                                                    if (checked) {
+                                                                        setSelectedKirimIds(listToKirim.map(s => s.id));
+                                                                    } else {
+                                                                        setSelectedKirimIds([]);
+                                                                    }
+                                                                }}
+                                                                aria-label="Pilih semua segmen"
+                                                                disabled={listToKirim.length === 0}
+                                                            />
+                                                        </th>
+                                                        <th className="p-2.5 text-center w-8">No</th>
+                                                        <th className="p-2.5">Nama Objek / Segmen</th>
+                                                        <th className="p-2.5 text-center">Tipe</th>
+                                                        <th className="p-2.5 text-right">Panjang</th>
+                                                        <th className="p-2.5 text-center">Perkerasan</th>
+                                                        <th className="p-2.5 text-center">Kondisi</th>
+                                                        <th className="p-2.5 text-center">Status</th>
                                                     </tr>
-                                                ) : (
-                                                    listToKirim.map((r, idx) => (
-                                                        <tr key={r.id} className="hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                                                            <td className="p-2.5 text-center font-bold text-muted-foreground">{idx + 1}</td>
-                                                            <td className="p-2.5 font-bold font-sans text-slate-900 dark:text-slate-100">{r.namobj || r.nama_jalan}</td>
-                                                            <td className="p-2.5 text-right font-bold text-emerald-600 dark:text-emerald-400">{parseFloat(r.panjang_m.toString()).toFixed(2)}m</td>
-                                                            <td className="p-2.5 text-center font-sans">{r.perkerasan || "—"}</td>
-                                                            <td className="p-2.5 text-center font-sans capitalize">{r.kondisi || "Baik"}</td>
-                                                            <td className="p-2.5 text-center font-sans">
-                                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-amber-500/10 text-amber-700 dark:text-amber-300 border-amber-500/25">
-                                                                    Belum Dikirim
-                                                                </span>
+                                                </thead>
+                                                <tbody className="divide-y divide-border/60 text-[11px]">
+                                                    {listToKirim.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={8} className="p-6 text-center text-muted-foreground italic">
+                                                                Tidak ada segmen dengan status <span className="font-semibold text-foreground">Belum Dikirim</span> pada wilayah ini.
                                                             </td>
                                                         </tr>
-                                                    ))
-                                                )}
-                                            </tbody>
-                                        </table>
+                                                    ) : (
+                                                        listToKirim.map((r, idx) => {
+                                                            const isChecked = selectedKirimIds.includes(r.id);
+                                                            const tipeItem = tipes?.find(t => t.kode === (r as any).tipe_kode || t.kode === activeTipe?.kode) || activeTipe;
+                                                            const tipeLabel = (r as any).tipe_nama || tipeItem?.nama || "Jalan Desa";
+                                                            const tipeColor = tipeItem?.warna || "#6366f1";
+                                                            const sv = (r as any).status_verifikasi;
+
+                                                            return (
+                                                                <tr
+                                                                    key={r.id}
+                                                                    onClick={() => {
+                                                                        if (isChecked) {
+                                                                            setSelectedKirimIds(prev => prev.filter(id => id !== r.id));
+                                                                        } else {
+                                                                            setSelectedKirimIds(prev => [...prev, r.id]);
+                                                                        }
+                                                                    }}
+                                                                    className={cn(
+                                                                        "transition-colors cursor-pointer",
+                                                                        isChecked
+                                                                            ? "bg-indigo-50/60 dark:bg-indigo-950/30 hover:bg-indigo-50/80 dark:hover:bg-indigo-950/40"
+                                                                            : "hover:bg-muted/40"
+                                                                    )}
+                                                                >
+                                                                    <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                                                        <Checkbox
+                                                                            checked={isChecked}
+                                                                            onCheckedChange={(checked) => {
+                                                                                if (checked) {
+                                                                                    setSelectedKirimIds(prev => [...prev, r.id]);
+                                                                                } else {
+                                                                                    setSelectedKirimIds(prev => prev.filter(id => id !== r.id));
+                                                                                }
+                                                                            }}
+                                                                            aria-label={`Pilih segmen ${r.namobj || r.nama_jalan}`}
+                                                                        />
+                                                                    </td>
+                                                                    <td className="p-2.5 text-center font-bold text-muted-foreground">{idx + 1}</td>
+                                                                    <td className="p-2.5 font-bold text-foreground max-w-[180px] truncate" title={r.namobj || r.nama_jalan || "Tanpa Nama Segmen"}>
+                                                                        {r.namobj || r.nama_jalan || "Tanpa Nama Segmen"}
+                                                                    </td>
+                                                                    <td className="p-2.5 text-center">
+                                                                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-50/80 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/60 shadow-2xs">
+                                                                            <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: tipeColor }} />
+                                                                            <span>{tipeLabel}</span>
+                                                                        </span>
+                                                                    </td>
+                                                                    <td className="p-2.5 text-right font-mono font-bold text-foreground">
+                                                                        {parseFloat((r.panjang_m || 0).toString()).toFixed(1)}m
+                                                                    </td>
+                                                                    <td className="p-2.5 text-center text-muted-foreground font-sans">
+                                                                        {r.perkerasan || "—"}
+                                                                    </td>
+                                                                    <td className="p-2.5 text-center capitalize font-medium text-foreground">
+                                                                        {r.kondisi || "Baik"}
+                                                                    </td>
+                                                                    <td className="p-2.5 text-center">
+                                                                        {sv === 'terverifikasi' ? (
+                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/25">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                                                                                Terverifikasi
+                                                                            </span>
+                                                                        ) : sv === 'verifikasi_bappeda' ? (
+                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/25">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500 shrink-0" />
+                                                                                Terkirim
+                                                                            </span>
+                                                                        ) : (sv === 'verifikasi_kecamatan' || !sv) && r.catatan_verifikasi ? (
+                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/25">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-rose-500 shrink-0" />
+                                                                                Dikembalikan
+                                                                            </span>
+                                                                        ) : (
+                                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/25">
+                                                                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+                                                                                Belum Dikirim
+                                                                            </span>
+                                                                        )}
+                                                                    </td>
+                                                                </tr>
+                                                            );
+                                                        })
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Table Footer Summary Bar */}
+                                        {listToKirim.length > 0 && (() => {
+                                            const selectedSegmens = listToKirim.filter(r => selectedKirimIds.includes(r.id));
+                                            const selectedPanjang = selectedSegmens.reduce((acc, r) => acc + (r.panjang_m || 0), 0);
+                                            return (
+                                                <div className="bg-muted/40 border-t border-border/80 px-3.5 py-2 flex items-center justify-between text-[11px] font-medium text-muted-foreground">
+                                                    <span>
+                                                        Dipilih: <strong className="text-indigo-600 dark:text-indigo-400 font-bold">{selectedKirimIds.length}</strong> dari {listToKirim.length} segmen
+                                                    </span>
+                                                    <span className="font-mono">
+                                                        Panjang Dipilih: <strong className="text-foreground font-bold">{selectedPanjang.toFixed(2)} meter</strong>
+                                                    </span>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </>
                             );
                         })()}
                     </div>
 
-                    <DialogFooter className="px-6 py-4 border-t border-border bg-slate-50/50 dark:bg-slate-900/50 flex gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setIsKirimDialogOpen(false)} disabled={isSubmittingKirim} className="h-9 text-xs">
+                    {/* Footer Actions */}
+                    <DialogFooter className="px-6 py-4 border-t border-border/80 bg-muted/20 flex flex-row gap-2 justify-end">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => setIsKirimDialogOpen(false)}
+                            disabled={isSubmittingKirim}
+                            className="h-9 px-4 text-xs font-semibold rounded-xl cursor-pointer"
+                        >
                             Batal
                         </Button>
-                        {(() => {
-                            const listToKirim = listFilteredByYear.filter(r => (r as any).status_verifikasi === 'verifikasi_kecamatan' || !(r as any).status_verifikasi);
-                            return (
-                                <Button
-                                    onClick={async () => {
-                                        setIsSubmittingKirim(true);
-                                        const toastId = toast.loading("Mengirimkan digitasi segmen ke Operator Bappeda...");
-                                        try {
-                                            const segIds = listToKirim.map(s => s.id);
-                                            const tipeKode = activeTipe?.kode || 'jalan';
-                                            await monitoringService.batchSubmitSegmenToBappeda(tipeKode, {
-                                                ids: segIds,
-                                                id_desa: selectedDesa,
-                                                tahun_pembangunan: selectedTahunFilter !== "Semua" ? selectedTahunFilter : undefined
-                                            });
-                                            toast.success(`${listToKirim.length} segmen digitasi berhasil dikirimkan ke Operator Bappeda!`, { id: toastId });
-                                            setIsKirimDialogOpen(false);
-                                            if (onRefreshSegments) onRefreshSegments();
-                                        } catch (err: any) {
-                                            console.error("Gagal mengirim ke Bappeda:", err);
-                                            toast.error(err?.message || "Gagal mengirimkan digitasi ke Bappeda", { id: toastId });
-                                        } finally {
-                                            setIsSubmittingKirim(false);
-                                        }
-                                    }}
-                                    disabled={isSubmittingKirim || listToKirim.length === 0}
-                                    className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2 shadow-md cursor-pointer disabled:opacity-50"
-                                >
-                                    {isSubmittingKirim ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}
-                                    <span>Konfirmasi Kirim Ke Bappeda</span>
-                                </Button>
-                            );
-                        })()}
+                        <Button
+                            type="button"
+                            onClick={async () => {
+                                if (selectedKirimIds.length === 0) {
+                                    toast.warning("Pilih minimal 1 segmen untuk dikirimkan.");
+                                    return;
+                                }
+                                setIsSubmittingKirim(true);
+                                const toastId = toast.loading(`Mengirimkan ${selectedKirimIds.length} segmen ke Operator Bappeda...`);
+                                try {
+                                    const tipeKode = activeTipe?.kode || 'jalan';
+                                    await monitoringService.batchSubmitSegmenToBappeda(tipeKode, {
+                                        ids: selectedKirimIds,
+                                        id_desa: selectedDesa,
+                                        tahun_pembangunan: selectedTahunFilter !== "Semua" ? selectedTahunFilter : undefined
+                                    });
+                                    toast.success(`${selectedKirimIds.length} segmen digitasi berhasil dikirimkan ke Operator Bappeda!`, { id: toastId });
+                                    setIsKirimDialogOpen(false);
+                                    if (onRefreshSegments) onRefreshSegments();
+                                } catch (err: any) {
+                                    console.error("Gagal mengirim ke Bappeda:", err);
+                                    toast.error(err?.message || "Gagal mengirimkan digitasi ke Bappeda", { id: toastId });
+                                } finally {
+                                    setIsSubmittingKirim(false);
+                                }
+                            }}
+                            disabled={isSubmittingKirim || selectedKirimIds.length === 0}
+                            className="h-9 px-5 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white shadow-md shadow-indigo-500/20 gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                            {isSubmittingKirim ? (
+                                <>
+                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                    <span>Mengirimkan...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Send className="w-3.5 h-3.5" />
+                                    <span>Kirim {selectedKirimIds.length > 0 ? `(${selectedKirimIds.length} Segmen)` : "Geometri"}</span>
+                                </>
+                            )}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -1733,7 +2147,7 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                 <span>Perkerasan: {kembalikanSegmenData?.perkerasan || "—"}</span>
                             </div>
                             <p className="text-[11px] text-amber-800 dark:text-amber-300 pt-1 leading-snug">
-                                Segmen akan dikembalikan ke Kecamatan dengan status <strong>dikembalikan</strong>. Operator kecamatan dapat mengedit kembali geometri / atribut data.
+                                Segmen akan dikembalikan ke Kecamatan dengan status <strong>verifikasi_kecamatan</strong>. Operator kecamatan dapat mengedit kembali geometri / atribut data.
                             </p>
                         </div>
 
@@ -1767,7 +2181,7 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                             variant="outline"
                             onClick={() => setKembalikanSegmenData(null)}
                             disabled={isVerifikasiSubmitting}
-                            className="h-9 text-xs"
+                            className="h-9 text-xs cursor-pointer"
                         >
                             Batal
                         </Button>
@@ -1779,9 +2193,21 @@ export const InfrastrukturPanel: React.FC<InfrastrukturPanelProps> = ({
                                 try {
                                     const tipeKode = activeTipe?.kode || "jalan";
                                     await monitoringService.verifikasiSegmenByBappeda(tipeKode, kembalikanSegmenData.id, {
-                                        status_verifikasi: "dikembalikan",
+                                        status_verifikasi: "verifikasi_kecamatan",
                                         catatan_verifikasi: catatanVerifikasiInput
                                     });
+
+                                    // If there is an active report that is Submitted/Final, sync it to Draft with the revision note
+                                    if (activeSnapshotLaporan?.id && (activeSnapshotLaporan.status === 'Submitted' || activeSnapshotLaporan.status === 'Final')) {
+                                        try {
+                                            await monitoringLaporanService.revertToDraft(activeSnapshotLaporan.id, {
+                                                catatan: catatanVerifikasiInput,
+                                                unlock_segments: false
+                                            });
+                                        } catch (errLap) {
+                                            console.warn("Failed to sync report status on return segment:", errLap);
+                                        }
+                                    }
 
                                     toast.success("Segmen berhasil dikembalikan ke Kecamatan!", { id: toastId });
                                     setKembalikanSegmenData(null);
