@@ -1,4 +1,4 @@
-﻿import { authService } from '~/services/auth.service';
+import { authService } from '~/services/auth.service';
 import { apiClient } from '~/lib/api-client';
 
 export interface Jalan {
@@ -425,6 +425,14 @@ export const monitoringService = {
             {
                 showErrorToast: false
             }
+        );
+    },
+
+    detectDominantParent: async (tipe: string, geojson: any): Promise<any> => {
+        return await apiClient.post(
+            `${import.meta.env.VITE_API_BASE_URL}/v1/infrastruktur/${tipe}/detect-dominant-parent`,
+            geojson,
+            { showErrorToast: false }
         );
     },
 

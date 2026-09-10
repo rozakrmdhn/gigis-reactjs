@@ -23,7 +23,10 @@ export interface RealisasiSegmen {
     nama_jalan: string;
     id_desa: string;
     nama_desa: string;
+    id_kecamatan?: string;
     nama_kecamatan?: string;
+    desa_id?: string | number;
+    kecamatan_id?: string | number;
     status_parent?: boolean;
     check_melarosa: boolean;
     panjang_m: number;

@@ -252,8 +252,12 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
             lebar: parseFloat(formData.lebar) || 0,
             kecamatan_id: parseInt(formData.kecamatan_id) || null,
             desa_id: parseInt(formData.desa_id) || null,
-            parent_id: formData.check_melarosa && formData.kode_ruas && formData.kode_ruas !== "0" ? formData.kode_ruas : null,
-            kode_ruas: formData.check_melarosa ? formData.kode_ruas : "0",
+            parent_id: formData.check_melarosa 
+                ? (selectedRoad?.jalan?.id ? String(selectedRoad.jalan.id) : null)
+                : null,
+            kode_ruas: formData.check_melarosa 
+                ? (formData.kode_ruas && !isUUID(formData.kode_ruas) ? formData.kode_ruas : (selectedRoad?.jalan?.kode_ruas?.toString() || "0")) 
+                : "0",
             status_parent: Boolean(formData.check_melarosa),
             check_melarosa: formData.check_melarosa ? "Ya" : "Tidak",
             sumber_data: formData.sumber_data || "Survey Desa",
@@ -298,7 +302,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                 <div className="space-y-4">
 
                     {/* Basic Info Readonly/Disabled */}
-                    <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
                         <div className="space-y-1">
                             <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Kecamatan</Label>
                             {selectedRoad ? (
@@ -376,7 +380,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                     </div>
 
                     {selectedRoad && (
-                        <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
+                        <div className="flex items-center space-x-2 border p-3 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
                             <Checkbox
                                 id="melarosa-new"
                                 checked={formData.check_melarosa}
@@ -392,7 +396,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status Jalan</Label>
                             <Select value={formData.status_jalan} onValueChange={(v) => setFormData({ ...formData, status_jalan: v })}>
-                                <SelectTrigger className="w-full h-9.5 text-xs rounded-xl"><SelectValue /></SelectTrigger>
+                                <SelectTrigger className="w-full h-9.5 text-xs"><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Jalan Kabupaten">Jalan Kabupaten</SelectItem>
                                     <SelectItem value="Jalan Desa">Jalan Desa</SelectItem>
@@ -401,7 +405,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Data</Label>
-                            <Input className="w-full h-9.5 text-xs rounded-xl" value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
+                            <Input className="w-full h-9.5 text-xs" value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
                         </div>
                     </div>
 
@@ -411,7 +415,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                             value={formData.sumber_dana}
                             onValueChange={(val) => setFormData({ ...formData, sumber_dana: val })}
                         >
-                            <SelectTrigger className="w-full h-9.5 text-xs rounded-xl">
+                            <SelectTrigger className="w-full h-9.5 text-xs">
                                 <SelectValue placeholder="Pilih Sumber Dana" />
                             </SelectTrigger>
                             <SelectContent>
@@ -441,7 +445,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                     }
                                 }}
                             >
-                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl focus:ring-1 focus:ring-blue-500">
+                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input focus:ring-1 focus:ring-blue-500">
                                     <SelectValue placeholder="Pilih Status Aset" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-popover border-border">
@@ -456,7 +460,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                     placeholder="Ketik status aset manual..."
                                     value={formData.status_aset}
                                     onChange={(e) => setFormData({ ...formData, status_aset: e.target.value })}
-                                    className="h-9.5 text-xs bg-background border-input rounded-xl mt-1.5 focus:border-blue-500 animate-in fade-in-50 duration-200"
+                                    className="h-9.5 text-xs bg-background border-input mt-1.5 focus:border-blue-500 animate-in fade-in-50 duration-200"
                                 />
                             )}
                         </div>
@@ -471,7 +475,7 @@ export function DrawFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJSON, 
                                 onSelect={(val) => setFormData({ ...formData, plotting_id: val })}
                                 placeholder={isLoadingPlotting ? "Memuat..." : (plottingOptions.length > 0 ? "Pilih Plotting..." : "Tidak ada data")}
                                 emptyText="Data plotting tidak ditemukan"
-                                className="w-full h-9.5 text-xs rounded-xl"
+                                className="w-full h-9.5 text-xs"
                             />
                         </div>
                     </div>

@@ -1,4 +1,4 @@
-﻿import * as React from "react"
+import * as React from "react"
 import {
   type Icon,
   IconDashboard,
@@ -57,28 +57,55 @@ interface AppSidebarProps extends React.ComponentProps<typeof Sidebar> {
   }>;
 }
 
+import { canManageUsers } from "~/utils/permissions"
+
 export function AppSidebar({ menus = [], ...props }: AppSidebarProps) {
   const user = authService.getUser();
   const ability = useAbility();
 
+  const isUserMgmtUrl = (url: string = '') => {
+    const lower = url.toLowerCase();
+    return (
+      lower.includes('/master/users') ||
+      lower.includes('/master/roles') ||
+      lower.includes('/master/permissions') ||
+      lower.includes('/master/menus') ||
+      lower.includes('/master/menu-access') ||
+      lower.includes('/master/sessions')
+    );
+  };
+
   // Map the database-driven dynamic menus into the format expected by NavMain
   const formattedNavMain = React.useMemo(() => {
-    return menus.map(item => {
-      const IconComponent = item.icon ? iconMap[item.icon] : undefined;
-      
-      let subItems = item.items ? item.items.map(subItem => ({
-        title: subItem.title,
-        url: subItem.url
-      })) : undefined;
+    const userAllowedUserMgmt = canManageUsers(user);
 
+    return menus
+      .filter(item => {
+        if (!userAllowedUserMgmt && isUserMgmtUrl(item.url)) {
+          return false;
+        }
+        return true;
+      })
+      .map(item => {
+        const IconComponent = item.icon ? iconMap[item.icon] : undefined;
+        
+        let subItems = item.items ? item.items.filter(subItem => {
+          if (!userAllowedUserMgmt && isUserMgmtUrl(subItem.url)) {
+            return false;
+          }
+          return true;
+        }).map(subItem => ({
+          title: subItem.title,
+          url: subItem.url
+        })) : undefined;
 
-      return {
-        title: item.title,
-        url: item.url,
-        icon: IconComponent,
-        items: subItems
-      };
-    });
+        return {
+          title: item.title,
+          url: item.url,
+          icon: IconComponent,
+          items: subItems
+        };
+      });
   }, [menus, user?.role]);
 
   return (

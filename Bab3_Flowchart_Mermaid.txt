@@ -1,0 +1,35 @@
+flowchart TD
+    subgraph FlowchartPenelitian [Metodologi Pelaksanaan Penelitian WebGIS]
+        direction LR
+        
+        subgraph Col1 [1. Analisis Kebutuhan]
+            direction TB
+            Start([Mulai Penelitian]) --> Obs[Observasi Data Spasial]
+            Obs --> Story[Penyusunan User Story & Product Backlog]
+        end
+
+        subgraph Col2 [2. Perancangan Sistem]
+            direction TB
+            Arch[Perancangan Arsitektur WebGIS] --> ERD[Skema ERD PostGIS]
+            ERD --> Env[Setup React Router v7 & Hapi.js]
+        end
+
+        subgraph Col3 [3. Iterasi Development]
+            direction TB
+            S1[Sprint 1: Core API & OpenLayers] --> S2[Sprint 2: Digitasi, Turf.js & RBAC]
+            S2 --> S3[Sprint 3: Recharts & PostGIS Buffer]
+        end
+
+        subgraph Col4 [4. Pengujian & Deployment]
+            direction TB
+            Test[Black Box & Integration Testing] --> UAT[User Acceptance Testing UAT]
+            UAT --> Eval{Lolos UAT?}
+            Eval -- Ya --> Deploy[Deployment Server VPS]
+            Deploy --> End([Selesai])
+        end
+
+        Story --> Arch
+        Env --> S1
+        S3 --> Test
+        Eval -- Tidak (Perbaikan Bug) --> Story
+    end

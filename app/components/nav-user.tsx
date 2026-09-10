@@ -31,9 +31,8 @@ export function NavUser() {
 
   if (!user) return null
 
-  const handleLogout = () => {
-    signout()
-    navigate("/")
+  const handleLogout = async () => {
+    await signout()
   }
 
   // Get initials from name

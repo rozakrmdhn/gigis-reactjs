@@ -1,4 +1,4 @@
-﻿import { apiClient } from '~/lib/api-client';
+import { apiClient } from '~/lib/api-client';
 import type { FeatureCollection, Geometry, GeoJsonProperties } from 'geojson';
 
 // --- Type Definitions ---
@@ -23,8 +23,8 @@ export interface InfrastrukturAset {
     nama_jalan?: string;
     desa?: string;
     kecamatan?: string;
-    id_desa?: number;
-    id_kecamatan?: number;
+    id_desa?: number | null;
+    id_kecamatan?: number | null;
     panjang?: number;
     lebar?: number;
     kondisi?: string;
@@ -53,8 +53,11 @@ export interface InfrastrukturSegmen {
     atribut?: Record<string, any>; // JSONB atribut khusus per-tipe
     desa?: string;
     kecamatan?: string;
+    id_desa?: number | null;
+    id_kecamatan?: number | null;
     created_at?: string;
     updated_at?: string;
+    [key: string]: any;
 }
 
 export interface InfrastrukturArea {
@@ -75,10 +78,11 @@ export interface InfrastrukturArea {
     atribut?: Record<string, any>;
     desa?: string;
     kecamatan?: string;
-    id_desa?: number;
-    id_kecamatan?: number;
+    id_desa?: number | null;
+    id_kecamatan?: number | null;
     created_at?: string;
     updated_at?: string;
+    [key: string]: any;
 }
 
 export interface MonitoringLog {

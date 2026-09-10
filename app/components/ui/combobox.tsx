@@ -1,4 +1,4 @@
-﻿import * as React from "react";
+import * as React from "react";
 import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "~/components/ui/button";
@@ -70,7 +70,7 @@ export function Combobox({
                     aria-expanded={open}
                     disabled={disabled}
                     className={cn(
-                        "w-full justify-between font-normal h-9.5 text-xs rounded-xl dark:border-slate-800 bg-white dark:bg-slate-950",
+                        "w-full h-9.5 px-3 text-xs font-normal justify-between rounded-md border-input shadow-xs bg-transparent dark:bg-input/30",
                         !selectedOption && "text-muted-foreground",
                         className
                     )}
@@ -78,14 +78,14 @@ export function Combobox({
                     <span className="truncate">
                         {selectedOption ? selectedOption.label : placeholder}
                     </span>
-                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                 </Button>
             </PopoverTrigger>
             <PopoverContent className={cn("w-[var(--radix-popover-trigger-width)] p-0", popoverClassName)} align="start">
                 <Command className={cn(contentClassName)}>
-                    <CommandInput placeholder={searchPlaceholder} className="h-8 text-xs" />
+                    <CommandInput placeholder={searchPlaceholder} className="h-9" />
                     <CommandList>
-                        <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">{emptyText}</CommandEmpty>
+                        <CommandEmpty className="py-6 text-center text-sm text-muted-foreground">{emptyText}</CommandEmpty>
                         <CommandGroup className="max-h-60 overflow-auto">
                             {options.map((option) => {
                                 const isSelected = value !== undefined && value !== null && value !== "" && String(option.value).trim().toLowerCase() === String(value).trim().toLowerCase();
@@ -97,7 +97,7 @@ export function Combobox({
                                             handleSelect(option.value);
                                             setOpen(false);
                                         }}
-                                        className="text-xs flex items-center justify-between cursor-pointer"
+                                        className="text-sm flex items-center justify-between cursor-pointer"
                                     >
                                         <span className="truncate">{option.label}</span>
                                         <Check

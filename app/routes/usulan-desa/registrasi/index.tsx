@@ -1,4 +1,4 @@
-﻿import { lazy, Suspense, useCallback, useEffect, useState, useRef } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, useRef } from "react";
 import type { MetaFunction } from "react-router";
 import { useParams, useSearchParams, useNavigate } from "react-router";
 import { Button } from "~/components/ui/button";
@@ -27,10 +27,14 @@ import {
     Globe,
     Filter,
     RotateCcw,
-    GripVertical,
     Search,
-    Loader2
+    Loader2,
+    CheckCircle2,
+    Info,
+    PanelLeftClose,
+    PanelLeftOpen
 } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 import { usulanDesaService } from "~/features/usulan-desa/services/usulan-desa.service";
 import { getProxiedLayerUrl } from "~/lib/utils";
 import { usulanDesaGeometryService } from "~/features/usulan-desa/services/usulan-desa-geometry.service";
@@ -447,85 +451,167 @@ export default function RegistrasiUsulanPage() {
                 </Suspense>
             </div>
 
-            {/* Left Trigger Button (if panel is closed) */}
-            {!isFormPanelOpen && (
-                <Button
-                    onClick={() => setIsFormPanelOpen(true)}
-                    className="absolute top-4 left-4 z-20 shadow-xl gap-2 bg-white dark:bg-slate-950 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-800 font-bold text-xs rounded-xl"
-                >
-                    <ClipboardList size={15} />
-                    Form Usulan
-                    <ChevronRight size={15} className="text-slate-400" />
-                </Button>
-            )}
-
-            {/* Top Right Controls Group */}
-            <div className={cn(
-                "absolute top-4 z-20 flex flex-col items-end gap-2.5 pointer-events-none",
-                isRightPanelOpen ? "right-[400px]" : "right-4"
-            )}>
-                {/* Toggle Workspace Spasial Button */}
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Button
-                                onClick={() => {
-                                    if (isRightPanelOpen && (activeRightTab === 'katalog' || activeRightTab === 'layers')) {
-                                        setIsRightPanelOpen(false);
-                                    } else {
-                                        setIsRightPanelOpen(true);
-                                        if (activeRightTab === 'lokasi') {
-                                            setActiveRightTab('katalog');
-                                        }
-                                    }
-                                }}
-                                className={cn(
-                                    "h-10 w-10 md:h-9 md:w-9 rounded-xl border border-border bg-background/90 backdrop-blur-sm shadow-md hover:bg-muted text-foreground pointer-events-auto transition-all duration-300",
-                                    isRightPanelOpen && (activeRightTab === 'katalog' || activeRightTab === 'layers')
-                                        ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white"
-                                        : ""
-                                )}
-                            >
-                                <Layers className="h-4 w-4" />
-                            </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="left">
-                            <p className="text-xs font-semibold">Manajemen Layer</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-
-                {/* Toggle Lokasi Button (only when usulan exists) */}
-                {savedUsulan && (
+            {/* 1. TOP EXECUTIVE FLOATING HEADER BAR */}
+            <div className="absolute top-3 inset-x-3 sm:top-4 sm:inset-x-4 z-20 flex items-center justify-between gap-2 pointer-events-none">
+                {/* Left: Form Toggle & Back Button & Proposal Status Banner */}
+                <div className="flex items-center gap-1.5 pointer-events-auto bg-background/95 dark:bg-slate-900/95 backdrop-blur-md border border-border px-2 sm:px-3 py-2 rounded-2xl shadow-lg">
+                    {/* Toggle Form Panel Button on Left */}
                     <TooltipProvider>
                         <Tooltip>
                             <TooltipTrigger asChild>
                                 <Button
-                                    onClick={() => {
-                                        if (isRightPanelOpen && activeRightTab === 'lokasi') {
-                                            setIsRightPanelOpen(false);
-                                        } else {
-                                            setIsRightPanelOpen(true);
-                                            setActiveRightTab("lokasi");
-                                        }
-                                    }}
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={() => setIsFormPanelOpen(!isFormPanelOpen)}
                                     className={cn(
-                                        "h-10 w-10 md:h-9 md:w-9 rounded-xl border border-border bg-background/90 backdrop-blur-sm shadow-md hover:bg-muted text-foreground pointer-events-auto transition-all duration-300",
-                                        isRightPanelOpen && activeRightTab === 'lokasi'
-                                            ? "bg-blue-600 text-white border-blue-600 hover:bg-blue-700 hover:text-white"
-                                            : ""
+                                        "h-8 w-8 rounded-xl cursor-pointer transition-colors",
+                                        isFormPanelOpen
+                                            ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/50 hover:bg-indigo-100"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
                                     )}
                                 >
-                                    <MapPin className={cn("h-4 w-4", isRightPanelOpen && activeRightTab === 'lokasi' ? "text-white" : "text-blue-500")} />
+                                    {isFormPanelOpen ? (
+                                        <PanelLeftClose className="h-4 w-4" />
+                                    ) : (
+                                        <PanelLeftOpen className="h-4 w-4" />
+                                    )}
                                 </Button>
                             </TooltipTrigger>
-                            <TooltipContent side="left">
-                                <p className="text-xs font-semibold">Daftar Lokasi ({geometries.length})</p>
+                            <TooltipContent side="bottom">
+                                <p className="text-xs font-semibold">{isFormPanelOpen ? "Tutup Panel Formulir" : "Buka Panel Formulir"}</p>
                             </TooltipContent>
                         </Tooltip>
                     </TooltipProvider>
-                )}
+
+                    <div className="h-5 w-px bg-border mx-0.5" />
+
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => navigate("/admin/usulan-desa/daftar-usulan")}
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground hover:bg-muted rounded-xl cursor-pointer"
+                        title="Kembali ke Daftar Usulan"
+                    >
+                        <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    <div className="h-5 w-px bg-border mx-0.5" />
+                    <div className="flex items-center gap-2">
+                        <div>
+                            <div className="flex items-center gap-1.5">
+                                <h2 className="text-xs sm:text-sm font-bold text-foreground leading-tight">
+                                    {savedUsulan ? "Edit Usulan Pembangunan" : "Registrasi Usulan Desa"}
+                                </h2>
+                                {savedUsulan && (
+                                    <Badge variant="outline" className="text-[10px] font-mono px-1.5 py-0 h-4 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 border-indigo-300">
+                                        #{savedUsulan.nomor_agenda}
+                                    </Badge>
+                                )}
+                            </div>
+                            <p className="text-[10px] text-muted-foreground hidden sm:block">
+                                {savedUsulan ? `${savedUsulan.nama_desa || ''} • Kec. ${savedUsulan.nama_kecamatan || ''} (TA ${savedUsulan.tahun_anggaran || ''})` : "Lengkapi form data dan digitasi lokasi spasial"}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Center: Step Progress Indicators (Hidden on small mobile) */}
+                <div className="hidden lg:flex items-center gap-2 pointer-events-auto bg-background/95 dark:bg-slate-900/95 backdrop-blur-md border border-border px-3.5 py-1.5 rounded-2xl shadow-lg text-xs font-semibold">
+                    <div className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-xl transition-all",
+                        savedUsulan ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40" : "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40"
+                    )}>
+                        {savedUsulan ? <CheckCircle2 className="h-3.5 w-3.5 text-emerald-600" /> : <div className="h-2 w-2 rounded-full bg-indigo-600 animate-ping" />}
+                        <span>1. Formulir Data</span>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/60" />
+                    <div className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 rounded-xl transition-all",
+                        geometries.length > 0
+                            ? "text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/40"
+                            : (savedUsulan ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40" : "text-muted-foreground")
+                    )}>
+                        <MapPin className="h-3.5 w-3.5" />
+                        <span>2. Pemetaan Spasial ({geometries.length})</span>
+                    </div>
+                </div>
+
+                {/* Right: Quick Action Controls */}
+                <div className="flex items-center gap-1 pointer-events-auto bg-background/95 dark:bg-slate-900/95 backdrop-blur-md border border-border p-1 rounded-2xl shadow-lg">
+                    {/* Toggle Layers */}
+                    <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => {
+                            if (isRightPanelOpen && (activeRightTab === 'katalog' || activeRightTab === 'layers')) {
+                                setIsRightPanelOpen(false);
+                            } else {
+                                setIsRightPanelOpen(true);
+                                if (activeRightTab === 'lokasi') setActiveRightTab('katalog');
+                            }
+                        }}
+                        className={cn(
+                            "h-8 px-2.5 text-xs font-bold gap-1.5 rounded-xl transition-all cursor-pointer",
+                            isRightPanelOpen && (activeRightTab === 'katalog' || activeRightTab === 'layers')
+                                ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        <Layers className="h-3.5 w-3.5" />
+                        <span className="hidden sm:inline">Layer</span>
+                        {activeOverlays.length > 0 && (
+                            <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] bg-indigo-600 text-white rounded-full">
+                                {activeOverlays.length}
+                            </Badge>
+                        )}
+                    </Button>
+
+                    {/* Toggle Lokasi List (if saved usulan) */}
+                    {savedUsulan && (
+                        <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                                if (isRightPanelOpen && activeRightTab === 'lokasi') {
+                                    setIsRightPanelOpen(false);
+                                } else {
+                                    setIsRightPanelOpen(true);
+                                    setActiveRightTab('lokasi');
+                                }
+                            }}
+                            className={cn(
+                                "h-8 px-2.5 text-xs font-bold gap-1.5 rounded-xl transition-all cursor-pointer",
+                                isRightPanelOpen && activeRightTab === 'lokasi'
+                                    ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            <MapPin className="h-3.5 w-3.5" />
+                            <span className="hidden sm:inline">Lokasi</span>
+                            <Badge variant="secondary" className="px-1.5 py-0 h-4 text-[9px] bg-emerald-600 text-white rounded-full">
+                                {geometries.length}
+                            </Badge>
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {/* Contextual Drawing Helper Notification */}
+            {(drawMode || editingGeometry) && (
+                <div
+                    className="absolute bottom-24 z-20 flex justify-center items-center pointer-events-none transition-all duration-300 animate-in fade-in slide-in-from-bottom-2"
+                    style={{ left: toolbarLeft, right: toolbarRight }}
+                >
+                    <div className="pointer-events-auto bg-slate-900/90 text-white dark:bg-slate-100 dark:text-slate-900 px-4 py-2 rounded-2xl shadow-xl text-xs font-medium flex items-center gap-2 border border-slate-700/50">
+                        <Info className="h-4 w-4 text-amber-400 shrink-0" />
+                        <span>
+                            {drawMode === "Point" && "Klik pada peta untuk menempatkan titik koordinat lokasi."}
+                            {drawMode === "LineString" && "Klik titik demi titik pada jalur, double-click untuk menyelesaikan garis."}
+                            {drawMode === "Polygon" && "Klik tiap sudut batas area usulan, double-click untuk menutup polygon."}
+                            {editingGeometry && !drawMode && "Mode Edit: Geser titik koordinat pada peta, lalu simpan perubahan."}
+                        </span>
+                    </div>
+                </div>
+            )}
 
             {/* Bottom Center: Draw Toolbar (only show when usulan is saved) */}
             {savedUsulan && !drawnGeom && (
@@ -537,7 +623,7 @@ export default function RegistrasiUsulanPage() {
                             right: toolbarRight,
                         }}
                     >
-                        <div className="flex items-center gap-1 p-1.5 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border dark:border-slate-800 rounded-2xl shadow-2xl pointer-events-auto">
+                        <div className="flex items-center gap-1.5 p-1.5 bg-background/95 dark:bg-slate-900/95 backdrop-blur-xl border border-border rounded-2xl shadow-2xl pointer-events-auto">
                             {!drawMode && !editingGeometry ? (
                                 <>
                                     {/* Titik Tool */}
@@ -546,11 +632,11 @@ export default function RegistrasiUsulanPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[44px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 text-slate-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
+                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[50px] md:min-w-[64px] px-2.5 py-2 rounded-xl transition-all text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 cursor-pointer"
                                                 onClick={() => setDrawMode("Point")}
                                             >
                                                 <MapPin className="h-4 w-4 text-rose-500" />
-                                                <span className="text-[9px] font-black tracking-tight leading-none uppercase hidden md:block">Titik</span>
+                                                <span className="text-[9.5px] font-bold tracking-tight uppercase hidden md:block">Titik</span>
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent side="top">
@@ -564,11 +650,11 @@ export default function RegistrasiUsulanPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[44px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 text-slate-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 cursor-pointer"
+                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[50px] md:min-w-[64px] px-2.5 py-2 rounded-xl transition-all text-muted-foreground hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/20 cursor-pointer"
                                                 onClick={() => setDrawMode("LineString")}
                                             >
                                                 <Route className="h-4 w-4 text-blue-500" />
-                                                <span className="text-[9px] font-black tracking-tight leading-none uppercase hidden md:block">Garis</span>
+                                                <span className="text-[9.5px] font-bold tracking-tight uppercase hidden md:block">Garis</span>
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent side="top">
@@ -582,11 +668,11 @@ export default function RegistrasiUsulanPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[44px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer"
+                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[50px] md:min-w-[64px] px-2.5 py-2 rounded-xl transition-all text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/20 cursor-pointer"
                                                 onClick={() => setDrawMode("Polygon")}
                                             >
                                                 <Pentagon className="h-4 w-4 text-emerald-500" />
-                                                <span className="text-[9px] font-black tracking-tight leading-none uppercase hidden md:block">Area</span>
+                                                <span className="text-[9.5px] font-bold tracking-tight uppercase hidden md:block">Area</span>
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent side="top">
@@ -598,79 +684,53 @@ export default function RegistrasiUsulanPage() {
                                 <>
                                     {/* Active Mode Info */}
                                     <div className="flex flex-col items-start justify-center px-3 py-1 shrink-0">
-                                        <span className="text-[9px] font-black text-slate-400 dark:text-slate-550 uppercase tracking-wider block">Mode Aktif</span>
+                                        <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Mode Aktif</span>
                                         <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 animate-pulse">
                                             {drawMode
                                                 ? `Menggambar ${drawMode === "Point" ? "Titik" : drawMode === "LineString" ? "Garis" : "Area"}...`
-                                                : "Menggeser Geometry..."}
+                                                : "Menggeser Geometri..."}
                                         </span>
                                     </div>
 
-                                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1" />
+                                    <div className="w-px h-6 bg-border mx-1" />
 
-                                    {/* If we are editing, we can still choose to redraw */}
+                                    {/* Redraw Options when editing */}
                                     {editingGeometry && !drawMode && (
                                         <>
                                             <div className="flex items-center gap-1">
-                                                {/* Redraw Point */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="flex flex-col items-center justify-center gap-0.5 h-auto min-w-[36px] px-1 py-1 rounded-lg text-slate-500 hover:text-rose-600 hover:bg-rose-50"
-                                                            onClick={() => setDrawMode("Point")}
-                                                        >
-                                                            <MapPin className="h-3.5 w-3.5 text-rose-500" />
-                                                            <span className="text-[8px] font-bold uppercase leading-none">Redraw Titik</span>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top">
-                                                        <p className="text-xs font-semibold">Gambar Ulang sebagai Titik</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-
-                                                {/* Redraw Line */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="flex flex-col items-center justify-center gap-0.5 h-auto min-w-[36px] px-1 py-1 rounded-lg text-slate-500 hover:text-blue-600 hover:bg-blue-50"
-                                                            onClick={() => setDrawMode("LineString")}
-                                                        >
-                                                            <Route className="h-3.5 w-3.5 text-blue-500" />
-                                                            <span className="text-[8px] font-bold uppercase leading-none">Redraw Garis</span>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top">
-                                                        <p className="text-xs font-semibold">Gambar Ulang sebagai Garis</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
-
-                                                {/* Redraw Area */}
-                                                <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="flex flex-col items-center justify-center gap-0.5 h-auto min-w-[36px] px-1 py-1 rounded-lg text-slate-500 hover:text-emerald-600 hover:bg-emerald-50"
-                                                            onClick={() => setDrawMode("Polygon")}
-                                                        >
-                                                            <Pentagon className="h-3.5 w-3.5 text-emerald-500" />
-                                                            <span className="text-[8px] font-bold uppercase leading-none">Redraw Area</span>
-                                                        </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent side="top">
-                                                        <p className="text-xs font-semibold">Gambar Ulang sebagai Area (Polygon)</p>
-                                                    </TooltipContent>
-                                                </Tooltip>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="flex flex-col items-center justify-center gap-0.5 h-auto min-w-[36px] px-1.5 py-1 rounded-lg text-muted-foreground hover:text-rose-600 hover:bg-rose-50"
+                                                    onClick={() => setDrawMode("Point")}
+                                                >
+                                                    <MapPin className="h-3.5 w-3.5 text-rose-500" />
+                                                    <span className="text-[8px] font-bold uppercase leading-none">Titik</span>
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="flex flex-col items-center justify-center gap-0.5 h-auto min-w-[36px] px-1.5 py-1 rounded-lg text-muted-foreground hover:text-blue-600 hover:bg-blue-50"
+                                                    onClick={() => setDrawMode("LineString")}
+                                                >
+                                                    <Route className="h-3.5 w-3.5 text-blue-500" />
+                                                    <span className="text-[8px] font-bold uppercase leading-none">Garis</span>
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="flex flex-col items-center justify-center gap-0.5 h-auto min-w-[36px] px-1.5 py-1 rounded-lg text-muted-foreground hover:text-emerald-600 hover:bg-emerald-50"
+                                                    onClick={() => setDrawMode("Polygon")}
+                                                >
+                                                    <Pentagon className="h-3.5 w-3.5 text-emerald-500" />
+                                                    <span className="text-[8px] font-bold uppercase leading-none">Area</span>
+                                                </Button>
                                             </div>
-                                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1" />
+                                            <div className="w-px h-6 bg-border mx-1" />
                                         </>
                                     )}
 
-                                    {/* If drawMode is active, show Manual Coordinate entry button */}
+                                    {/* Manual Coordinate Entry Button */}
                                     {drawMode && (
                                         <>
                                             <Tooltip>
@@ -679,34 +739,34 @@ export default function RegistrasiUsulanPage() {
                                                         variant="ghost"
                                                         size="sm"
                                                         className={cn(
-                                                            "flex flex-col items-center justify-center gap-1 h-auto min-w-[44px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 text-slate-500 hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/20 cursor-pointer",
+                                                            "flex flex-col items-center justify-center gap-1 h-auto min-w-[50px] md:min-w-[64px] px-2.5 py-2 rounded-xl transition-all text-muted-foreground hover:text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/20 cursor-pointer",
                                                             showCoordInput && "bg-violet-50 text-violet-600 dark:bg-violet-950/40"
                                                         )}
                                                         onClick={() => setShowCoordInput(!showCoordInput)}
                                                     >
                                                         <Keyboard className="h-4 w-4 text-violet-500" />
-                                                        <span className="text-[9px] font-black tracking-tight leading-none uppercase hidden md:block">Koordinat</span>
+                                                        <span className="text-[9.5px] font-bold tracking-tight uppercase hidden md:block">Koordinat</span>
                                                     </Button>
                                                 </TooltipTrigger>
                                                 <TooltipContent side="top">
                                                     <p className="text-xs font-semibold">Input Koordinat Manual</p>
                                                 </TooltipContent>
                                             </Tooltip>
-                                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-800 mx-1" />
+                                            <div className="w-px h-6 bg-border mx-1" />
                                         </>
                                     )}
 
-                                    {/* Tombol Batal */}
+                                    {/* Cancel Button */}
                                     <Tooltip>
                                         <TooltipTrigger asChild>
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[44px] md:min-w-[64px] px-2 py-1.5 rounded-xl transition-all duration-300 text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 cursor-pointer"
+                                                className="flex flex-col items-center justify-center gap-1 h-auto min-w-[50px] md:min-w-[64px] px-2.5 py-2 rounded-xl transition-all text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/20 cursor-pointer"
                                                 onClick={handleCancelDraw}
                                             >
                                                 <X className="h-4 w-4" />
-                                                <span className="text-[9px] font-black tracking-tight leading-none uppercase hidden md:block">Batal</span>
+                                                <span className="text-[9.5px] font-bold tracking-tight uppercase hidden md:block">Batal</span>
                                             </Button>
                                         </TooltipTrigger>
                                         <TooltipContent side="top">
@@ -753,18 +813,18 @@ export default function RegistrasiUsulanPage() {
                                 <Button
                                     onClick={() => setIsBasemapPanelOpen(!isBasemapPanelOpen)}
                                     className={cn(
-                                        "h-12 w-12 rounded-full shadow-2xl border cursor-pointer flex items-center justify-center transition-all duration-300",
+                                        "h-11 w-11 rounded-2xl shadow-xl border cursor-pointer flex items-center justify-center transition-all duration-300",
                                         isBasemapPanelOpen
-                                            ? "bg-blue-600 hover:bg-blue-700 text-white border-blue-500"
-                                            : "bg-white/95 dark:bg-slate-900/95 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-800"
+                                            ? "bg-indigo-600 hover:bg-indigo-700 text-white border-indigo-500 shadow-indigo-500/20"
+                                            : "bg-background/95 dark:bg-slate-900/95 hover:bg-muted text-foreground border-border"
                                     )}
                                 >
                                     <Globe className="h-5 w-5" />
                                 </Button>
 
                                 {isBasemapPanelOpen && (
-                                    <div className="absolute bottom-14 right-0 w-64 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl rounded-2xl border border-slate-200 dark:border-slate-800 p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
-                                        <span className="text-[9px] font-black text-slate-400 dark:text-slate-550 uppercase tracking-wider block border-b pb-1">Pilihan Basemap</span>
+                                    <div className="absolute bottom-14 right-0 w-64 bg-background/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl rounded-2xl border border-border p-3 flex flex-col gap-2 animate-in fade-in slide-in-from-bottom-3 duration-200">
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block border-b pb-1">Pilihan Basemap</span>
                                         <div className="grid grid-cols-3 gap-2 pt-1">
                                             {basemaps.map((b) => (
                                                 <button
@@ -774,23 +834,23 @@ export default function RegistrasiUsulanPage() {
                                                     className={cn(
                                                         "relative overflow-hidden rounded-xl border transition-all active:scale-95 group h-14 cursor-pointer",
                                                         activeBasemap === b.id
-                                                            ? "border-blue-600 dark:border-blue-500 ring-2 ring-blue-500/20 shadow-md"
-                                                            : "border-slate-200 dark:border-slate-800 hover:border-slate-350 dark:hover:border-slate-700"
+                                                            ? "border-indigo-600 ring-2 ring-indigo-500/20 shadow-md"
+                                                            : "border-border hover:border-border/80"
                                                     )}
                                                     title={b.name}
                                                 >
                                                     {b.thumbnail ? (
                                                         <img src={b.thumbnail} alt={b.name} className="w-full h-full object-cover" />
                                                     ) : (
-                                                        <div className="w-full h-full bg-slate-100 dark:bg-slate-900 flex items-center justify-center text-slate-400 dark:text-slate-650">
+                                                        <div className="w-full h-full bg-muted flex items-center justify-center text-muted-foreground">
                                                             <Layers className="h-4 w-4" />
                                                         </div>
                                                     )}
                                                     <div className={cn(
                                                         "absolute inset-x-0 bottom-0 p-0.5 transition-colors",
-                                                        activeBasemap === b.id ? "bg-blue-600/90" : "bg-slate-950/60 group-hover:bg-blue-600/90"
+                                                        activeBasemap === b.id ? "bg-indigo-600/90" : "bg-slate-950/60 group-hover:bg-indigo-600/90"
                                                     )}>
-                                                        <p className="text-[7px] font-bold text-white text-center truncate tracking-tighter uppercase px-0.5 leading-tight">{b.name}</p>
+                                                        <p className="text-[7.5px] font-bold text-white text-center truncate tracking-tighter uppercase px-0.5 leading-tight">{b.name}</p>
                                                     </div>
                                                 </button>
                                             ))}
@@ -812,7 +872,7 @@ export default function RegistrasiUsulanPage() {
                 onZoomOut={() => mapRef.current?.zoomOut()}
                 onResetBearing={() => mapRef.current?.resetRotation()}
                 className={cn(
-                    "absolute bottom-6 transition-all duration-300 z-20 shadow-2xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border dark:border-slate-800 rounded-xl p-1",
+                    "absolute bottom-6 transition-all duration-300 z-20 shadow-2xl bg-background/90 backdrop-blur-xl border border-border rounded-2xl p-1",
                     isFormPanelOpen ? "left-[400px]" : "left-6"
                 )}
             />
@@ -826,12 +886,12 @@ export default function RegistrasiUsulanPage() {
                         right: toolbarRight,
                     }}
                 >
-                    <div className="pointer-events-auto bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl rounded-2xl border border-slate-200 dark:border-slate-800 p-4 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-5 duration-200">
+                    <div className="pointer-events-auto bg-background/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl rounded-2xl border border-border p-3.5 sm:p-4 flex items-center gap-3.5 animate-in fade-in slide-in-from-bottom-5 duration-200">
                         <div className="min-w-0">
-                            <span className="text-[9px] font-black text-slate-400 dark:text-slate-550 uppercase tracking-wider block">Status Menggambar</span>
-                            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                            <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider block">Status Digitasi</span>
+                            <span className="text-xs font-bold text-foreground">
                                 {editingGeometry
-                                    ? (drawnGeom ? "Posisi geometry telah diubah" : "Mengubah lokasi spasial...")
+                                    ? (drawnGeom ? "Posisi geometri telah diubah" : "Mengubah lokasi spasial...")
                                     : "Geometri lokasi baru berhasil digambar"}
                             </span>
                         </div>
@@ -840,7 +900,7 @@ export default function RegistrasiUsulanPage() {
                                 <Button
                                     size="sm"
                                     onClick={handleSaveEditedGeometryClick}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold gap-1.5 text-xs rounded-xl"
+                                    className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5 text-xs rounded-xl cursor-pointer"
                                 >
                                     <Save size={13} />
                                     Simpan Perubahan
@@ -849,7 +909,7 @@ export default function RegistrasiUsulanPage() {
                                 <Button
                                     size="sm"
                                     onClick={handleSaveGeometryClick}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 text-xs rounded-xl"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold gap-1.5 text-xs rounded-xl cursor-pointer"
                                 >
                                     <Save size={13} />
                                     Simpan Lokasi
@@ -859,7 +919,7 @@ export default function RegistrasiUsulanPage() {
                                 size="sm"
                                 variant="outline"
                                 onClick={handleCancelDraw}
-                                className="text-slate-500 hover:text-slate-700 dark:border-slate-800 dark:hover:bg-slate-900 text-xs rounded-xl"
+                                className="text-muted-foreground hover:text-foreground text-xs rounded-xl cursor-pointer"
                             >
                                 {editingGeometry ? "Batal" : "Hapus"}
                             </Button>
@@ -870,24 +930,29 @@ export default function RegistrasiUsulanPage() {
 
             {/* Left Panel: Form Panel */}
             <div className={cn(
-                "absolute top-0 bottom-0 left-0 w-full sm:w-96 max-w-full bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl border-r border-slate-200 dark:border-slate-800 transition-all duration-300 z-30 flex flex-col overflow-hidden",
+                "absolute top-0 bottom-0 left-0 w-full sm:w-[390px] max-w-full bg-background/98 dark:bg-slate-950/98 backdrop-blur-md shadow-2xl border-r border-border transition-all duration-300 z-30 flex flex-col overflow-hidden",
                 isFormPanelOpen ? "translate-x-0 opacity-100" : "-translate-x-full opacity-0 pointer-events-none"
             )}>
                 {/* Panel Header */}
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
+                <div className="p-3.5 sm:p-4 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
                     <div className="flex items-center gap-2">
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => navigate("/admin/usulan-desa/daftar-usulan")}
-                            className="h-8 w-8 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900 rounded-md"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl cursor-pointer"
                             title="Kembali ke Daftar"
                         >
                             <ArrowLeft size={16} />
                         </Button>
-                        <h3 className="font-semibold text-sm text-slate-800 dark:text-slate-200">
-                            {savedUsulan ? "Edit Usulan" : "Registrasi Usulan"}
-                        </h3>
+                        <div>
+                            <h3 className="font-bold text-xs sm:text-sm text-foreground">
+                                {savedUsulan ? "Edit Data Usulan" : "Form Registrasi Usulan"}
+                            </h3>
+                            <p className="text-[10px] text-muted-foreground">
+                                {savedUsulan ? `#${savedUsulan.nomor_agenda}` : "Input parameter data pembangunan"}
+                            </p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-1">
                         {savedUsulan && (
@@ -895,29 +960,30 @@ export default function RegistrasiUsulanPage() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setShowDeleteConfirm(true)}
-                                className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 rounded-md"
+                                className="h-8 w-8 text-rose-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-950/30 rounded-xl cursor-pointer"
                                 title="Hapus Usulan"
                                 disabled={isDeleting}
                             >
-                                <Trash2 size={16} />
+                                <Trash2 size={15} />
                             </Button>
                         )}
                         <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => setIsFormPanelOpen(false)}
-                            className="h-8 w-8 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"
+                            className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl cursor-pointer"
+                            title="Tutup Panel Formulir"
                         >
-                            <X size={16} />
+                            <PanelLeftClose size={16} />
                         </Button>
                     </div>
                 </div>
 
                 {/* Form Wrapper */}
-                <div className="flex-1 overflow-y-auto px-4 pt-4 pb-0 custom-scrollbar flex flex-col">
+                <div className="flex-1 overflow-y-auto px-4 pt-3.5 pb-0 custom-scrollbar flex flex-col">
                     {isLoadingUsulan ? (
-                        <div className="flex h-full items-center justify-center bg-slate-50/50 dark:bg-slate-950/20">
-                            <Spinner className="h-8 w-8 text-blue-600 animate-spin" />
+                        <div className="flex h-full items-center justify-center">
+                            <Spinner className="h-8 w-8 text-indigo-600 animate-spin" />
                         </div>
                     ) : (
                         <UsulanDesaForm
@@ -936,44 +1002,46 @@ export default function RegistrasiUsulanPage() {
 
             {/* Right Panel: Panel Spasial (Katalog, Layer, Lokasi) */}
             <div className={cn(
-                "absolute top-0 bottom-0 right-0 w-full sm:w-[380px] max-w-full bg-white/95 dark:bg-slate-950/95 backdrop-blur-md shadow-2xl border-l border-slate-200 dark:border-slate-800 z-30 flex flex-col overflow-hidden",
+                "absolute top-0 bottom-0 right-0 w-full sm:w-[380px] max-w-full bg-background/98 dark:bg-slate-950/98 backdrop-blur-md shadow-2xl border-l border-border z-30 flex flex-col overflow-hidden transition-all duration-300",
                 isRightPanelOpen ? "translate-x-0 opacity-100" : "translate-x-full opacity-0 pointer-events-none"
             )}>
                 {/* Header */}
-                <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/50 dark:bg-slate-900/50">
-                    <span className="text-sm font-semibold text-slate-855 dark:text-slate-200 flex items-center gap-2">
-                        <Layers className="h-4 w-4 text-blue-500" />
-                        Manajemen Layer
+                <div className="p-3.5 sm:p-4 border-b border-border flex items-center justify-between bg-muted/20 shrink-0">
+                    <span className="text-xs sm:text-sm font-bold text-foreground flex items-center gap-2">
+                        <Layers className="h-4 w-4 text-indigo-600" />
+                        Manajemen Spasial & Layer
                     </span>
                     <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => setIsRightPanelOpen(false)}
-                        className="h-8 w-8 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-900"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-xl cursor-pointer"
                     >
                         <X size={16} />
                     </Button>
                 </div>
 
                 <Tabs value={activeRightTab} onValueChange={setActiveRightTab} className="flex-1 flex flex-col min-h-0 gap-0">
-                    <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 px-2 py-2 shrink-0">
-                        <TabsList className={cn("w-full grid h-9", savedUsulan ? "grid-cols-3" : "grid-cols-2")}>
-                            <TabsTrigger value="katalog" className="text-[10px] uppercase font-bold tracking-tight">Katalog</TabsTrigger>
-                            <TabsTrigger value="layers" className="text-[10px] uppercase font-bold tracking-tight">
+                    <div className="bg-background border-b border-border px-3 py-2 shrink-0">
+                        <TabsList className={cn("w-full grid h-8 rounded-xl", savedUsulan ? "grid-cols-3" : "grid-cols-2")}>
+                            <TabsTrigger value="katalog" className="text-[10px] uppercase font-bold tracking-tight rounded-lg">Katalog</TabsTrigger>
+                            <TabsTrigger value="layers" className="text-[10px] uppercase font-bold tracking-tight rounded-lg">
                                 Layer
                                 {activeOverlays.length > 0 && (
-                                    <span className="ml-1 px-1.5 py-0.2 text-[8px] bg-blue-100 text-blue-700 rounded-full font-black">
+                                    <span className="ml-1 px-1.5 py-0 text-[8px] bg-indigo-600 text-white rounded-full font-bold">
                                         {activeOverlays.length}
                                     </span>
                                 )}
                             </TabsTrigger>
                             {savedUsulan && (
-                                <TabsTrigger value="lokasi" className="text-[10px] uppercase font-bold tracking-tight">Lokasi</TabsTrigger>
+                                <TabsTrigger value="lokasi" className="text-[10px] uppercase font-bold tracking-tight rounded-lg">
+                                    Lokasi ({geometries.length})
+                                </TabsTrigger>
                             )}
                         </TabsList>
                     </div>
 
-                    {/* Tab Content: Katalog & Layer (Managed by LayerManagementPanel component) */}
+                    {/* Tab Content: Katalog & Layer */}
                     {activeRightTab !== "lokasi" ? (
                         <LayerManagementPanel
                             dbLayers={dbLayers}
@@ -993,66 +1061,69 @@ export default function RegistrasiUsulanPage() {
                     ) : (
                         /* Tab Content: Lokasi Spasial */
                         savedUsulan && (
-                            <TabsContent value="lokasi" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
-                                <div className="flex-1 overflow-y-auto">
-                                    <GeometryList
-                                        data={geometries}
-                                        isLoading={isLoadingGeoms}
-                                        onFocus={handleFocusGeometry}
-                                        onEdit={(item) => {
-                                            setEditingGeometry(item);
-                                            setDrawMode(null);
-                                            handleFocusGeometry(item);
-                                        }}
-                                        onRefresh={() => fetchGeometries(savedUsulan.id)}
-                                    />
-                                </div>
+                            <TabsContent value="lokasi" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-background">
+                                <GeometryList
+                                    data={geometries}
+                                    isLoading={isLoadingGeoms}
+                                    onFocus={handleFocusGeometry}
+                                    onFitAll={() => mapRef.current?.fitAllGeometries()}
+                                    onStartDraw={(mode) => setDrawMode(mode)}
+                                    onEdit={(item) => {
+                                        setEditingGeometry(item);
+                                        setDrawMode(null);
+                                        handleFocusGeometry(item);
+                                    }}
+                                    onRefresh={() => fetchGeometries(savedUsulan.id)}
+                                />
                             </TabsContent>
                         )
                     )}
                 </Tabs>
             </div>
 
+            {/* Confirm Delete Usulan Dialog */}
             <AlertDialog open={showDeleteConfirm} onOpenChange={(open) => !open && setShowDeleteConfirm(false)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Apakah Anda yakin?</AlertDialogTitle>
+                        <AlertDialogTitle>Hapus Usulan Pembangunan?</AlertDialogTitle>
                         <AlertDialogDescription>
                             Tindakan ini tidak dapat dibatalkan. Usulan dengan nomor agenda{" "}
-                            <span className="font-semibold text-foreground">
-                                {savedUsulan?.nomor_agenda}
+                            <span className="font-bold text-foreground">
+                                #{savedUsulan?.nomor_agenda}
                             </span>{" "}
-                            beserta seluruh geometry/lokasi terkait akan dihapus secara permanen dari server.
+                            beserta seluruh geometry/lokasi terkait akan dihapus secara permanen.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Batal</AlertDialogCancel>
+                        <AlertDialogCancel className="rounded-xl">Batal</AlertDialogCancel>
                         <AlertDialogAction
                             onClick={handleDelete}
-                            className="bg-rose-600 hover:bg-rose-700 text-white"
+                            className="bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl"
                         >
-                            Hapus
+                            Hapus Usulan
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
 
+            {/* Keterangan Geometry Dialog */}
             <Dialog open={showKeteranganDialog} onOpenChange={setShowKeteranganDialog}>
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
-                        <DialogTitle>Keterangan Lokasi</DialogTitle>
-                        <DialogDescription>
-                            Masukkan keterangan atau nama lokasi untuk geometri yang baru digambar ini.
+                        <DialogTitle className="text-sm font-bold">Keterangan Lokasi Spasial</DialogTitle>
+                        <DialogDescription className="text-xs">
+                            Masukkan label atau keterangan untuk lokasi spasial yang baru digambar ini.
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="grid gap-2">
+                    <div className="grid gap-4 py-3">
+                        <div className="space-y-1.5">
+                            <Label htmlFor="keterangan_geometry" className="text-xs font-bold">Nama / Keterangan Titik</Label>
                             <Input
                                 id="keterangan_geometry"
                                 value={tempKeterangan}
                                 onChange={(e) => setTempKeterangan(e.target.value)}
-                                placeholder="Contoh: RT 03 RW 01, Dusun Krajan"
-                                className="w-full"
+                                placeholder="Contoh: Titik Pangkal Jembatan, Dusun Krajan"
+                                className="h-9 text-xs rounded-xl"
                                 autoFocus
                                 onKeyDown={(e) => {
                                     if (e.key === "Enter") {
@@ -1063,12 +1134,12 @@ export default function RegistrasiUsulanPage() {
                             />
                         </div>
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowKeteranganDialog(false)}>
+                    <DialogFooter className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setShowKeteranganDialog(false)} className="rounded-xl">
                             Batal
                         </Button>
-                        <Button onClick={handleConfirmSave} className="bg-blue-600 hover:bg-blue-700 text-white">
-                            Simpan
+                        <Button size="sm" onClick={handleConfirmSave} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl">
+                            Simpan Lokasi
                         </Button>
                     </DialogFooter>
                 </DialogContent>

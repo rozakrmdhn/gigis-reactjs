@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Search, MapPin, X, Loader2 } from 'lucide-react';
 import { Input } from '~/components/ui/input';
 import { Button } from '~/components/ui/button';
@@ -78,20 +78,21 @@ export function AddressSearch({ onSelect, className }: AddressSearchProps) {
             <div className="relative group">
                 <Search className={cn(
                     "absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors",
-                    loading ? "text-blue-500 animate-pulse" : "text-slate-400 group-focus-within:text-blue-500"
+                    loading ? "text-emerald-400 animate-pulse" : "text-slate-500 group-focus-within:text-emerald-400"
                 )} />
                 <Input
                     type="text"
-                    placeholder="Cari alamat atau lokasi..."
+                    placeholder="Cari alamat, jalan, atau desa..."
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     onFocus={() => query.length > 2 && setIsOpen(true)}
-                    className="pl-10 pr-4 h-10 bg-white/90 dark:bg-slate-900/90 rounded-xl border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all font-medium"
+                    className="pl-9 pr-8 h-10 bg-[#0E131F] text-slate-100 placeholder:text-slate-500 rounded-xl border border-white/[0.08] focus-visible:ring-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500 text-xs font-medium transition-all"
                 />
                 {query && (
                     <button
+                        type="button"
                         onClick={clearSearch}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 hover:bg-white/[0.08] rounded-md text-slate-400 hover:text-white transition-colors cursor-pointer"
                     >
                         {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
                     </button>
@@ -100,34 +101,30 @@ export function AddressSearch({ onSelect, className }: AddressSearchProps) {
 
             {/* Results Dropdown */}
             {isOpen && results.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="p-1">
-                        {results.map((result, index) => (
+                <div className="absolute top-full left-0 right-0 mt-1.5 bg-[#0B101D]/95 backdrop-blur-xl border border-white/[0.1] rounded-xl shadow-2xl overflow-hidden z-50 divide-y divide-white/[0.04] animate-in fade-in zoom-in-95 duration-150">
+                    <div className="px-3 py-1.5 bg-[#090D16] border-b border-white/[0.06] text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        Hasil Pencarian Lokasi ({results.length})
+                    </div>
+                    <div className="max-h-48 overflow-y-auto custom-scrollbar">
+                        {results.map((result, idx) => (
                             <button
-                                key={index}
+                                key={idx}
+                                type="button"
                                 onClick={() => handleSelect(result)}
-                                className="w-full flex items-start gap-3 p-3 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors text-left group"
+                                className="w-full p-2.5 text-left hover:bg-white/[0.06] transition-colors flex items-start gap-2.5 group cursor-pointer"
                             >
-                                <div className="mt-0.5 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg text-slate-500 group-hover:bg-blue-100 dark:group-hover:bg-blue-900/40 group-hover:text-blue-600 transition-colors shrink-0">
-                                    <MapPin className="w-4 h-4" />
-                                </div>
+                                <MapPin className="w-3.5 h-3.5 text-emerald-400 mt-0.5 shrink-0 group-hover:scale-110 transition-transform" />
                                 <div className="min-w-0">
-                                    <p className="text-xs font-bold text-slate-700 dark:text-slate-200 line-clamp-1 group-hover:text-blue-700 dark:group-hover:text-blue-300 transition-colors">
+                                    <p className="text-xs font-semibold text-slate-200 line-clamp-1 group-hover:text-emerald-300 transition-colors">
                                         {result.display_name.split(',')[0]}
                                     </p>
-                                    <p className="text-[10px] text-slate-400 dark:text-slate-500 line-clamp-2 mt-0.5 font-medium leading-relaxed">
+                                    <p className="text-[10px] text-slate-500 line-clamp-1">
                                         {result.display_name}
                                     </p>
                                 </div>
                             </button>
                         ))}
                     </div>
-                </div>
-            )}
-
-            {isOpen && results.length === 0 && query.length > 2 && !loading && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 rounded-2xl p-4 text-center z-50 shadow-xl">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Lokasi tidak ditemukan</p>
                 </div>
             )}
         </div>

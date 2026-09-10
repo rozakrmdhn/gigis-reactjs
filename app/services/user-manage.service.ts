@@ -4,7 +4,7 @@ export interface UserDetail {
     id: string | number;
     nama: string;
     email: string;
-    role: 'super_admin' | 'operator_bappeda' | 'operator_kecamatan' | 'operator_desa' | string;
+    role: 'super_admin' | 'operator_bappeda' | 'operator_kecamatan' | 'operator_desa' | 'operator_opd' | string;
     id_kecamatan: number | null;
     id_desa: number | null;
     nip?: string | null;
@@ -24,7 +24,7 @@ export interface UserDetail {
 }
 
 export interface RoleDetail {
-    id: 'super_admin' | 'operator_bappeda' | 'operator_kecamatan' | 'operator_desa' | string;
+    id: 'super_admin' | 'operator_bappeda' | 'operator_kecamatan' | 'operator_desa' | 'operator_opd' | string;
     name: string;
     description: string;
 }

@@ -57,6 +57,7 @@ export default function AgregasiAnggaranPage() {
     
     // Level 1 State: Groups
     const [isLoadingGroups, setIsLoadingGroups] = React.useState<boolean>(true);
+    const [isRefreshing, setIsRefreshing] = React.useState<boolean>(false);
     const [groups, setGroups] = React.useState<AgregasiAnggaranGroup[]>([]);
     const [expandedGroups, setExpandedGroups] = React.useState<Record<string, boolean>>({});
 
@@ -168,6 +169,62 @@ export default function AgregasiAnggaranPage() {
             setLoadingDesa(prev => ({ ...prev, [kecamatanKey]: false }));
         }
     }, [statusFilter, searchTerm, sumberDana]);
+
+    // Comprehensive refresh for all levels (summary groups, expanded kecamatan, desa, and segmen)
+    const handleRefresh = React.useCallback(async () => {
+        setIsRefreshing(true);
+        try {
+            // 1. Level 1: Fetch summary groups
+            const filters: any = {};
+            if (tahun !== "all") filters.tahun_anggaran = tahun;
+            if (sumberDana !== "all") filters.sumber_dana = sumberDana;
+
+            const res = await agregasiService.getAgregasi(filters);
+            setGroups(res);
+
+            // 2. Level 2: Refresh all currently expanded groups (Kecamatan)
+            const groupKeys = Object.keys(expandedGroups).filter(k => expandedGroups[k]);
+            const groupPromises = groupKeys.map(async (groupKey) => {
+                const parts = groupKey.split("-");
+                if (parts.length >= 2) {
+                    const tahunAnggaran = parseInt(parts[0], 10);
+                    const jenisBantuan = parts.slice(1).join("-");
+                    return fetchKecamatanForGroup(groupKey, tahunAnggaran, jenisBantuan);
+                }
+            });
+
+            // 3. Level 3: Refresh all currently expanded kecamatan (Desa)
+            const kecKeys = Object.keys(expandedKecamatan).filter(k => expandedKecamatan[k]);
+            const desaPromises = kecKeys.map(async (kecamatanKey) => {
+                const parts = kecamatanKey.split("-");
+                if (parts.length >= 3) {
+                    const tahunAnggaran = parseInt(parts[0], 10);
+                    const jenisBantuan = parts[1];
+                    const idKecamatan = parseInt(parts[2], 10);
+                    return fetchDesaForKecamatan(kecamatanKey, tahunAnggaran, jenisBantuan, idKecamatan);
+                }
+            });
+
+            // 4. Level 4: Refresh all currently expanded desa (Segmen)
+            const desaPlottingIds = Object.keys(expandedDesa).filter(k => expandedDesa[k]);
+            const segmenPromises = desaPlottingIds.map(async (plottingId) => {
+                try {
+                    const segRes = await agregasiService.getAgregasiSegmen({ plotting_id: plottingId });
+                    setSegmenData(prev => ({ ...prev, [plottingId]: segRes }));
+                } catch (err) {
+                    console.error("Gagal refresh segmen:", err);
+                }
+            });
+
+            await Promise.all([...groupPromises, ...desaPromises, ...segmenPromises]);
+            toast.success("Data agregasi anggaran berhasil diperbarui!");
+        } catch (error) {
+            console.error("Error refreshing data:", error);
+            toast.error("Gagal memperbarui data agregasi.");
+        } finally {
+            setIsRefreshing(false);
+        }
+    }, [tahun, sumberDana, expandedGroups, expandedKecamatan, expandedDesa, fetchKecamatanForGroup, fetchDesaForKecamatan]);
 
     // Trigger re-fetch for expanded groups & kecamatan when statusFilter, searchTerm or sumberDana changes
     React.useEffect(() => {
@@ -544,12 +601,13 @@ export default function AgregasiAnggaranPage() {
                         <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={fetchGroups} 
-                            disabled={isLoadingGroups}
-                            className="h-8 px-2.5 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl gap-1.5 text-slate-700 dark:text-slate-300 shadow-2xs cursor-pointer shrink-0"
+                            onClick={handleRefresh} 
+                            disabled={isLoadingGroups || isRefreshing}
+                            className="h-8 px-2.5 text-xs bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 rounded-xl gap-1.5 text-slate-700 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-900 shadow-2xs cursor-pointer shrink-0 transition-all"
+                            title="Segarkan semua data agregasi"
                         >
-                            <RefreshCw className={`w-3.5 h-3.5 ${isLoadingGroups ? "animate-spin" : ""}`} />
-                            <span className="hidden sm:inline">Segarkan</span>
+                            <RefreshCw className={`w-3.5 h-3.5 ${(isLoadingGroups || isRefreshing) ? "animate-spin text-blue-600 dark:text-blue-400" : ""}`} />
+                            <span className="hidden sm:inline">{isRefreshing ? "Memperbarui..." : "Segarkan"}</span>
                         </Button>
                     </div>
                 </div>
@@ -676,6 +734,18 @@ export default function AgregasiAnggaranPage() {
                                     Data plotting anggaran dan laporan monitoring untuk filter terpilih tidak ditemukan.
                                 </EmptyDescription>
                             </EmptyHeader>
+                            <div className="flex items-center gap-2 mt-2">
+                                {isFilterActive && (
+                                    <Button variant="outline" size="sm" onClick={handleResetFilters} className="text-xs rounded-xl gap-1.5 cursor-pointer">
+                                        <RotateCcw className="w-3.5 h-3.5" />
+                                        Reset Filter
+                                    </Button>
+                                )}
+                                <Button size="sm" onClick={handleRefresh} disabled={isRefreshing} className="text-xs bg-blue-600 hover:bg-blue-700 text-white rounded-xl gap-1.5 cursor-pointer">
+                                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? "animate-spin" : ""}`} />
+                                    Segarkan Data
+                                </Button>
+                            </div>
                         </Empty>
                     </div>
                 ) : (

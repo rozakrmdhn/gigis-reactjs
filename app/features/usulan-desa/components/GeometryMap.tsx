@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "~/components/ui/button";
 import OLMap from "ol/Map";
@@ -43,6 +43,7 @@ interface GeometryMapProps {
 
 export interface GeometryMapRef {
     zoomToGeometry: (geometry: UsulanDesaGeometry) => void;
+    fitAllGeometries: () => void;
     zoomIn: () => void;
     zoomOut: () => void;
     resetRotation: () => void;
@@ -221,6 +222,19 @@ export const GeometryMap = forwardRef<GeometryMapRef, GeometryMapProps>(({
                 if (popupOverlayRef.current) {
                     popupOverlayRef.current.setPosition(coords);
                 }
+            }
+        },
+        fitAllGeometries: () => {
+            const map = mapRef.current;
+            if (!map) return;
+            const source = savedSourceRef.current;
+            const extent = source.getExtent();
+            if (extent && extent[0] !== Infinity && extent[0] !== -Infinity) {
+                map.getView().fit(extent, {
+                    padding: getViewportPadding(),
+                    maxZoom: 18,
+                    duration: 800
+                });
             }
         },
         zoomIn: () => {

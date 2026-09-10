@@ -1,5 +1,4 @@
-﻿import { useEffect, useRef, forwardRef, useImperativeHandle, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useRef, forwardRef, useImperativeHandle } from 'react';
 import Map from 'ol/Map';
 import View from 'ol/View';
 import TileLayer from 'ol/layer/Tile';
@@ -10,20 +9,16 @@ import VectorSource from 'ol/source/Vector';
 import XYZ from 'ol/source/XYZ';
 import GeoJSON from 'ol/format/GeoJSON';
 import { fromLonLat, toLonLat } from 'ol/proj';
-import Overlay from 'ol/Overlay';
 import Feature from 'ol/Feature';
 import Point from 'ol/geom/Point';
-import { Style, Stroke, Fill, Text, Icon } from 'ol/style';
-import { X, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Layers, MapPin, Copy, Check } from 'lucide-react';
-import { toast } from 'sonner';
-import { Tooltip, TooltipTrigger, TooltipContent } from '~/components/ui/tooltip';
-import { cn } from '~/lib/utils';
+import { Style, Stroke, Fill, Text, Icon, Circle as CircleStyle } from 'ol/style';
 import { CORE_LAYER_COLORS } from '~/lib/map-config';
 import 'ol/ol.css';
 import { getProxiedLayerUrl } from '~/lib/utils';
 import { useTheme } from "next-themes";
+import * as turf from '@turf/turf';
 
-const getStoredStyle = (key: string, defaultStyle: { color: string; width: number; lineDash?: number[]; scale?: number }) => {
+const getStoredStyle = (key: string, defaultStyle: { color: string; width: number; lineDash?: number[]; scale?: number; visible?: boolean }) => {
     try {
         if (typeof window !== 'undefined') {
             const stored = localStorage.getItem('gigis_custom_vector_styles');
@@ -34,6 +29,8 @@ const getStoredStyle = (key: string, defaultStyle: { color: string; width: numbe
                     let lineDashVal: number[] | undefined = undefined;
                     if (item.lineDash === 'dashed') {
                         lineDashVal = [6, 6];
+                    } else if (item.lineDash === 'dotted') {
+                        lineDashVal = [2, 4];
                     } else if (item.lineDash === 'solid') {
                         lineDashVal = undefined;
                     } else if (Array.isArray(item.lineDash)) {
@@ -44,7 +41,8 @@ const getStoredStyle = (key: string, defaultStyle: { color: string; width: numbe
                         width: item.width !== undefined ? Number(item.width) : defaultStyle.width,
                         lineDash: lineDashVal,
                         scale: item.scale !== undefined ? Number(item.scale) : defaultStyle.scale,
-                        fillColor: item.fillColor || `${item.color || defaultStyle.color}0d`
+                        fillColor: item.fillColor || `${item.color || defaultStyle.color}0d`,
+                        visible: item.visible !== undefined ? Boolean(item.visible) : true
                     };
                 }
             }
@@ -52,7 +50,7 @@ const getStoredStyle = (key: string, defaultStyle: { color: string; width: numbe
     } catch (e) {
         console.error("Error loading custom styles from localStorage:", e);
     }
-    return defaultStyle;
+    return { ...defaultStyle, visible: defaultStyle.visible !== false };
 };
 
 export interface MapPopupItem {
@@ -93,6 +91,13 @@ interface OpenLayersMapProps {
     basemapUrl?: string | 'osm';
     markers?: { id: string; lat: number; lon: number; title?: string }[];
     onFeatureSelect?: (properties: any) => void;
+    onInspectFeatures?: (features: any[], coordinate: [number, number] | null) => void;
+    isInspectMode?: boolean;
+    bufferCenter?: [number, number] | null;
+    bufferRadiusKm?: number;
+    isBufferMode?: boolean;
+    onBufferPointSelect?: (coordinate: [number, number]) => void;
+    overlapGeometry?: any;
     disablePopup?: boolean;
     onMapReady?: (map: Map) => void;
 }
@@ -104,21 +109,31 @@ export interface OpenLayersMapRef {
     zoomToCoordinate: (lon: number, lat: number, zoom?: number) => void;
     fitAllMarkers: () => void;
     zoomToFeature: (geojson: any) => void;
+    fitBuffer: () => void;
+    fitOverlap: () => void;
     getMap: () => Map | null;
 }
 
 export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     className,
     center = [111.8328268, -7.2288555], // Bojonegoro
-    zoom = 10,
+    zoom = 11,
     layers = [],
     geojsonData,
-    showBatasDesa = true,
-    showJalanUtama = true,
-    showSegmenJalan = true,
-    basemapUrl = 'osm',
+    showJalanKabupaten = false,
+    showBatasDesa = false,
+    showJalanUtama = false,
+    showSegmenJalan = false,
+    basemapUrl,
     markers = [],
     onFeatureSelect,
+    onInspectFeatures,
+    isInspectMode = false,
+    bufferCenter = null,
+    bufferRadiusKm = 1.0,
+    isBufferMode = false,
+    onBufferPointSelect,
+    overlapGeometry = null,
     disablePopup = false,
     onMapReady,
 }, ref) => {
@@ -127,26 +142,42 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     const vectorSourceRef = useRef<VectorSource>(new VectorSource());
     const markerSourceRef = useRef<VectorSource>(new VectorSource());
     const highlightSourceRef = useRef<VectorSource>(new VectorSource());
+    const bufferSourceRef = useRef<VectorSource>(new VectorSource());
+    const overlapSourceRef = useRef<VectorSource>(new VectorSource());
 
     // Layer Refs
     const basemapLayerRef = useRef<TileLayer<OSM | XYZ> | null>(null);
     const batasDesaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const utamaLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const segmenLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+    const bufferLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
+    const overlapLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
     const markerLayerRef = useRef<VectorLayer<VectorSource> | null>(null);
-
-    const vectorPopupRef = useRef<Overlay | null>(null);
-    const vectorPopupElementRef = useRef<HTMLDivElement | null>(null);
-
     const { resolvedTheme } = useTheme();
     const isDark = resolvedTheme === "dark";
 
-    // Multi-Popup Layer State
-    const [popupItems, setPopupItems] = useState<MapPopupItem[]>([]);
-    const [popupIndex, setPopupIndex] = useState<number>(0);
-    const [popupCoordinate, setPopupCoordinate] = useState<number[] | null>(null);
-    const [isPopupMinimized, setIsPopupMinimized] = useState(false);
-    const [isPopupClosing, setIsPopupClosing] = useState(false);
+    const onInspectFeaturesRef = useRef(onInspectFeatures);
+    useEffect(() => {
+        onInspectFeaturesRef.current = onInspectFeatures;
+    }, [onInspectFeatures]);
+
+    const isInspectModeRef = useRef(isInspectMode);
+    useEffect(() => {
+        isInspectModeRef.current = isInspectMode;
+        if (mapRef.current) {
+            mapRef.current.getTargetElement().style.cursor = (isInspectMode || isBufferMode) ? 'crosshair' : '';
+        }
+    }, [isInspectMode, isBufferMode]);
+
+    const isBufferModeRef = useRef(isBufferMode);
+    useEffect(() => {
+        isBufferModeRef.current = isBufferMode;
+    }, [isBufferMode]);
+
+    const onBufferPointSelectRef = useRef(onBufferPointSelect);
+    useEffect(() => {
+        onBufferPointSelectRef.current = onBufferPointSelect;
+    }, [onBufferPointSelect]);
 
     const layersRef = useRef<MapLayerConfig[]>(layers);
     useEffect(() => {
@@ -157,23 +188,29 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         getMap: () => mapRef.current,
         zoomToFeature: (geojson: any) => {
             if (!mapRef.current) return;
-
             vectorSourceRef.current.clear();
             if (!geojson) return;
 
-            const format = new GeoJSON();
-            const features = format.readFeatures(geojson, {
-                featureProjection: 'EPSG:3857'
-            });
-
-            vectorSourceRef.current.addFeatures(features);
-
-            const extent = vectorSourceRef.current.getExtent();
-            if (extent && extent[0] !== Infinity) {
-                mapRef.current.getView().fit(extent, {
-                    padding: [50, 50, 50, 50],
-                    duration: 1000
+            try {
+                const format = new GeoJSON();
+                const features = format.readFeatures(geojson, {
+                    featureProjection: 'EPSG:3857'
                 });
+
+                if (features && features.length > 0) {
+                    const tempSource = new VectorSource({ features });
+                    const extent = tempSource.getExtent();
+                    if (extent && extent[0] !== Infinity && extent[0] !== -Infinity) {
+                        mapRef.current.getView().fit(extent, {
+                            padding: [60, 60, 60, 60],
+                            duration: 1000,
+                            maxZoom: 16
+                        });
+                    }
+                    tempSource.clear();
+                }
+            } catch (err) {
+                console.error("Failed to zoom to feature:", err);
             }
         },
         zoomIn: () => {
@@ -224,6 +261,28 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                     });
                 }
             }
+        },
+        fitBuffer: () => {
+            if (!mapRef.current) return;
+            const extent = bufferSourceRef.current.getExtent();
+            if (extent && extent[0] !== Infinity && extent[0] !== -Infinity) {
+                mapRef.current.getView().fit(extent, {
+                    padding: [80, 80, 80, 80],
+                    duration: 800,
+                    maxZoom: 17
+                });
+            }
+        },
+        fitOverlap: () => {
+            if (!mapRef.current) return;
+            const extent = overlapSourceRef.current.getExtent();
+            if (extent && extent[0] !== Infinity && extent[0] !== -Infinity) {
+                mapRef.current.getView().fit(extent, {
+                    padding: [80, 80, 80, 80],
+                    duration: 800,
+                    maxZoom: 17
+                });
+            }
         }
     }));
 
@@ -260,6 +319,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         const utamaLayer = new VectorLayer({
             source: vectorSourceRef.current,
             zIndex: 20,
+            declutter: true,
             visible: showJalanUtama,
             style: (feature) => {
                 const props = feature.getProperties();
@@ -284,49 +344,111 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         const segmenLayer = new VectorLayer({
             source: vectorSourceRef.current,
             zIndex: 40,
+            declutter: true,
             visible: showSegmenJalan,
             style: (feature) => {
                 const props = feature.getProperties();
                 const layer = props._layer;
                 if (layer === 'jalan_segmen') {
-                    const checkMelarosa = props.check_melarosa;
-                    const statusJalan = props.status_jalan;
-                    const kondisi = (props.kondisi || props.KONDISI || '').toLowerCase();
+                    let symbologyMode = 'kondisi';
+                    try {
+                        if (typeof window !== 'undefined') {
+                            symbologyMode = localStorage.getItem('gigis_symbology_mode') || 'kondisi';
+                        }
+                    } catch (e) { }
 
                     let styleKey = 'jalan_desa_baik';
                     let defaultColor = '#22c55e';
                     let defaultWidth = 5;
                     let defaultLineDash: number[] | undefined = undefined;
 
-                    if (statusJalan === 'Jalan Desa') {
-                        if (kondisi === 'baik') {
-                            styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_baik' : 'jalan_desa_baik';
-                            defaultColor = '#22c55e';
-                        } else if (kondisi === 'sedang') {
-                            styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_sedang' : 'jalan_desa_sedang';
-                            defaultColor = '#f59e0b';
+                    if (symbologyMode === 'status_verifikasi') {
+                        const rawStatus = (props.status_verifikasi || props.status || props.status_usulan || '').toString().toLowerCase();
+                        if (rawStatus.includes('setuju') || rawStatus.includes('approved') || rawStatus.includes('terverifikasi') || props.is_verified) {
+                            styleKey = 'verif_approved';
+                            defaultColor = '#10b981';
+                        } else if (rawStatus.includes('ajuk') || rawStatus.includes('submit') || rawStatus.includes('proses') || rawStatus.includes('evaluasi')) {
+                            styleKey = 'verif_submitted';
+                            defaultColor = '#3b82f6';
+                        } else if (rawStatus.includes('revisi') || rawStatus.includes('tolak') || rawStatus.includes('catatan')) {
+                            styleKey = 'verif_revision';
+                            defaultColor = '#f43f5e';
                         } else {
-                            styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_rusak' : 'jalan_desa_rusak';
-                            defaultColor = '#ef4444';
-                        }
-                        if (checkMelarosa === 'Tidak') {
+                            styleKey = 'verif_draft';
+                            defaultColor = '#94a3b8';
                             defaultLineDash = [6, 6];
                         }
-                    } else if (statusJalan === 'Jalan Kabupaten') {
-                        if (kondisi === 'baik') {
-                            styleKey = 'jalan_kabupaten_baik';
-                            defaultColor = '#2563eb';
-                        } else if (kondisi === 'sedang') {
-                            styleKey = 'jalan_kabupaten_sedang';
-                            defaultColor = '#60a5fa';
+                    } else if (symbologyMode === 'jenis_perkerasan') {
+                        const rawPerkerasan = (props.jenis_perkerasan || props.perkerasan || props.tipe_perkerasan || props.jenis_konstruksi || '').toString().toLowerCase();
+                        if (rawPerkerasan.includes('aspal') || rawPerkerasan.includes('hotmix') || rawPerkerasan.includes('lapen')) {
+                            styleKey = 'perkerasan_aspal';
+                            defaultColor = '#0f172a';
+                        } else if (rawPerkerasan.includes('beton') || rawPerkerasan.includes('rigid') || rawPerkerasan.includes('cor')) {
+                            styleKey = 'perkerasan_beton';
+                            defaultColor = '#0284c7';
+                        } else if (rawPerkerasan.includes('paving') || rawPerkerasan.includes('conblock')) {
+                            styleKey = 'perkerasan_paving';
+                            defaultColor = '#d97706';
                         } else {
-                            styleKey = 'jalan_kabupaten_rusak';
-                            defaultColor = '#60a5fa';
+                            styleKey = 'perkerasan_tanah';
+                            defaultColor = '#854d0e';
                             defaultLineDash = [6, 6];
+                        }
+                    } else if (symbologyMode === 'status_jalan') {
+                        const statusJalan = (props.status_jalan || '').toString();
+                        const checkMelarosa = props.check_melarosa;
+                        if (statusJalan === 'Jalan Kabupaten') {
+                            styleKey = 'hirarki_kabupaten';
+                            defaultColor = '#9333ea';
+                            defaultWidth = 6;
+                        } else if (checkMelarosa === 'Tidak') {
+                            styleKey = 'hirarki_lingkungan';
+                            defaultColor = '#06b6d4';
+                            defaultWidth = 4;
+                        } else {
+                            styleKey = 'hirarki_poros';
+                            defaultColor = '#4f46e5';
+                            defaultWidth = 6;
+                        }
+                    } else {
+                        // Default Mode: 'kondisi'
+                        const checkMelarosa = props.check_melarosa;
+                        const statusJalan = props.status_jalan;
+                        const kondisi = (props.kondisi || props.KONDISI || '').toLowerCase();
+
+                        if (statusJalan === 'Jalan Desa') {
+                            if (kondisi === 'baik') {
+                                styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_baik' : 'jalan_desa_baik';
+                                defaultColor = '#22c55e';
+                            } else if (kondisi === 'sedang') {
+                                styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_sedang' : 'jalan_desa_sedang';
+                                defaultColor = '#f59e0b';
+                            } else {
+                                styleKey = checkMelarosa === 'Tidak' ? 'jalan_lingkungan_rusak' : 'jalan_desa_rusak';
+                                defaultColor = '#ef4444';
+                            }
+                            if (checkMelarosa === 'Tidak') {
+                                defaultLineDash = [6, 6];
+                            }
+                        } else if (statusJalan === 'Jalan Kabupaten') {
+                            if (kondisi === 'baik') {
+                                styleKey = 'jalan_kabupaten_baik';
+                                defaultColor = '#2563eb';
+                            } else if (kondisi === 'sedang') {
+                                styleKey = 'jalan_kabupaten_sedang';
+                                defaultColor = '#60a5fa';
+                            } else {
+                                styleKey = 'jalan_kabupaten_rusak';
+                                defaultColor = '#60a5fa';
+                                defaultLineDash = [6, 6];
+                            }
                         }
                     }
 
                     const custom = getStoredStyle(styleKey, { color: defaultColor, width: defaultWidth, lineDash: defaultLineDash });
+                    if (custom.visible === false) {
+                        return []; // Layer category isolated/hidden by user
+                    }
 
                     const styles = [
                         new Style({
@@ -338,18 +460,18 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                         })
                     ];
 
-                    const label = props.nama_ruas || props.NM_RUAS;
+                    const label = props.nama_segmen || props.nama_ruas || props.NM_RUAS || props.nama_jalan;
                     if (label) {
                         styles.push(new Style({
                             text: new Text({
-                                text: label.toString().toUpperCase(),
-                                font: 'bold 10px Inter, sans-serif',
-                                fill: new Fill({ color: '#fff' }),
-                                stroke: new Stroke({ color: custom.color, width: 3 }),
-                                offsetY: -12,
+                                text: label.toString(),
+                                font: '600 10px Inter, system-ui, sans-serif',
+                                fill: new Fill({ color: '#ffffff' }),
+                                stroke: new Stroke({ color: '#090d16', width: 3.5 }),
+                                offsetY: -10,
                                 placement: 'line',
-                                repeat: 300,
-                                overflow: true
+                                overflow: false,
+                                maxAngle: Math.PI / 4,
                             })
                         }));
                     }
@@ -364,6 +486,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         const markerLayer = new VectorLayer({
             source: markerSourceRef.current,
             zIndex: 500,
+            declutter: true,
             style: (feature) => {
                 const title = feature.get('title');
                 const custom = getStoredStyle('marker_titik', { color: '#1e40af', width: 2, scale: 0.07 });
@@ -388,10 +511,154 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         });
         markerLayerRef.current = markerLayer;
 
-        // 6. Highlight Layer
+        // 6. Buffer Layer (Turf.js analysis visualization)
+        const bufferLayer = new VectorLayer({
+            source: bufferSourceRef.current,
+            zIndex: 150,
+            style: (feature) => {
+                const geomType = feature.getGeometry()?.getType();
+                if (geomType === 'Point') {
+                    return new Style({
+                        image: new Icon({
+                            anchor: [0.5, 0.5],
+                            src: 'https://cdn-icons-png.flaticon.com/512/7588/7588725.png',
+                            scale: 0.05,
+                        })
+                    });
+                }
+                return [
+                    new Style({
+                        stroke: new Stroke({
+                            color: '#0891b2',
+                            width: 6,
+                        }),
+                    }),
+                    new Style({
+                        stroke: new Stroke({
+                            color: '#06b6d4',
+                            width: 2.5,
+                            lineDash: [6, 6]
+                        }),
+                        fill: new Fill({
+                            color: 'rgba(6, 182, 212, 0.15)'
+                        })
+                    })
+                ];
+            }
+        });
+        bufferLayerRef.current = bufferLayer;
+
+        // 7. Overlap Intersection Layer (Turf.js Overlap Engine visualization)
+        const overlapLayer = new VectorLayer({
+            source: overlapSourceRef.current,
+            zIndex: 180,
+            style: (feature, resolution) => {
+                const zoom = Math.log2(156543.03392804097 / resolution);
+                const geomType = feature.getGeometry()?.getType();
+                const color = feature.get('color') || '#f59e0b';
+                const name = feature.get('name');
+
+                const styles: Style[] = [];
+
+                if (geomType === 'LineString' || geomType === 'MultiLineString') {
+                    styles.push(
+                        new Style({
+                            stroke: new Stroke({
+                                color: '#090d16',
+                                width: 7,
+                                lineCap: 'round',
+                                lineJoin: 'round',
+                            }),
+                        }),
+                        new Style({
+                            stroke: new Stroke({
+                                color: color,
+                                width: 4,
+                                lineCap: 'round',
+                                lineJoin: 'round',
+                            }),
+                        })
+                    );
+
+                    if (name && zoom >= 13.5) {
+                        styles.push(
+                            new Style({
+                                text: new Text({
+                                    text: String(name),
+                                    font: 'bold 11px Inter, system-ui, sans-serif',
+                                    fill: new Fill({ color: '#ffffff' }),
+                                    stroke: new Stroke({ color: '#090d16', width: 3.5, lineJoin: 'round' }),
+                                    placement: 'line',
+                                    offsetY: -10,
+                                    repeat: 500,
+                                    maxAngle: Math.PI / 6,
+                                    overflow: false,
+                                }),
+                            })
+                        );
+                    }
+                    return styles;
+                }
+
+                if (geomType === 'Point' || geomType === 'MultiPoint') {
+                    return new Style({
+                        image: new CircleStyle({
+                            radius: 7,
+                            fill: new Fill({ color: color }),
+                            stroke: new Stroke({ color: '#ffffff', width: 2.5 }),
+                        }),
+                        text: name ? new Text({
+                            text: String(name),
+                            font: 'bold 10px Inter, system-ui, sans-serif',
+                            fill: new Fill({ color: '#ffffff' }),
+                            stroke: new Stroke({ color: '#090d16', width: 3 }),
+                            offsetY: -14,
+                        }) : undefined
+                    });
+                }
+
+                styles.push(
+                    new Style({
+                        stroke: new Stroke({
+                            color: color,
+                            width: 3,
+                        }),
+                        fill: new Fill({
+                            color: `${color}40`,
+                        }),
+                    }),
+                    new Style({
+                        stroke: new Stroke({
+                            color: '#ffffff',
+                            width: 1.5,
+                            lineDash: [4, 4],
+                        }),
+                    })
+                );
+
+                if (name) {
+                    styles.push(
+                        new Style({
+                            text: new Text({
+                                text: String(name),
+                                font: 'bold 10px Inter, system-ui, sans-serif',
+                                fill: new Fill({ color: '#ffffff' }),
+                                stroke: new Stroke({ color: '#090d16', width: 3 }),
+                                overflow: true,
+                            }),
+                        })
+                    );
+                }
+
+                return styles;
+            },
+        });
+        overlapLayerRef.current = overlapLayer;
+
+        // 8. Highlight Layer
         const highlightLayer = new VectorLayer({
             source: highlightSourceRef.current,
-            zIndex: 100,
+            zIndex: 200,
             style: [
                 new Style({
                     stroke: new Stroke({
@@ -407,18 +674,6 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 }),
             ],
         });
-
-        // Popup Overlay
-        const popupEl = document.createElement('div');
-        popupEl.className = 'vector-popup-container';
-        vectorPopupElementRef.current = popupEl;
-        const vectorPopup = new Overlay({
-            element: popupEl,
-            positioning: 'bottom-center',
-            offset: [0, 0],
-            stopEvent: true,
-        });
-        vectorPopupRef.current = vectorPopup;
 
         const isAtrBpn = basemapUrl && basemapUrl.includes("atrbpn.go.id");
         const finalUrl = isAtrBpn ? `/proxy/basemap?url=${encodeURIComponent(basemapUrl)}` : basemapUrl;
@@ -441,10 +696,12 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 batasDesaLayer,
                 utamaLayer,
                 segmenLayer,
+                bufferLayer,
+                overlapLayer,
                 markerLayer,
                 highlightLayer,
             ],
-            overlays: [vectorPopup],
+            overlays: [],
             controls: [],
             view: new View({
                 center: fromLonLat(center),
@@ -483,7 +740,11 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                 }
             }
 
-            map.getTargetElement().style.cursor = (hit || wmsHit) ? 'pointer' : '';
+            if (isInspectModeRef.current) {
+                map.getTargetElement().style.cursor = 'crosshair';
+            } else {
+                map.getTargetElement().style.cursor = (hit || wmsHit) ? 'pointer' : '';
+            }
         });
 
         // 7. Dynamic Layers Management
@@ -513,7 +774,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
 
                     const layerType = props._layer;
                     if (layerType === 'jalan_segmen') {
-                        title = props.nama_ruas || props.NM_RUAS || "Segmen Jalan";
+                        title = props.nama_ruas || props.NM_RUAS || props.nama_segmen || "Segmen Jalan";
                         badgeText = "Segmen Jalan";
                         badgeColor = "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300";
                     } else if (layerType === 'jalan_utama') {
@@ -527,8 +788,8 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                     } else {
                         const layerId = layer?.get('id');
                         const matchedConfig = currentLayers.find(c => c.id === layerId);
-                        title = props.nama || props.name || props.NAMOBJ || matchedConfig?.title || "Dataset Katalog";
-                        badgeText = matchedConfig?.title || "Katalog Vector";
+                        title = props.nama || props.name || props.NAMOBJ || matchedConfig?.title || "Dataset Spasial";
+                        badgeText = matchedConfig?.title || "Vektor";
                         badgeColor = "bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300";
                     }
 
@@ -594,15 +855,41 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             }
 
             const allItems = [...vectorItems, ...wmsItems];
+            const lonLat = toLonLat(evt.coordinate);
 
-            if (allItems.length > 0) {
-                setIsPopupClosing(false);
-                setPopupItems(allItems);
-                setPopupIndex(0);
-                setPopupCoordinate(evt.coordinate);
-                vectorPopup.setPosition(evt.coordinate);
-            } else {
-                closePopup();
+            if (onInspectFeaturesRef.current) {
+                const geojsonFormat = new GeoJSON();
+                const inspectedList = allItems.map((item) => {
+                    let geomObj = item.geometry;
+                    if (item.geometry instanceof Feature) {
+                        try {
+                            const g = item.geometry.getGeometry();
+                            if (g) {
+                                geomObj = geojsonFormat.writeGeometryObject(g, {
+                                    featureProjection: 'EPSG:3857',
+                                    dataProjection: 'EPSG:4326'
+                                });
+                            }
+                        } catch (e) {}
+                    }
+                    return {
+                        id: String(item.id),
+                        layerId: item.layerId,
+                        title: item.title,
+                        layerTitle: item.badgeText,
+                        type: item.layerId?.startsWith('layer-') ? 'wms' as const : 'vector' as const,
+                        badgeText: item.badgeText,
+                        badgeColor: item.badgeColor,
+                        properties: item.properties,
+                        coordinate: [lonLat[1], lonLat[0]] as [number, number],
+                        geometry: geomObj,
+                    };
+                });
+                onInspectFeaturesRef.current(inspectedList, [lonLat[1], lonLat[0]]);
+            }
+
+            if (isBufferModeRef.current && onBufferPointSelectRef.current) {
+                onBufferPointSelectRef.current([lonLat[1], lonLat[0]]);
             }
         });
 
@@ -621,12 +908,55 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
         };
     }, []);
 
+    // Turf.js Buffer Visualization Effect
+    useEffect(() => {
+        if (!mapRef.current) return;
+        bufferSourceRef.current.clear();
+        if (bufferCenter) {
+            try {
+                const centerPoint = turf.point([bufferCenter[1], bufferCenter[0]]);
+                const bufferPoly = turf.buffer(centerPoint, bufferRadiusKm || 1.0, { units: 'kilometers' });
+                if (bufferPoly) {
+                    const format = new GeoJSON();
+                    const feat = format.readFeature(bufferPoly, { featureProjection: 'EPSG:3857' });
+                    const centerPointGeom = new Feature({
+                        geometry: new Point(fromLonLat([bufferCenter[1], bufferCenter[0]]))
+                    });
+                    bufferSourceRef.current.addFeatures([feat as Feature, centerPointGeom]);
+                }
+            } catch (err) {
+                console.error("Failed to render buffer polygon:", err);
+            }
+        }
+    }, [bufferCenter, bufferRadiusKm]);
+
+    // Turf.js Overlap Intersection Visualization Effect
+    useEffect(() => {
+        if (!mapRef.current) return;
+        overlapSourceRef.current.clear();
+        if (overlapGeometry) {
+            try {
+                const format = new GeoJSON();
+                const features = format.readFeatures(overlapGeometry, { featureProjection: 'EPSG:3857' });
+                if (Array.isArray(features) && features.length > 0) {
+                    overlapSourceRef.current.addFeatures(features);
+                } else if (features) {
+                    overlapSourceRef.current.addFeature(features as any);
+                }
+            } catch (err) {
+                console.error("Failed to render overlap geometry:", err);
+            }
+        }
+    }, [overlapGeometry]);
+
     useEffect(() => {
         const handleStyleChange = () => {
             if (batasDesaLayerRef.current) batasDesaLayerRef.current.changed();
             if (utamaLayerRef.current) utamaLayerRef.current.changed();
             if (segmenLayerRef.current) segmenLayerRef.current.changed();
             if (markerLayerRef.current) markerLayerRef.current.changed();
+            if (bufferLayerRef.current) bufferLayerRef.current.changed();
+            if (overlapLayerRef.current) overlapLayerRef.current.changed();
         };
 
         window.addEventListener('MELAROSA-vector-styles-changed', handleStyleChange);
@@ -634,39 +964,6 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             window.removeEventListener('MELAROSA-vector-styles-changed', handleStyleChange);
         };
     }, []);
-
-    // Reactive effect when active popup item changes
-    useEffect(() => {
-        if (popupItems.length > 0 && popupItems[popupIndex]) {
-            const item = popupItems[popupIndex];
-            highlightSourceRef.current.clear();
-
-            if (item.geometry) {
-                try {
-                    const format = new GeoJSON();
-                    let feat;
-                    if (item.geometry instanceof Feature) {
-                        feat = item.geometry.clone();
-                    } else if (typeof item.geometry === 'object' && item.geometry.type) {
-                        feat = format.readFeature(item.geometry, { featureProjection: 'EPSG:3857' });
-                    }
-                    if (feat) {
-                        if (Array.isArray(feat)) {
-                            highlightSourceRef.current.addFeatures(feat);
-                        } else {
-                            highlightSourceRef.current.addFeature(feat as Feature);
-                        }
-                    }
-                } catch (err) {
-                    console.error("Highlight parse error:", err);
-                }
-            }
-
-            if (onFeatureSelect) {
-                onFeatureSelect(item.properties);
-            }
-        }
-    }, [popupIndex, popupItems, onFeatureSelect]);
 
     useEffect(() => {
         if (!basemapLayerRef.current) return;
@@ -683,19 +980,6 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
             basemapLayerRef.current.setSource(new XYZ({ url: finalUrl, crossOrigin: 'anonymous' }));
         }
     }, [basemapUrl, isDark]);
-
-    const closePopup = () => {
-        setIsPopupClosing(true);
-        setTimeout(() => {
-            setPopupItems([]);
-            setPopupIndex(0);
-            setPopupCoordinate(null);
-            vectorPopupRef.current?.setPosition(undefined);
-            highlightSourceRef.current.clear();
-            setIsPopupMinimized(false);
-            setIsPopupClosing(false);
-        }, 200);
-    };
 
     useEffect(() => {
         if (!mapRef.current) return;
@@ -733,8 +1017,11 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                 featureProjection: 'EPSG:3857'
                             })
                         }),
+                        declutter: true,
                         zIndex: layerConfig.zIndex ?? 50,
-                        style: (feature) => {
+                        style: (feature, resolution) => {
+                            const zoom = Math.log2(156543.03392804097 / resolution);
+
                             // If a specific style is provided in config
                             if (layerConfig.style) {
                                 const customStyle = new Style({
@@ -748,15 +1035,17 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                     })
                                 });
 
-                                if (layerConfig.style.labelField) {
+                                // Only display administrative label at appropriate zoom range (zoom 11.5 - 15.5)
+                                if (layerConfig.style.labelField && zoom >= 11.5 && zoom <= 15.5) {
                                     const label = feature.get(layerConfig.style.labelField);
                                     if (label) {
                                         customStyle.setText(new Text({
                                             text: label.toString().toUpperCase(),
-                                            font: 'bold 10px sans-serif',
+                                            font: 'bold 10px Inter, system-ui, sans-serif',
                                             fill: new Fill({ color: CORE_LAYER_COLORS.ADMIN.hex }),
-                                            stroke: new Stroke({ color: '#ffffff', width: 3 }),
-                                            overflow: true
+                                            stroke: new Stroke({ color: '#090d16', width: 3 }),
+                                            overflow: false,
+                                            placement: 'point'
                                         }));
                                     }
                                 }
@@ -779,9 +1068,35 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                 });
                             }
                             if (id.startsWith('legacy_poros_')) {
-                                return new Style({
-                                    stroke: new Stroke({ color: '#000000', width: 3 })
-                                });
+                                const styles = [
+                                    new Style({
+                                        stroke: new Stroke({ color: '#090d16', width: 5.5, lineCap: 'round', lineJoin: 'round' })
+                                    }),
+                                    new Style({
+                                        stroke: new Stroke({ color: '#f97316', width: 3.5, lineCap: 'round', lineJoin: 'round' })
+                                    })
+                                ];
+
+                                // Road names only show at zoom >= 13.5 to prevent visual clutter
+                                if (zoom >= 13.5) {
+                                    const rawLabel = feature.get('nama_ruas') || feature.get('NM_RUAS') || feature.get('nama_jalan') || feature.get('nama');
+                                    if (rawLabel) {
+                                        styles.push(new Style({
+                                            text: new Text({
+                                                text: String(rawLabel),
+                                                font: '600 11px Inter, system-ui, sans-serif',
+                                                fill: new Fill({ color: '#ffffff' }),
+                                                stroke: new Stroke({ color: '#090d16', width: 3.5, lineJoin: 'round' }),
+                                                offsetY: -10,
+                                                placement: 'line',
+                                                repeat: 600, // Repeat cleanly every 600px along the road
+                                                maxAngle: Math.PI / 6, // 30 deg max bend to prevent distortion
+                                                overflow: false, // Don't render on short lines
+                                            })
+                                        }));
+                                    }
+                                }
+                                return styles;
                             }
                             if (id.startsWith('legacy_segments_')) {
                                 const checkMelarosa = feature.get('check_melarosa');
@@ -792,59 +1107,71 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                                 let lineDash: number[] | undefined = undefined;
 
                                 if (statusJalan === 'Jalan Desa') {
-                                    // Category 1 & 2
                                     if (kondisi === 'baik') color = '#22c55e';
                                     else if (kondisi === 'sedang') color = '#f59e0b'; // Orange
                                     else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') color = '#ef4444'; // Merah
 
                                     if (checkMelarosa === 'Tidak') {
-                                        lineDash = [6, 6]; // Dashed
+                                        lineDash = [6, 6];
                                     }
                                 } else if (statusJalan === 'Jalan Kabupaten') {
-                                    // Category 3
                                     if (kondisi === 'baik') {
-                                        color = '#2563eb'; // Biru
+                                        color = '#2563eb';
                                         lineDash = undefined;
                                     } else if (kondisi === 'sedang') {
-                                        color = '#60a5fa'; // Biru Muda
+                                        color = '#60a5fa';
                                         lineDash = undefined;
                                     } else if (kondisi === 'rusak ringan' || kondisi === 'rusak berat') {
-                                        color = '#2563eb'; // Biru
-                                        lineDash = [6, 6]; // Dashed
+                                        color = '#2563eb';
+                                        lineDash = [6, 6];
                                     }
                                 }
 
                                 const styles = [
                                     new Style({
                                         stroke: new Stroke({
+                                            color: '#090d16',
+                                            width: 6,
+                                            lineCap: 'round',
+                                            lineJoin: 'round',
+                                        })
+                                    }),
+                                    new Style({
+                                        stroke: new Stroke({
                                             color: color,
-                                            width: 5,
-                                            lineDash: lineDash
+                                            width: 4,
+                                            lineDash: lineDash,
+                                            lineCap: 'round',
+                                            lineJoin: 'round',
                                         })
                                     })
                                 ];
 
-                                const label = feature.get('nama_ruas') || feature.get('NM_RUAS');
-                                if (label) {
-                                    styles.push(new Style({
-                                        text: new Text({
-                                            text: label.toString().toUpperCase(),
-                                            font: 'bold 10px Inter, sans-serif',
-                                            fill: new Fill({ color: '#fff' }),
-                                            stroke: new Stroke({ color: color, width: 3 }),
-                                            offsetY: -12,
-                                            placement: 'line',
-                                            repeat: 300,
-                                            overflow: true
-                                        })
-                                    }));
+                                // Segment details only show at detailed zoom >= 15.5
+                                if (zoom >= 15.5) {
+                                    const label = feature.get('nama_segmen') || feature.get('nama_ruas') || feature.get('NM_RUAS') || (feature.get('kode_ruas') ? `Ruas ${feature.get('kode_ruas')}` : null);
+                                    if (label) {
+                                        styles.push(new Style({
+                                            text: new Text({
+                                                text: String(label),
+                                                font: '600 10px Inter, system-ui, sans-serif',
+                                                fill: new Fill({ color: '#f8fafc' }),
+                                                stroke: new Stroke({ color: '#090d16', width: 3.5, lineJoin: 'round' }),
+                                                offsetY: -10,
+                                                placement: 'line',
+                                                repeat: 400,
+                                                maxAngle: Math.PI / 6,
+                                                overflow: false,
+                                            })
+                                        }));
+                                    }
                                 }
                                 return styles;
                             }
 
                             return new Style({
                                 stroke: new Stroke({ color: CORE_LAYER_COLORS.CATALOG.hex, width: 2 }),
-                                fill: new Fill({ color: `${CORE_LAYER_COLORS.CATALOG.hex}1a` }) // 10% opacity
+                                fill: new Fill({ color: `${CORE_LAYER_COLORS.CATALOG.hex}1a` })
                             });
                         }
                     });
@@ -875,18 +1202,43 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
                     if (source && layerConfig.params) {
                         source.updateParams(layerConfig.params);
                     }
+                } else if (layerConfig.type === 'vector' && layerConfig.data && (layer as any).getSource) {
+                    const vecSource = (layer as any).getSource();
+                    if (vecSource && typeof vecSource.clear === 'function') {
+                        vecSource.clear();
+                        const features = new GeoJSON().readFeatures(layerConfig.data, {
+                            featureProjection: 'EPSG:3857'
+                        });
+                        vecSource.addFeatures(features);
+                    }
                 }
             }
         });
 
         // 3. Remove layers that are no longer in the config (only for dynamic layers)
-        const PROTECTED_LAYER_IDS = ['legacy_batas_desa', 'legacy_utama', 'legacy_segmen', 'highlight', 'legacy_poros'];
+        const STATIC_INTERNAL_LAYER_IDS = [
+            'legacy_batas_desa',
+            'legacy_utama',
+            'legacy_segmen',
+            'highlight',
+            'buffer_layer',
+            'overlap_layer',
+            'marker_layer',
+            'basemap'
+        ];
         const dynamicLayerIds = new Set(layers.map(l => l.id));
+        const layersToRemove: any[] = [];
         existingLayers.getArray().forEach(l => {
             const id = l.get('id');
-            if (id && !PROTECTED_LAYER_IDS.includes(id) && !dynamicLayerIds.has(id)) {
-                map.removeLayer(l);
+            if (id && !STATIC_INTERNAL_LAYER_IDS.includes(id) && !dynamicLayerIds.has(id)) {
+                layersToRemove.push(l);
             }
+        });
+        layersToRemove.forEach(l => {
+            if (l && typeof (l as any).getSource === 'function') {
+                (l as any).getSource()?.clear?.();
+            }
+            map.removeLayer(l);
         });
 
     }, [layers]);
@@ -939,168 +1291,7 @@ export const OpenLayersMap = forwardRef<OpenLayersMapRef, OpenLayersMapProps>(({
     };
 
     return (
-        <div ref={mapElement} className={className}>
-            {!disablePopup && popupItems.length > 0 && popupCoordinate && vectorPopupElementRef.current && createPortal(
-                <div className={cn(
-                    "flex flex-col items-center select-none pointer-events-none origin-bottom transform-gpu transition-all duration-300",
-                    isPopupClosing ? "animate-out zoom-out-95 fade-out" : "animate-in zoom-in-95 fade-in"
-                )}>
-                    {/* Main Popup Card Container */}
-                    <div className={cn(
-                        "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl border border-blue-100 dark:border-slate-800 shadow-2xl w-72 flex flex-col pointer-events-auto relative transition-all duration-300",
-                        isPopupMinimized ? "p-2 h-auto" : "p-3.5 max-h-[380px]"
-                    )}>
-                        {/* Action Controls (Minimize & Close) */}
-                        <div className="absolute top-3 right-3 flex gap-1 z-10">
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsPopupMinimized(!isPopupMinimized)}
-                                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md transition-colors text-slate-400"
-                                    >
-                                        {isPopupMinimized ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-[10px] py-1 px-2">
-                                    {isPopupMinimized ? "Perbesar Popup" : "Minimalkan Popup"}
-                                </TooltipContent>
-                            </Tooltip>
-
-                            <Tooltip>
-                                <TooltipTrigger asChild>
-                                    <button
-                                        type="button"
-                                        onClick={closePopup}
-                                        className="p-1 hover:bg-red-50 dark:hover:bg-red-950/40 hover:text-red-500 rounded-md transition-colors text-slate-400"
-                                    >
-                                        <X size={14} />
-                                    </button>
-                                </TooltipTrigger>
-                                <TooltipContent side="top" className="text-[10px] py-1 px-2">
-                                    Tutup Popup
-                                </TooltipContent>
-                            </Tooltip>
-                        </div>
-
-                        {/* Multi-layer Popup Navigator Header */}
-                        {popupItems.length > 1 && (
-                            <div className="flex items-center justify-between bg-slate-100 dark:bg-slate-800/80 px-2 py-1 rounded-xl text-[10px] font-bold mb-2 mr-14">
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            type="button"
-                                            disabled={popupIndex === 0}
-                                            onClick={() => setPopupIndex(prev => Math.max(0, prev - 1))}
-                                            className="p-0.5 hover:bg-white dark:hover:bg-slate-700 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all text-slate-600 dark:text-slate-300"
-                                        >
-                                            <ChevronLeft size={13} />
-                                        </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="text-[10px] py-1 px-2">
-                                        Layer Sebelumnya
-                                    </TooltipContent>
-                                </Tooltip>
-                                <span className="text-[9px] font-black text-slate-600 dark:text-slate-300 tracking-tight">
-                                    Layer {popupIndex + 1} dari {popupItems.length}
-                                </span>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <button
-                                            type="button"
-                                            disabled={popupIndex === popupItems.length - 1}
-                                            onClick={() => setPopupIndex(prev => Math.min(popupItems.length - 1, prev + 1))}
-                                            className="p-0.5 hover:bg-white dark:hover:bg-slate-700 rounded disabled:opacity-30 disabled:hover:bg-transparent transition-all text-slate-600 dark:text-slate-300"
-                                        >
-                                            <ChevronRight size={13} />
-                                        </button>
-                                    </TooltipTrigger>
-                                    <TooltipContent side="top" className="text-[10px] py-1 px-2">
-                                        Layer Selanjutnya
-                                    </TooltipContent>
-                                </Tooltip>
-                            </div>
-                        )}
-
-                        {/* Current Active Item Header */}
-                        <div className={cn("flex items-center gap-2.5 mb-2.5 shrink-0", popupItems.length === 1 && "mr-12")}>
-                            <div className="p-1.5 bg-blue-600 rounded-lg text-white shadow-md shadow-blue-500/20 shrink-0">
-                                <Layers size={14} />
-                            </div>
-                            <div className="min-w-0 flex-1">
-                                <span className={cn(
-                                    "text-[8px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded leading-none inline-block mb-1",
-                                    popupItems[popupIndex]?.badgeColor || "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
-                                )}>
-                                    {popupItems[popupIndex]?.badgeText || "Feature"}
-                                </span>
-                                <h4 className="font-bold text-slate-800 dark:text-slate-100 text-xs truncate leading-tight">
-                                    {popupItems[popupIndex]?.title || 'DETAIL DATA'}
-                                </h4>
-                            </div>
-                        </div>
-
-                        {/* Content Body */}
-                        <div className={cn(
-                            "transition-all duration-300 overflow-hidden flex flex-col",
-                            isPopupMinimized ? "max-h-0 opacity-0" : "max-h-[250px] opacity-100 border-t border-slate-100 dark:border-slate-800 pt-2.5"
-                        )}>
-                            <div className="overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
-                                {Object.entries(popupItems[popupIndex]?.properties || {})
-                                    .filter(([key]) => !['geometry', '_layer', 'bbox', 'fid', 'id'].includes(key))
-                                    .map(([key, value]) => (
-                                        <div key={key} className="flex flex-col p-1.5 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
-                                            <span className="text-[8px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tighter leading-none mb-1">
-                                                {key.replace(/_/g, ' ')}
-                                            </span>
-                                            <span className="text-[11px] font-extrabold text-slate-700 dark:text-slate-200 break-words">
-                                                {formatValue(key, value)}
-                                                {(key.toLowerCase().includes('panjang') || key.toLowerCase().includes('lebar')) ? ' m' : ''}
-                                            </span>
-                                        </div>
-                                    ))}
-                            </div>
-
-                            <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 gap-1.5">
-                                <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">Koordinat</span>
-                                <div className="flex items-center gap-1.5 min-w-0">
-                                    <code className="text-[9.5px] font-mono font-bold bg-slate-50 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700 text-blue-600 dark:text-blue-400 truncate">
-                                        {toLonLat(popupCoordinate)[1].toFixed(6)}, {toLonLat(popupCoordinate)[0].toFixed(6)}
-                                    </code>
-                                    <Tooltip>
-                                        <TooltipTrigger asChild>
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    const lonLat = toLonLat(popupCoordinate);
-                                                    const coordText = `${lonLat[1].toFixed(6)}, ${lonLat[0].toFixed(6)}`;
-                                                    navigator.clipboard.writeText(coordText);
-                                                    toast.success(`Koordinat disalin: ${coordText}`);
-                                                }}
-                                                className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 rounded transition-colors shrink-0"
-                                            >
-                                                <Copy size={13} />
-                                            </button>
-                                        </TooltipTrigger>
-                                        <TooltipContent side="top" className="text-[10px] py-1 px-2">
-                                            Salin Koordinat
-                                        </TooltipContent>
-                                    </Tooltip>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Thick Vertical Dotted Pointer Line & Pulsing Target Point Indicator */}
-                    <div className="flex flex-col items-center relative z-20 shrink-0 pointer-events-none">
-                        <div className="w-0 h-6 border-l-[3px] border-dotted border-blue-600 dark:border-blue-400 shadow-sm" />
-                        <div className="w-3 h-3 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 shadow-md animate-ping absolute -bottom-0.5" />
-                        <div className="w-3 h-3 rounded-full bg-blue-600 border-2 border-white dark:border-slate-900 shadow-md" />
-                    </div>
-                </div>,
-                vectorPopupElementRef.current
-            )}
-        </div>
+        <div ref={mapElement} className={className} />
     );
 });
 

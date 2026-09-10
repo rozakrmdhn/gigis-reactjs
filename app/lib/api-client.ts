@@ -1,4 +1,4 @@
-﻿import { toast } from "sonner";
+import { toast } from "sonner";
 import { authService } from "~/services/auth.service";
 
 let lastErrorToastMessage = "";
@@ -135,9 +135,9 @@ export const apiClient = {
                     }
                 }
                 
-                // If not an admin route, do not force logout or redirect
+                // If not an admin route, do not force logout or show session expired toast
                 if (!isAdminRoute) {
-                    throw new Error("Gagal mengambil data");
+                    throw new Error("Unauthorized");
                 }
                 
                 // Refresh failed — notify user then full logout
@@ -149,18 +149,49 @@ export const apiClient = {
                 throw new Error("Unauthorized");
             }
 
-            // ── Other auth errors ────────────────────────────────────────────────
+            // ── Other auth / forbidden errors ───────────────────────────────────
             if (response.status === 403) {
-                if (!isAdminRoute) {
-                    throw new Error("Gagal mengambil data");
+                const errData = await response.json().catch(() => null);
+                const errorCode = errData?.errorCode || errData?.error_code;
+                const message = errData?.message || "Anda tidak memiliki hak akses untuk melakukan aksi ini.";
+
+                if (showErrorToast) {
+                    if (errorCode === "READ_ONLY_ROLE") {
+                        toast.warning("Akses Ditolak: Role Read-Only", {
+                            id: "forbidden-read-only",
+                            duration: 5000,
+                            description: message,
+                        });
+                    } else if (errorCode === "NO_DRAFT_ASSIGNMENT") {
+                        toast.warning("Belum Ada Penugasan Bappeda", {
+                            id: "forbidden-no-draft",
+                            duration: 5000,
+                            description: message,
+                        });
+                    } else if (errorCode === "REPORT_SUBMITTED") {
+                        toast.warning("Menunggu Verifikasi Bappeda", {
+                            id: "forbidden-report-submitted",
+                            duration: 5000,
+                            description: message,
+                        });
+                    } else if (errorCode === "REPORT_FINALIZED") {
+                        toast.warning("Dokumen Telah Disahkan / Final", {
+                            id: "forbidden-report-finalized",
+                            duration: 5000,
+                            description: message,
+                        });
+                    } else {
+                        toast.warning("Akses Ditolak (403)", {
+                            id: "forbidden-access",
+                            duration: 5000,
+                            description: message || "Hubungi administrator jika Anda merasa ini keliru.",
+                        });
+                    }
                 }
-                const forbiddenMsg = "Anda tidak memiliki hak akses untuk melakukan aksi ini.";
-                toast.warning(forbiddenMsg, {
-                    id: "forbidden-access",
-                    duration: 5000,
-                    description: "Hubungi administrator jika Anda merasa ini keliru.",
-                });
-                throw new Error(forbiddenMsg);
+                const customErr: any = new Error(message);
+                customErr.errorCode = errorCode;
+                customErr.status = 403;
+                throw customErr;
             }
 
             const data: ApiResponse<T> = await response.json().catch(() => ({
@@ -181,8 +212,11 @@ export const apiClient = {
             return data;
         } catch (error) {
             if (error instanceof Error) {
+                const isCustomForbidden = (error as any).status === 403 || (error as any).errorCode;
                 const alreadyToasted =
                     error.message === "Unauthorized" ||
+                    error.message === "Forbidden" ||
+                    isCustomForbidden ||
                     error.message.startsWith("Anda tidak memiliki hak akses");
                 if (showErrorToast && !alreadyToasted) {
                     showUniqueErrorToast(errorMessage || error.message);

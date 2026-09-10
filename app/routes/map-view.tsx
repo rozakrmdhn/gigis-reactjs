@@ -1,28 +1,18 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type OLMap from 'ol/Map';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import {
   Layers as LayersIcon,
   Search,
-  Map as MapIcon,
   ChevronDown,
-  Info,
   X,
-  ArrowLeft,
   Filter,
   SlidersHorizontal,
   FolderOpen,
   MapPin,
-  Navigation,
   Activity,
   CheckCircle2,
   AlertCircle,
-  Ruler,
-  Globe,
-  Home,
-  BarChart3 as ChartIcon,
-  Database as DatabaseIcon,
-  Route as RouteIcon,
   Menu,
 } from 'lucide-react';
 import {
@@ -39,9 +29,12 @@ import { OpenLayersMap, type OpenLayersMapRef, type MapLayerConfig } from "~/fea
 import { MapLegend, type LegendItem } from "~/features/peta/components/MapLegend";
 import { GeonodeDatasetPanel } from "~/features/peta/components/GeonodeDatasetPanel";
 import { MapLayerControlPanel } from "~/features/peta/components/MapLayerControlPanel";
+import { SpatialInspector, type InspectedFeature } from "~/features/peta/components/SpatialInspector";
+import { SpatialBufferAnalysisPanel } from "~/features/peta/components/SpatialBufferAnalysisPanel";
+import { CrossLayerAnalysisPanel } from "~/features/peta/components/CrossLayerAnalysisPanel";
 import { KecamatanDropdown } from "~/features/peta/components/KecamatanDropdown";
 import { DesaDropdown } from "~/features/peta/components/DesaDropdown";
-import { type Kecamatan } from "~/services/kecamatan";
+import { kecamatanService, type Kecamatan } from "~/services/kecamatan";
 import { desaService, type Desa } from "~/services/desa";
 import { jalanService, type RekapDibangun } from "~/services/jalan";
 import { cn, getProxiedLayerUrl } from '~/lib/utils';
@@ -84,27 +77,28 @@ import { CORE_LAYER_COLORS } from '~/lib/map-config';
 import { MapViewSidebar } from "~/features/peta/components/MapViewSidebar";
 import { MapViewMapControls } from "~/features/peta/components/MapViewMapControls";
 import { SegmenMiniMap } from "~/features/peta/components/SegmenMiniMap";
+import { RekapPembangunanPanel } from "~/features/peta/components/RekapPembangunanPanel";
 
 export const meta: MetaFunction = () => {
   return [
     { title: "Peta Interaktif WebGIS — MELAROSA" },
-    { name: "description", content: "Peta Interaktif Spasial Pembangunan Infrastruktur BKK Kabupaten Bojonegoro" },
+    { name: "description", content: "Peta Interaktif Spasial Pembangunan Infrastruktur Kabupaten Bojonegoro" },
   ];
 };
 
 const BASEMAPS = [
-  { id: 'carto-light', name: 'Positron Light', url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/light_all/14/13283/8518.png' },
+  { id: 'google-sat', name: 'Google Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
   { id: 'carto-dark', name: 'Dark Matter', url: 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/dark_all/14/13283/8518.png' },
+  { id: 'carto-light', name: 'Positron Light', url: 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png', thumbnail: 'https://a.basemaps.cartocdn.com/light_all/14/13283/8518.png' },
   { id: 'osm', name: 'OpenStreetMap', url: 'osm', thumbnail: 'https://tile.openstreetmap.org/14/13283/8518.png' },
   { id: 'satellite', name: 'Esri Satellite', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', thumbnail: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/14/8518/13283' },
   { id: 'google-road', name: 'Google Maps', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=m&x=13283&y=8518&z=14' },
-  { id: 'google-sat', name: 'Google Satellite', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
 ];
 
 // Public Navigation Links Map
 const PUBLIC_NAV_LINKS = [
   { name: "Beranda", path: "/", icon: IconHome, desc: "Halaman Utama Portal" },
-  { name: "Peta Spasial", path: "/map-view", icon: IconMap2, desc: "WebGIS Peta Interaktif" },
+  { name: "Peta Interaktif", path: "/map-view", icon: IconMap2, desc: "WebGIS Peta Interaktif" },
   { name: "Ruas Jalan", path: "/jalan-desa", icon: IconRoute, desc: "Daftar Jalan Poros Desa" },
   { name: "Statistik", path: "/statistik", icon: IconChartBar, desc: "Data Rekap & Capaian" },
   { name: "Katalog Dataset", path: "/katalog-dataset", icon: IconDatabase, desc: "Dataset GeoNode OGC" },
@@ -115,6 +109,7 @@ export default function MapViewPage() {
   const [mapInstance, setMapInstance] = useState<OLMap | null>(null);
   const isMobile = useIsMobile();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isRekapOpen, setIsRekapOpen] = useState(false);
 
@@ -125,7 +120,7 @@ export default function MapViewPage() {
     }
   }, [isMobile]);
 
-  // Basemap & Legend State
+  // Basemap & Legend State — Default Google Hybrid
   const [activeBasemap, setActiveBasemap] = useState(BASEMAPS[0]);
   const [rekapData, setRekapData] = useState<RekapDibangun | null>(null);
   const [segmentsData, setSegmentsData] = useState<any>(null);
@@ -138,6 +133,91 @@ export default function MapViewPage() {
   // Map Layers & Markers State
   const [activeLayers, setActiveLayers] = useState<MapLayerConfig[]>([]);
   const [markers, setMarkers] = useState<Marker[]>([]);
+
+  // Spatial Inspector (Tahap 1: WMS & Vector Feature Identification)
+  const [isInspectMode, setIsInspectMode] = useState(false);
+  const [inspectedFeatures, setInspectedFeatures] = useState<InspectedFeature[]>([]);
+  const [inspectedCoordinate, setInspectedCoordinate] = useState<[number, number] | null>(null);
+  const [isInspectorOpen, setIsInspectorOpen] = useState(false);
+
+  // Spatial Buffer Analysis & Overlap Engine (Turf.js Engine)
+  const [isBufferMode, setIsBufferMode] = useState(false);
+  const [bufferCenter, setBufferCenter] = useState<[number, number] | null>(null);
+  const [bufferRadiusKm, setBufferRadiusKm] = useState<number>(1.0);
+  const [isBufferPanelOpen, setIsBufferPanelOpen] = useState(false);
+  const [isCrossLayerOpen, setIsCrossLayerOpen] = useState(false);
+  const [overlapGeometry, setOverlapGeometry] = useState<any | null>(null);
+
+  // Aggregate all road features for Turf.js calculations
+  const allRoadFeatures = useMemo(() => {
+    const feats: any[] = [];
+    if (segmentsData?.features && Array.isArray(segmentsData.features)) {
+      feats.push(...segmentsData.features);
+    }
+    activeLayers.forEach((l) => {
+      if (l.type === 'vector' && l.data?.features && Array.isArray(l.data.features)) {
+        feats.push(...l.data.features);
+      }
+    });
+    return feats;
+  }, [segmentsData, activeLayers]);
+
+  // Standard GIS Layer Stacking & Ordering Engine
+  const sortAndApplyConsistentZIndex = (layers: MapLayerConfig[]): MapLayerConfig[] => {
+    const roadLayers: MapLayerConfig[] = [];
+    const adminLayers: MapLayerConfig[] = [];
+    const thematicLayers: MapLayerConfig[] = [];
+
+    layers.forEach((l) => {
+      const id = l.id || '';
+      if (id.startsWith('legacy_segments_') || id.startsWith('legacy_poros_') || id.startsWith('legacy_utama')) {
+        roadLayers.push(l);
+      } else if (id.startsWith('legacy_desa_') || id.startsWith('batas_kecamatan_') || id.startsWith('legacy_batas_desa')) {
+        adminLayers.push(l);
+      } else {
+        thematicLayers.push(l);
+      }
+    });
+
+    // 1. Road Infrastructure (Highest Priority): Segmen (120) -> Poros (110) -> Utama (100)
+    roadLayers.sort((a, b) => {
+      const getScore = (id: string) => {
+        if (id.startsWith('legacy_segments_')) return 3;
+        if (id.startsWith('legacy_poros_')) return 2;
+        return 1;
+      };
+      return getScore(b.id) - getScore(a.id);
+    });
+
+    const assignedRoads = roadLayers.map((l, i) => ({
+      ...l,
+      zIndex: 120 - i * 5,
+    }));
+
+    // 2. Administrative Boundaries (Middle Priority): Desa (60) -> Kecamatan (50)
+    adminLayers.sort((a, b) => {
+      const getScore = (id: string) => {
+        if (id.startsWith('legacy_desa_')) return 2;
+        return 1;
+      };
+      return getScore(b.id) - getScore(a.id);
+    });
+
+    const assignedAdmin = adminLayers.map((l, i) => ({
+      ...l,
+      zIndex: 60 - i * 5,
+    }));
+
+    // 3. Thematic / GeoNode / WMS Layers (Base Thematic: 45 down to 10)
+    const totalThematic = thematicLayers.length;
+    const assignedThematic = thematicLayers.map((l, i) => ({
+      ...l,
+      zIndex: Math.max(10, 45 - Math.round((i / Math.max(1, totalThematic)) * 30)),
+    }));
+
+    // Ordered list in Tab Menu Layer: Roads -> Admin -> Thematic
+    return [...assignedRoads, ...assignedAdmin, ...assignedThematic];
+  };
 
   // Load default visible layers from backend API
   useEffect(() => {
@@ -166,7 +246,7 @@ export default function MapViewPage() {
                 zIndex: l.order ?? 50
               };
             });
-          setActiveLayers(prev => [...defaultVisibleLayers, ...prev]);
+          setActiveLayers(prev => sortAndApplyConsistentZIndex([...defaultVisibleLayers, ...prev]));
         }
       } catch (err) {
         console.error("Failed to load default layers:", err);
@@ -193,7 +273,13 @@ export default function MapViewPage() {
     activeLayers.forEach(layer => {
       if (layer.visible === false) return;
 
-      if (layer.id.startsWith('legacy_segments_')) {
+      if (layer.id.startsWith('legacy_poros_')) {
+        itemsMap.set('Jalan Poros Desa', {
+          label: 'Jalan Poros Desa',
+          color: '#f97316',
+          active: true
+        });
+      } else if (layer.id.startsWith('legacy_segments_')) {
         itemsMap.set('Segmen Jalan Desa', {
           label: 'Segmen Jalan Desa',
           color: CORE_LAYER_COLORS.SEGMENTS.hex,
@@ -229,24 +315,17 @@ export default function MapViewPage() {
   // Handlers
   const handleAddLayer = (newLayer: MapLayerConfig) => {
     setActiveLayers(prev => {
-      const next = [newLayer, ...prev];
-      return next.map((l, i) => ({
-        ...l,
-        zIndex: 100 + (next.length - i) * 10
-      }));
+      const next = [newLayer, ...prev.filter(l => l.id !== newLayer.id)];
+      return sortAndApplyConsistentZIndex(next);
     });
   };
 
   const handleRemoveLayer = (id: string) => {
-    setActiveLayers(prev => prev.filter(l => l.id !== id));
+    setActiveLayers(prev => sortAndApplyConsistentZIndex(prev.filter(l => l.id !== id)));
   };
 
   const handleReorderLayers = (newOrder: MapLayerConfig[]) => {
-    const updated = newOrder.map((layer, index) => ({
-      ...layer,
-      zIndex: 100 + (newOrder.length - index) * 10
-    }));
-    setActiveLayers(updated);
+    setActiveLayers(sortAndApplyConsistentZIndex(newOrder));
   };
 
   const handleToggleVisibility = (id: string) => {
@@ -298,17 +377,43 @@ export default function MapViewPage() {
     setMarkers(prev => [...prev, newMarker]);
   };
 
+  // Dedicated Clean Reset for Administrative Vector Layers
+  const handleResetAdminFilters = () => {
+    setSelectedKecamatan(null);
+    setSelectedDesa(null);
+    setRekapData(null);
+    setSegmentsData(null);
+
+    setActiveLayers(prev => {
+      const filtered = prev.filter(l =>
+        !l.id.startsWith('batas_kecamatan_') &&
+        !l.id.startsWith('legacy_desa_') &&
+        !l.id.startsWith('legacy_poros_') &&
+        !l.id.startsWith('legacy_segments_')
+      );
+      return sortAndApplyConsistentZIndex(filtered);
+    });
+
+    mapRef.current?.zoomToFeature(null);
+  };
+
   // Administrative selection handlers
   const handleSelectKecamatan = async (kecamatan: Kecamatan | null) => {
     setLoading(true);
     setSelectedKecamatan(kecamatan);
     setSelectedDesa(null);
+    setRekapData(null);
+    setSegmentsData(null);
 
-    setActiveLayers(prev => prev.filter(l =>
-      !l.id.startsWith('batas_kecamatan_') &&
-      !l.id.startsWith('legacy_desa_') &&
-      !l.id.startsWith('legacy_segments_')
-    ));
+    setActiveLayers(prev => {
+      const filtered = prev.filter(l =>
+        !l.id.startsWith('batas_kecamatan_') &&
+        !l.id.startsWith('legacy_desa_') &&
+        !l.id.startsWith('legacy_poros_') &&
+        !l.id.startsWith('legacy_segments_')
+      );
+      return sortAndApplyConsistentZIndex(filtered);
+    });
 
     mapRef.current?.zoomToFeature(null);
 
@@ -325,20 +430,22 @@ export default function MapViewPage() {
           const filtered = prev.filter(l =>
             !l.id.startsWith('batas_kecamatan_') &&
             !l.id.startsWith('legacy_desa_') &&
+            !l.id.startsWith('legacy_poros_') &&
             !l.id.startsWith('legacy_segments_')
           );
 
           const layerId = `batas_kecamatan_${kecamatan.id}`;
           const layerTitle = `KECAMATAN: ${kecamatan.nama_kecamatan}`;
-          return [{
+          const newLayer: MapLayerConfig = {
             id: layerId,
             title: layerTitle,
             type: 'vector',
             data: geojson,
             visible: true,
             opacity: 1.0,
-            style: { stroke: '#2563eb', width: 2, lineDash: [4, 4], fill: 'rgba(37, 99, 235, 0.04)', labelField: 'nama_desa' }
-          }, ...filtered];
+            style: { stroke: '#38bdf8', width: 2.5, lineDash: [4, 4], fill: 'rgba(56, 189, 248, 0.08)', labelField: 'nama_desa' }
+          };
+          return sortAndApplyConsistentZIndex([newLayer, ...filtered]);
         });
 
         mapRef.current?.zoomToFeature(geojson);
@@ -354,13 +461,18 @@ export default function MapViewPage() {
     setLoading(true);
     setSelectedDesa(desa);
 
-    setActiveLayers(prev => prev.filter(l =>
-      !l.id.startsWith('legacy_desa_') &&
-      !l.id.startsWith('legacy_poros_') &&
-      !l.id.startsWith('legacy_segments_')
-    ));
+    setActiveLayers(prev => {
+      const filtered = prev.filter(l =>
+        !l.id.startsWith('legacy_desa_') &&
+        !l.id.startsWith('legacy_poros_') &&
+        !l.id.startsWith('legacy_segments_')
+      );
+      return sortAndApplyConsistentZIndex(filtered);
+    });
 
     if (!desa) {
+      setRekapData(null);
+      setSegmentsData(null);
       if (selectedKecamatan) {
         const geojson = await desaService.getGeojsonDesa(selectedKecamatan.id);
         if (geojson) mapRef.current?.zoomToFeature(geojson);
@@ -399,49 +511,48 @@ export default function MapViewPage() {
       } : null;
 
       setActiveLayers(prev => {
-        let filtered = prev.filter(l =>
+        const filtered = prev.filter(l =>
           !l.id.startsWith('legacy_desa_') &&
           !l.id.startsWith('legacy_poros_') &&
           !l.id.startsWith('legacy_segments_')
         );
 
+        const newLayersToAdd: MapLayerConfig[] = [];
+
         if (desaGeojson) {
-          filtered = [{
+          newLayersToAdd.push({
             id: `legacy_desa_${desa.id}`,
             title: `Wilayah: ${desa.nama_desa}`,
             type: 'vector',
             data: desaGeojson,
             visible: true,
             opacity: 1.0,
-            zIndex: 6
-          }, ...filtered];
+          });
         }
 
         if (porosGeojson) {
-          filtered = [{
+          newLayersToAdd.push({
             id: `legacy_poros_${desa.id}`,
             title: `Jalan Poros: ${desa.nama_desa}`,
             type: 'vector',
             data: porosGeojson,
             visible: true,
             opacity: 1,
-            zIndex: 90
-          }, ...filtered];
+          });
         }
 
         if (segmentsGeojson) {
-          filtered = [{
+          newLayersToAdd.push({
             id: `legacy_segments_${desa.id}`,
             title: `Segmen Jalan: ${desa.nama_desa}`,
             type: 'vector',
             data: segmentsGeojson,
             visible: true,
             opacity: 1,
-            zIndex: 100
-          }, ...filtered];
+          });
         }
 
-        return filtered;
+        return sortAndApplyConsistentZIndex([...newLayersToAdd, ...filtered]);
       });
 
       if (desaGeojson) {
@@ -454,28 +565,74 @@ export default function MapViewPage() {
     }
   };
 
+  // ── INTEGRASI QUICK AKSI DARI URL SEARCH PARAMS ──────────────────
+  const paramKecamatan = searchParams.get('kecamatan');
+  const paramIdKecamatan = searchParams.get('id_kecamatan');
+  const paramDesa = searchParams.get('desa');
+  const paramIdDesa = searchParams.get('id_desa');
+  const hasInitializedParams = useRef(false);
+
+  useEffect(() => {
+    async function initFromQueryParams() {
+      if (hasInitializedParams.current) return;
+      if (!paramKecamatan && !paramIdKecamatan) return;
+
+      try {
+        const list = await kecamatanService.getKecamatan();
+        if (Array.isArray(list)) {
+          const matchedKec = list.find((k) =>
+            (paramIdKecamatan && String(k.id) === String(paramIdKecamatan)) ||
+            (paramKecamatan && k.nama_kecamatan.toLowerCase() === paramKecamatan.toLowerCase())
+          );
+
+          if (matchedKec) {
+            hasInitializedParams.current = true;
+            await handleSelectKecamatan(matchedKec);
+
+            if (paramDesa || paramIdDesa) {
+              const desaList = await desaService.getDesa(matchedKec.id);
+              if (Array.isArray(desaList)) {
+                const matchedDesa = desaList.find((d) =>
+                  (paramIdDesa && String(d.id) === String(paramIdDesa)) ||
+                  (paramDesa && d.nama_desa.toLowerCase() === paramDesa.toLowerCase())
+                );
+                if (matchedDesa) {
+                  await handleSelectDesa(matchedDesa);
+                }
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to initialize from query params:", err);
+      }
+    }
+
+    initFromQueryParams();
+  }, [paramKecamatan, paramIdKecamatan, paramDesa, paramIdDesa]);
+
   const [activeTab, setActiveTab] = useState<string>('catalog');
 
-  // Refined Sidebar Content with Single Streamlined Header & Clean Shadcn Tabs
+  // Refined Sidebar Content with Dark Theme Console Look
   const SidebarContent = (
-    <div className="flex flex-col h-full bg-white dark:bg-slate-950 min-h-0">
+    <div className="flex flex-col h-full bg-[#080B11] text-slate-200 min-h-0">
       <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val)} className="flex-1 flex flex-col min-h-0 gap-0">
         {/* Streamlined Unified Header */}
-        <div className="p-3 border-b border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 shrink-0 space-y-2.5">
+        <div className="p-3 border-b border-white/[0.08] bg-[#0E131F]/90 shrink-0 space-y-2.5">
           <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-blue-600/10 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <div className="w-7 h-7 rounded-lg bg-slate-800 border border-white/[0.1] text-emerald-400 flex items-center justify-center shrink-0">
                 <SlidersHorizontal className="w-4 h-4" />
               </div>
               <div className="leading-none">
-                <h3 className="text-xs font-bold text-slate-900 dark:text-white tracking-tight">Panel Kontrol Spasial</h3>
-                <span className="text-[10px] text-slate-500 font-medium">GIS MELAROSA</span>
+                <h3 className="text-xs font-bold text-white tracking-tight">Panel Kontrol Spasial</h3>
+                <span className="text-[10px] text-slate-400 font-medium">GIS MELAROSA</span>
               </div>
             </div>
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 dark:hover:bg-slate-800"
+              className="h-7 w-7 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08]"
               onClick={() => setIsSidebarOpen(false)}
               title="Tutup Sidebar"
             >
@@ -483,35 +640,35 @@ export default function MapViewPage() {
             </Button>
           </div>
 
-          <TabsList className="w-full grid grid-cols-3 h-9 bg-white dark:bg-slate-950 p-1 border border-slate-200 dark:border-slate-800 rounded-xl">
-            <TabsTrigger value="catalog" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+          <TabsList className="w-full grid grid-cols-3 h-9 bg-slate-900/90 p-1 border border-white/[0.08] rounded-xl">
+            <TabsTrigger value="catalog" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-950 text-slate-400">
               <FolderOpen className="w-3.5 h-3.5" />
               Katalog
             </TabsTrigger>
-            <TabsTrigger value="layers" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger value="layers" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-950 text-slate-400">
               <LayersIcon className="w-3.5 h-3.5" />
               Layer
               {activeLayers.length > 0 && (
-                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] h-4 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] h-4 bg-slate-800 text-slate-300 border border-white/[0.08]">
                   {activeLayers.length}
                 </Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="filters" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-blue-600 data-[state=active]:text-white">
+            <TabsTrigger value="filters" className="text-xs font-semibold gap-1.5 rounded-lg data-[state=active]:bg-white data-[state=active]:text-slate-950 text-slate-400">
               <Filter className="w-3.5 h-3.5" />
               Filter
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="catalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950">
+        <TabsContent value="catalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-[#080B11]">
           <GeonodeDatasetPanel
             onAddLayer={handleAddLayer}
             activeLayerIds={activeLayerIds}
           />
         </TabsContent>
 
-        <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950">
+        <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-[#080B11]">
           <MapLayerControlPanel
             layers={activeLayers}
             onRemoveLayer={handleRemoveLayer}
@@ -522,34 +679,64 @@ export default function MapViewPage() {
           />
         </TabsContent>
 
-        <TabsContent value="filters" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden">
-          <div className="flex-1 overflow-y-auto p-4 space-y-5 bg-white dark:bg-slate-950">
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Search className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                Pencarian Alamat Lokasi
-              </label>
+        <TabsContent value="filters" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-[#080B11]">
+          <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 custom-scrollbar">
+            
+            {/* Section 1: Pencarian Alamat & Lokasi */}
+            <div className="bg-[#0B101D] p-3.5 rounded-2xl border border-white/[0.08] space-y-2.5 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-emerald-950/60 border border-emerald-800/40 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Search size={13} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200 leading-none">
+                    Pencarian Alamat
+                  </h4>
+                  <span className="text-[10px] text-slate-500">Cari nama lokasi atau jalan</span>
+                </div>
+              </div>
               <AddressSearch onSelect={handleSearchSelect} />
             </div>
 
-            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Filter className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                Filter Wilayah Administrasi
-              </label>
-              <div className="space-y-2.5">
+            {/* Section 2: Filter Wilayah Administrasi */}
+            <div className="bg-[#0B101D] p-3.5 rounded-2xl border border-white/[0.08] space-y-3 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-6 h-6 rounded-lg bg-cyan-950/60 border border-cyan-800/40 flex items-center justify-center text-cyan-400 shrink-0">
+                    <Filter size={13} />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-200 leading-none">
+                      Wilayah Administrasi
+                    </h4>
+                    <span className="text-[10px] text-slate-500">Zoom ke Kecamatan & Desa</span>
+                  </div>
+                </div>
+                {(selectedKecamatan || selectedDesa) && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleResetAdminFilters}
+                    className="h-6 px-2 text-[10px] font-bold text-slate-400 hover:text-white"
+                  >
+                    Reset
+                  </Button>
+                )}
+              </div>
+
+              <div className="space-y-2">
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-500 mb-1 block">Kecamatan</span>
+                  <span className="text-[10px] font-bold text-slate-400 mb-1 block uppercase tracking-wider">Kecamatan</span>
                   <KecamatanDropdown
-                    className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 text-sm font-semibold"
+                    className="w-full"
                     selectedKecamatanName={selectedKecamatan?.nama_kecamatan}
                     onSelectKecamatan={handleSelectKecamatan}
                   />
                 </div>
                 <div>
-                  <span className="text-[11px] font-semibold text-slate-500 mb-1 block">Desa / Kelurahan</span>
+                  <span className="text-[10px] font-bold text-slate-400 mb-1 block uppercase tracking-wider">Desa / Kelurahan</span>
                   <DesaDropdown
-                    className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 text-sm font-semibold"
+                    className="w-full"
                     idKecamatan={selectedKecamatan?.id}
                     selectedDesaName={selectedDesa?.nama_desa}
                     onSelectDesa={handleSelectDesa}
@@ -558,11 +745,20 @@ export default function MapViewPage() {
               </div>
             </div>
 
-            <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-800">
-              <label className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                Input Koordinat GPS
-              </label>
+            {/* Section 3: Input Koordinat GPS Manual */}
+            <div className="bg-[#0B101D] p-3.5 rounded-2xl border border-white/[0.08] space-y-3 shadow-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg bg-amber-950/60 border border-amber-800/40 flex items-center justify-center text-amber-400 shrink-0">
+                  <MapPin size={13} />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-200 leading-none">
+                    Titik Koordinat GPS
+                  </h4>
+                  <span className="text-[10px] text-slate-500">Plot manual atau deteksi GPS</span>
+                </div>
+              </div>
+
               <CoordinateInput
                 markers={markers}
                 onAdd={handleAddMarker}
@@ -571,6 +767,7 @@ export default function MapViewPage() {
                 onZoomTo={(m) => mapRef.current?.zoomToCoordinate(m.lon, m.lat)}
               />
             </div>
+
           </div>
         </TabsContent>
       </Tabs>
@@ -578,62 +775,60 @@ export default function MapViewPage() {
   );
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950 font-sans select-none">
+    <div className="relative w-screen h-screen overflow-hidden bg-[#080B11] font-sans select-none text-slate-100">
 
       {/* ── 1. FLOATING TOP BAR (HEADER PETA MODERN) ──────────────────── */}
-      {/* Reason: Header melayang translusen menggantikan navbar 64px statis.
-          Integrasi lengkap dengan Dropdown Menu Publik untuk navigasi antar halaman publik. */}
       <header className="absolute top-3 left-3 right-3 z-30 pointer-events-none flex items-center justify-between gap-3">
         {/* Kiri: Brand Logo + Menu Publik Dropdown + Sidebar Toggle */}
-        <div className="pointer-events-auto flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3 py-2 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-md">
+        <div className="pointer-events-auto flex items-center gap-2 bg-[#080B11]/90 backdrop-blur-xl px-3 py-2 rounded-2xl border border-white/[0.08] shadow-2xl">
           {/* Logo Mark */}
           <Link
             to="/"
-            className="flex items-center gap-2 group hover:opacity-90 transition-opacity"
+            className="flex items-center gap-2.5 group hover:opacity-90 transition-opacity"
             title="Kembali ke Beranda"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-tr from-blue-600 via-blue-500 to-emerald-500 text-white shadow-sm">
-              <IconTopologyComplex size={18} />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-800 border border-white/[0.12] text-white shadow-sm">
+              <IconTopologyComplex size={18} className="text-emerald-400" />
             </div>
             <div className="hidden sm:flex flex-col leading-none">
-              <span className="text-sm font-extrabold tracking-tight text-slate-900 dark:text-white">
+              <span className="text-sm font-extrabold tracking-tight text-white">
                 MELAROSA
               </span>
-              <span className="text-[9px] font-semibold text-slate-500 dark:text-slate-400">
+              <span className="text-[9px] font-semibold text-slate-400">
                 Sistem Informasi Geospasial
               </span>
             </div>
           </Link>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-1" />
+          <div className="h-4 w-px bg-white/[0.08] mx-1" />
 
-          {/* Menu Publik Dropdown — Solusi Navigasi Halaman Publik dari Peta */}
+          {/* Menu Publik Dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="sm"
-                className="h-8 px-2.5 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5"
+                className="h-8 px-2.5 rounded-xl text-xs font-semibold text-slate-300 hover:text-white hover:bg-white/[0.06] gap-1.5"
               >
-                <Menu className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                <Menu className="w-3.5 h-3.5 text-slate-400" />
                 <span className="hidden md:inline">Menu Publik</span>
                 <ChevronDown className="w-3 h-3 text-slate-400" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-56 p-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl">
+            <DropdownMenuContent align="start" className="w-56 p-2 bg-[#0C101A] backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-2xl text-slate-200">
               <DropdownMenuLabel className="px-2 py-1 text-[11px] font-bold text-slate-400 uppercase tracking-wider">
                 Navigasi Portal Publik
               </DropdownMenuLabel>
-              <DropdownMenuSeparator className="my-1" />
+              <DropdownMenuSeparator className="my-1 bg-white/[0.06]" />
               {PUBLIC_NAV_LINKS.map((link) => (
                 <DropdownMenuItem
                   key={link.path}
                   onClick={() => navigate(link.path)}
-                  className="rounded-xl text-xs font-semibold gap-2.5 py-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="rounded-xl text-xs font-semibold gap-2.5 py-2 cursor-pointer text-slate-200 focus:bg-slate-800 focus:text-white"
                 >
-                  <link.icon size={16} className="text-blue-600 dark:text-blue-400 shrink-0" />
+                  <link.icon size={16} className="text-slate-400 shrink-0" />
                   <div className="flex flex-col leading-none">
-                    <span className="font-bold text-slate-800 dark:text-slate-200">{link.name}</span>
+                    <span className="font-bold text-white">{link.name}</span>
                     <span className="text-[10px] text-slate-400 font-normal mt-0.5">{link.desc}</span>
                   </div>
                 </DropdownMenuItem>
@@ -641,7 +836,7 @@ export default function MapViewPage() {
             </DropdownMenuContent>
           </DropdownMenu>
 
-          <div className="h-4 w-px bg-slate-200 dark:bg-slate-800 mx-0.5" />
+          <div className="h-4 w-px bg-white/[0.08] mx-0.5" />
 
           {/* Toggle Sidebar */}
           <Button
@@ -649,17 +844,17 @@ export default function MapViewPage() {
             size="sm"
             onClick={() => setIsSidebarOpen(!isSidebarOpen)}
             className={cn(
-              "h-8 px-2.5 rounded-xl text-xs font-semibold gap-1.5 transition-all",
+              "h-8 px-2.5 rounded-xl text-xs font-semibold gap-1.5 transition-all cursor-pointer",
               isSidebarOpen
-                ? "bg-blue-50 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 border border-blue-200 dark:border-blue-800"
-                : "text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                ? "bg-white/[0.08] text-white border border-white/[0.08]"
+                : "text-slate-300 hover:text-white hover:bg-white/[0.04]"
             )}
             title={isSidebarOpen ? "Sembunyikan Panel Kontrol" : "Tampilkan Panel Kontrol"}
           >
-            <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            <SlidersHorizontal className="w-3.5 h-3.5 text-slate-400" />
             <span className="hidden md:inline">Panel Kontrol</span>
             {activeLayers.length > 0 && (
-              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+              <Badge variant="secondary" className="px-1.5 py-0 text-[10px] bg-slate-800 border border-white/[0.08] text-slate-300">
                 {activeLayers.length}
               </Badge>
             )}
@@ -668,35 +863,31 @@ export default function MapViewPage() {
 
         {/* Tengah: Quick Filter Indicator (Desa/Kecamatan terpilih) */}
         {(selectedKecamatan || selectedDesa) && (
-          <div className="pointer-events-auto hidden lg:flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-2 rounded-2xl border border-blue-200 dark:border-blue-900/60 shadow-md animate-in fade-in slide-in-from-top-2">
-            <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
-            <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+          <div className="pointer-events-auto hidden lg:flex items-center gap-2 bg-[#080B11]/90 backdrop-blur-xl px-3.5 py-2 rounded-2xl border border-white/[0.08] shadow-2xl animate-in fade-in slide-in-from-top-2">
+            <MapPin className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+            <span className="text-xs font-semibold text-white">
               {selectedDesa ? `Desa ${selectedDesa.nama_desa}` : `Kecamatan ${selectedKecamatan?.nama_kecamatan}`}
             </span>
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => {
-                if (selectedDesa) handleSelectDesa(null);
-                else handleSelectKecamatan(null);
-              }}
-              className="h-5 w-5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600"
+              onClick={handleResetAdminFilters}
+              className="h-5 w-5 rounded-md hover:bg-white/[0.08] text-slate-400 hover:text-white"
             >
               <X className="w-3 h-3" />
             </Button>
           </div>
         )}
 
-        {/* Kanan: Mode Toggle & Link Portal */}
-        <div className="pointer-events-auto flex items-center gap-2 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-2.5 py-1.5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-md">
-          <ModeToggle />
+        {/* Kanan: Link Portal Admin */}
+        <div className="pointer-events-auto flex items-center gap-2 bg-[#080B11]/90 backdrop-blur-xl px-2.5 py-1.5 rounded-2xl border border-white/[0.08] shadow-2xl">
           <Link to="/login">
             <Button
               size="sm"
-              className="h-8 px-3 rounded-xl text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white gap-1.5 shadow-sm"
+              className="h-8 px-3 rounded-xl text-xs font-semibold bg-white text-slate-950 hover:bg-slate-200 gap-1.5 shadow-sm cursor-pointer"
             >
               <IconLogin size={14} />
-              <span className="hidden sm:inline">Portal Admin</span>
+              <span className="hidden sm:inline">Portal Operator</span>
             </Button>
           </Link>
         </div>
@@ -709,7 +900,7 @@ export default function MapViewPage() {
           isOpen={isSidebarOpen}
           onToggle={setIsSidebarOpen}
           widthClass="w-[340px]"
-          className="top-16 left-3 bottom-3 h-[calc(100vh-76px)] rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xl z-30 pt-0 overflow-hidden"
+          className="top-16 left-3 bottom-3 h-[calc(100vh-76px)] rounded-2xl border border-white/[0.08] shadow-2xl z-30 pt-0 overflow-hidden"
         >
           {SidebarContent}
         </MapViewSidebar>
@@ -722,18 +913,71 @@ export default function MapViewPage() {
           markers={markers}
           basemapUrl={activeBasemap.url}
           onMapReady={setMapInstance}
+          isInspectMode={isInspectMode}
+          bufferCenter={bufferCenter}
+          bufferRadiusKm={bufferRadiusKm}
+          isBufferMode={isBufferMode}
+          overlapGeometry={overlapGeometry}
+          onBufferPointSelect={(coord) => {
+            setBufferCenter(coord);
+            setIsBufferPanelOpen(true);
+          }}
+          onInspectFeatures={(features, coord) => {
+            if (features.length > 0 && coord && !isBufferMode) {
+              setInspectedFeatures(features);
+              setInspectedCoordinate(coord);
+              setIsInspectorOpen(true);
+            }
+          }}
         />
+
+        {/* Floating Inspect Mode Indicator Badge */}
+        {isInspectMode && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-[#080B11]/95 text-emerald-400 border border-emerald-500/30 px-3.5 py-1.5 rounded-full shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+            <span className="text-xs font-bold tracking-tight text-white">Mode Analisa Spasial Aktif</span>
+            <span className="text-[11px] text-slate-400 hidden sm:inline">• Klik pada peta / layer WMS untuk analisa</span>
+            <button
+              type="button"
+              onClick={() => setIsInspectMode(false)}
+              className="ml-1 text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Floating Buffer Analysis Mode Indicator Badge */}
+        {isBufferMode && (
+          <div className="absolute top-20 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 bg-[#080B11]/95 text-cyan-400 border border-cyan-500/30 px-3.5 py-1.5 rounded-full shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95">
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
+            <span className="text-xs font-bold tracking-tight text-white">Mode Analisis Radius (Turf.js) Aktif</span>
+            <span className="text-[11px] text-slate-400 hidden sm:inline">• Klik pada peta untuk membuat titik pusat buffer</span>
+            <button
+              type="button"
+              onClick={() => {
+                setIsBufferMode(false);
+                setIsBufferPanelOpen(false);
+                setBufferCenter(null);
+                setOverlapGeometry(null);
+              }}
+              className="ml-1 text-slate-400 hover:text-white text-xs font-bold cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Loading Indicator */}
         {loading && (
           <div
             className={cn(
-              "absolute z-40 flex items-center gap-2.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md px-3.5 py-2 rounded-xl shadow-md border border-slate-200 dark:border-slate-800 transition-all duration-300",
+              "absolute z-40 flex items-center gap-2.5 bg-[#080B11]/95 backdrop-blur-xl px-3.5 py-2 rounded-xl shadow-xl border border-white/[0.08] transition-all duration-300",
               isSidebarOpen ? "top-20 left-[356px]" : "top-20 left-4"
             )}
           >
-            <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">Memuat layer spasial...</span>
+            <div className="h-4 w-4 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-semibold text-slate-200">Memuat layer spasial...</span>
           </div>
         )}
 
@@ -752,13 +996,110 @@ export default function MapViewPage() {
           )}
         />
 
-        {/* Map Zoom / Geolocation Controls (Kanan Atas) */}
+        {/* Map Zoom / Geolocation / Inspect / Buffer / Cross-Layer Controls (Kanan Atas) */}
         <MapViewMapControls
           map={mapInstance}
+          isInspectMode={isInspectMode}
+          onToggleInspectMode={() => {
+            const nextState = !isInspectMode;
+            setIsInspectMode(nextState);
+            if (nextState) {
+              setIsBufferMode(false);
+              setIsBufferPanelOpen(false);
+              setIsCrossLayerOpen(false);
+              setOverlapGeometry(null);
+            }
+          }}
+          isBufferMode={isBufferMode}
+          onToggleBufferMode={() => {
+            const nextState = !isBufferMode;
+            setIsBufferMode(nextState);
+            if (nextState) {
+              setIsInspectMode(false);
+              setIsInspectorOpen(false);
+              setIsCrossLayerOpen(false);
+            } else {
+              setIsBufferPanelOpen(false);
+              setBufferCenter(null);
+              setOverlapGeometry(null);
+            }
+          }}
+          isCrossLayerMode={isCrossLayerOpen}
+          onToggleCrossLayerMode={() => {
+            const nextState = !isCrossLayerOpen;
+            setIsCrossLayerOpen(nextState);
+            if (nextState) {
+              setIsInspectMode(false);
+              setIsInspectorOpen(false);
+              setIsBufferMode(false);
+              setIsBufferPanelOpen(false);
+            } else {
+              setOverlapGeometry(null);
+            }
+          }}
           onZoomIn={() => mapRef.current?.zoomIn()}
           onZoomOut={() => mapRef.current?.zoomOut()}
           onResetBearing={() => mapRef.current?.resetRotation()}
           className="absolute top-20 right-4 z-20"
+        />
+
+        {/* Spatial Inspector & Single-Feature Overlap Panel */}
+        <SpatialInspector
+          features={inspectedFeatures}
+          coordinate={inspectedCoordinate}
+          isOpen={isInspectorOpen && !isBufferMode && !isCrossLayerOpen}
+          activeLayers={activeLayers}
+          onHighlightGeometryChange={setOverlapGeometry}
+          onFitOverlap={() => mapRef.current?.fitOverlap()}
+          onClose={() => {
+            setIsInspectorOpen(false);
+            setOverlapGeometry(null);
+          }}
+          onFocusFeature={(feat) => {
+            if (feat.coordinate && mapRef.current) {
+              mapRef.current.zoomToCoordinate(feat.coordinate[1], feat.coordinate[0], 16);
+            }
+          }}
+        />
+
+        {/* Spatial Buffer & Overlap Analysis Panel (Turf.js Engine) */}
+        <SpatialBufferAnalysisPanel
+          isOpen={isBufferPanelOpen && !isCrossLayerOpen}
+          center={bufferCenter}
+          radiusKm={bufferRadiusKm}
+          onRadiusChange={setBufferRadiusKm}
+          roadFeatures={allRoadFeatures}
+          activeWmsLayers={activeLayers.filter(l => l.type === 'wms')}
+          onClose={() => {
+            setIsBufferPanelOpen(false);
+            setBufferCenter(null);
+            setOverlapGeometry(null);
+          }}
+          onFocus={() => {
+            if (overlapGeometry) {
+              mapRef.current?.fitOverlap();
+            } else {
+              mapRef.current?.fitBuffer();
+            }
+          }}
+          onOverlapGeometryChange={setOverlapGeometry}
+        />
+
+        {/* Cross-Layer Overlap Analysis Panel (Jalan vs Pola Ruang / Hutan) */}
+        <CrossLayerAnalysisPanel
+          isOpen={isCrossLayerOpen}
+          onClose={() => {
+            setIsCrossLayerOpen(false);
+            setOverlapGeometry(null);
+          }}
+          roadFeatures={allRoadFeatures}
+          activeLayers={activeLayers}
+          onHighlightGeometryChange={setOverlapGeometry}
+          onFocusGeometry={(geom) => {
+            if (mapRef.current && geom) {
+              mapRef.current.zoomToFeature(geom);
+            }
+          }}
         />
 
         {/* Floating Basemap Selector Popover (Kanan Bawah) */}
@@ -766,34 +1107,34 @@ export default function MapViewPage() {
           <Popover>
             <PopoverTrigger asChild>
               <Button
-                variant="outline"
-                className="h-10 px-3 rounded-xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-slate-200 dark:border-slate-800 shadow-md text-xs font-semibold gap-2 hover:bg-slate-50 dark:hover:bg-slate-800"
+                variant="ghost"
+                className="h-10 px-3.5 rounded-xl bg-[#0C101A]/95 hover:bg-slate-800 text-white hover:text-white backdrop-blur-xl border border-white/[0.08] shadow-2xl text-xs font-semibold gap-2 cursor-pointer transition-colors"
               >
-                <IconLayersSubtract size={16} className="text-blue-600 dark:text-blue-400" />
-                <span>Peta Dasar: {activeBasemap.name}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                <IconLayersSubtract size={16} className="text-emerald-400 shrink-0" />
+                <span className="text-white">Peta Dasar: {activeBasemap.name}</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               </Button>
             </PopoverTrigger>
             <PopoverContent
               side="top"
               align="end"
-              className="w-72 p-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border border-slate-200 dark:border-slate-800 shadow-xl rounded-2xl"
+              className="w-72 p-3 bg-[#0C101A] backdrop-blur-xl border border-white/[0.08] shadow-2xl rounded-2xl text-slate-200"
             >
-              <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mb-2.5">Pilih Peta Dasar (Basemap)</p>
+              <p className="text-xs font-bold text-white mb-2.5">Pilih Peta Dasar (Basemap)</p>
               <div className="grid grid-cols-2 gap-2">
                 {BASEMAPS.map((b) => (
                   <button
                     key={b.id}
                     onClick={() => setActiveBasemap(b)}
                     className={cn(
-                      "relative rounded-xl overflow-hidden border-2 transition-all group text-left",
+                      "relative rounded-xl overflow-hidden border-2 transition-all group text-left cursor-pointer",
                       activeBasemap.id === b.id
-                        ? "border-blue-600 ring-2 ring-blue-500/20"
-                        : "border-slate-200 dark:border-slate-800 hover:border-blue-400"
+                        ? "border-white ring-2 ring-white/20"
+                        : "border-white/[0.08] hover:border-white/40"
                     )}
                   >
                     <img src={b.thumbnail} alt={b.name} className="w-full h-14 object-cover" />
-                    <div className="p-1.5 bg-slate-900/80 backdrop-blur-xs text-white">
+                    <div className="p-1.5 bg-[#080B11]/90 backdrop-blur-xs text-white">
                       <p className="text-[10px] font-bold truncate leading-tight">{b.name}</p>
                     </div>
                   </button>
@@ -809,214 +1150,27 @@ export default function MapViewPage() {
         <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 flex justify-center pointer-events-none">
           <Button
             onClick={() => setIsRekapOpen(true)}
-            className="pointer-events-auto px-4 h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg border border-blue-500 transition-all font-semibold text-xs gap-2 cursor-pointer"
+            className="pointer-events-auto px-4 h-9 bg-[#0B101D]/90 hover:bg-[#121829] text-white backdrop-blur-xl rounded-full shadow-2xl border border-emerald-500/30 hover:border-emerald-500/60 transition-all font-bold text-xs gap-2 cursor-pointer group"
           >
-            <Activity className="w-4 h-4" />
-            Rekap Pembangunan Desa {selectedDesa.nama_desa}
-            <ChevronDown className="w-4 h-4 rotate-180" />
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <Activity className="w-3.5 h-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+            <span>Rekap Desa {selectedDesa.nama_desa}</span>
+            <span className="px-1.5 py-0.2 rounded-full bg-emerald-950 text-[10px] text-emerald-300 font-mono border border-emerald-800/40">
+              {Math.min(100, Math.round(((rekapData.total_panjang_dibangun || 0) / Math.max(1, (rekapData.total_panjang_aset || 0) - (rekapData.total_panjang_puk || 0))) * 100))}%
+            </span>
+            <ChevronDown className="w-3.5 h-3.5 text-slate-400 rotate-180" />
           </Button>
         </div>
       )}
 
-      {/* ── 4. BOTTOM SHEET REKAP PEMBANGUNAN ─────────────────────────── */}
-      <Sheet open={isRekapOpen} onOpenChange={setIsRekapOpen}>
-        <SheetContent side="bottom" className="h-auto max-h-[85dvh] rounded-t-3xl border-t-0 p-0 overflow-hidden shadow-2xl overflow-y-auto">
-          <div className="flex flex-col min-h-0 pt-6 px-6 pb-8 bg-white dark:bg-slate-900">
-            {/* Sheet Header */}
-            <SheetHeader className="pb-4 text-left border-b border-slate-100 dark:border-slate-800">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
-                    <Activity className="w-4 h-4" />
-                    <span className="text-xs font-bold uppercase tracking-wider">Ringkasan Infrastruktur Desa</span>
-                  </div>
-                  <SheetTitle className="text-xl font-extrabold text-slate-900 dark:text-white">
-                    Desa {rekapData?.nama_desa}
-                  </SheetTitle>
-                  <SheetDescription className="text-xs text-slate-500 font-medium">
-                    Kecamatan {rekapData?.nama_kecamatan} • Kabupaten Bojonegoro
-                  </SheetDescription>
-                </div>
-
-                {/* Progress Status Badge */}
-                <div className="flex items-center gap-3">
-                  {(() => {
-                    const pemetaan = rekapData?.total_panjang_aset || 0;
-                    const naikStatus = rekapData?.total_panjang_puk || 0;
-                    const jalanDesaSekarang = Math.max(0, pemetaan - naikStatus);
-                    const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
-
-                    const pct = jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100;
-                    const isDone = pct >= 100;
-
-                    return (
-                      <Badge
-                        className={cn(
-                          "px-3.5 py-1.5 rounded-xl text-xs font-semibold border flex items-center gap-2",
-                          isDone
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800"
-                            : "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800"
-                        )}
-                      >
-                        {isDone ? (
-                          <>
-                            <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                            <span>Infrastruktur Tuntas</span>
-                          </>
-                        ) : (
-                          <>
-                            <AlertCircle className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                            <span>Dalam Proses Pembangunan</span>
-                          </>
-                        )}
-                      </Badge>
-                    );
-                  })()}
-                </div>
-              </div>
-            </SheetHeader>
-
-            {/* Sheet Tabs */}
-            <Tabs defaultValue="overview" className="mt-4">
-              <TabsList className="w-full max-w-xs grid grid-cols-2 h-9 p-1 bg-slate-100 dark:bg-slate-800 rounded-lg">
-                <TabsTrigger value="overview" className="text-xs font-semibold">Status Capaian</TabsTrigger>
-                <TabsTrigger value="segments" className="text-xs font-semibold">Daftar Segmen</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="overview" className="py-4 space-y-6">
-                {/* 4 Stat Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <Card className="border border-slate-200 dark:border-slate-800 shadow-xs">
-                    <CardHeader className="p-3 pb-1">
-                      <CardTitle className="text-[11px] font-semibold text-slate-500">Pemetaan Jalan Desa</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-0">
-                      <div className="text-lg font-bold text-slate-900 dark:text-white">
-                        {(rekapData?.total_panjang_aset || 0).toLocaleString('id-ID')} m
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border border-slate-200 dark:border-slate-800 shadow-xs">
-                    <CardHeader className="p-3 pb-1">
-                      <CardTitle className="text-[11px] font-semibold text-slate-500">Naik Status Kab.</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-0">
-                      <div className="text-lg font-bold text-slate-900 dark:text-white">
-                        {(rekapData?.total_panjang_puk || 0).toLocaleString('id-ID')} m
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 shadow-xs">
-                    <CardHeader className="p-3 pb-1">
-                      <CardTitle className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">Jalan Desa Sekarang</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-0">
-                      <div className="text-lg font-bold text-blue-700 dark:text-blue-300">
-                        {Math.max(0, (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)).toLocaleString('id-ID')} m
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 shadow-xs">
-                    <CardHeader className="p-3 pb-1">
-                      <CardTitle className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Belum Tertangani</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-3 pt-0">
-                      <div className="text-lg font-bold text-amber-700 dark:text-amber-300">
-                        {Math.max(0, ((rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0)) - (rekapData?.total_panjang_dibangun || 0)).toLocaleString('id-ID')} m
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                {/* Progress Bar Detail */}
-                {(() => {
-                  const jalanDesaSekarang = (rekapData?.total_panjang_aset || 0) - (rekapData?.total_panjang_puk || 0);
-                  const jalanDibangun = rekapData?.total_panjang_dibangun || 0;
-                  const pct = Math.min(100, Math.round(jalanDesaSekarang > 0 ? (jalanDibangun / jalanDesaSekarang) * 100 : 100));
-
-                  return (
-                    <div className="bg-slate-50 dark:bg-slate-800/40 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">Progress Pembangunan Fisik</span>
-                        <span className="text-lg font-extrabold text-blue-600 dark:text-blue-400">{pct}%</span>
-                      </div>
-                      <div className="h-3 w-full bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-blue-600 rounded-full transition-all duration-500"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <div className="flex justify-between text-xs text-slate-500 pt-1">
-                        <span>Sudah Dibangun: {jalanDibangun.toLocaleString('id-ID')} m</span>
-                        <span>Sisa Target: {Math.max(0, jalanDesaSekarang - jalanDibangun).toLocaleString('id-ID')} m</span>
-                      </div>
-                    </div>
-                  );
-                })()}
-              </TabsContent>
-
-              {/* Segments List Tab */}
-              <TabsContent value="segments" className="py-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Daftar Segmen Jalan ({segmentsData?.features?.length || 0})</span>
-                  </div>
-
-                  <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
-                    {segmentsData?.features?.map((feature: any, idx: number) => {
-                      const props = feature.properties;
-                      const isDone = props.status_pembangunan === 'Sudah Tuntas';
-
-                      return (
-                        <Card key={idx} className="w-[280px] shrink-0 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-xs">
-                          <div className="h-32 bg-slate-100 dark:bg-slate-800 relative">
-                            <SegmenMiniMap
-                              feature={feature}
-                              strokeColor={isDone ? '#10b981' : '#2563eb'}
-                              className="w-full h-full p-4"
-                            />
-                            <Badge className={cn("absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5", isDone ? "bg-emerald-600" : "bg-blue-600")}>
-                              {isDone ? 'Sudah Tuntas' : 'Aktif'}
-                            </Badge>
-                          </div>
-                          <CardContent className="p-4 space-y-3">
-                            <div>
-                              <p className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">{props.nama_segmen || `Segmen ${idx + 1}`}</p>
-                              <p className="text-[11px] text-slate-500">Kode Ruas: {props.kode_ruas}</p>
-                            </div>
-                            <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
-                              <div>
-                                <span className="text-slate-400 block text-[10px]">Panjang</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-200">{Math.round(props.panjang || 0)} m</span>
-                              </div>
-                              <div>
-                                <span className="text-slate-400 block text-[10px]">Perkerasan</span>
-                                <span className="font-bold text-slate-700 dark:text-slate-200">{props.perkerasan || 'Belum Ada'}</span>
-                              </div>
-                            </div>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full h-8 text-xs font-semibold rounded-xl gap-1.5"
-                              onClick={() => mapRef.current?.zoomToFeature(feature)}
-                            >
-                              <MapPin className="w-3.5 h-3.5 text-blue-600" />
-                              Fokus Lokasi
-                            </Button>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
-                  </div>
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
-        </SheetContent>
-      </Sheet>
+      {/* ── 4. REKAP PEMBANGUNAN BOTTOM SHEET PANEL ─────────────────────── */}
+      <RekapPembangunanPanel
+        isOpen={isRekapOpen}
+        onOpenChange={setIsRekapOpen}
+        rekapData={rekapData}
+        segmentsData={segmentsData}
+        onFocusSegment={(feature) => mapRef.current?.zoomToFeature(feature)}
+      />
 
     </div>
   );

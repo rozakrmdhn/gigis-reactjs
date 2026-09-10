@@ -78,7 +78,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
 
         let attr = seg.atribut;
         if (typeof attr === "string") {
-            try { attr = JSON.parse(attr); } catch (e) {}
+            try { attr = JSON.parse(attr); } catch (e) { }
         }
         if (attr) {
             let attrVal = attr.plotting_id ?? attr.id_plotting;
@@ -276,7 +276,8 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                     kecamatan_id: isClickedLocation ? prev.kecamatan_id : (initialData.kecamatan_id?.toString() || initialData.id_kecamatan?.toString() || prev.kecamatan_id),
                     desa_id: isClickedLocation ? prev.desa_id : (initialData.desa_id?.toString() || initialData.id_desa?.toString() || prev.desa_id),
                     desa: isClickedLocation ? prev.desa : (initialData.desa || prev.desa),
-                    kecamatan: isClickedLocation ? prev.kecamatan : (initialData.kecamatan || prev.kecamatan)
+                    kecamatan: isClickedLocation ? prev.kecamatan : (initialData.kecamatan || prev.kecamatan),
+                    kode_ruas: selectedRoad?.jalan?.kode_ruas?.toString() || (initialData?.kode_ruas && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(initialData.kode_ruas)) ? String(initialData.kode_ruas) : (prev.kode_ruas && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(prev.kode_ruas)) ? prev.kode_ruas : "0"))
                 };
             });
         }
@@ -337,8 +338,14 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
             lebar: parseFloat(formData.lebar) || 0,
             kecamatan_id: parseInt(formData.kecamatan_id) || null,
             desa_id: parseInt(formData.desa_id) || null,
-            parent_id: (formData.check_melarosa && formData.kode_ruas && formData.kode_ruas !== "0") ? formData.kode_ruas : null,
-            kode_ruas: formData.check_melarosa ? formData.kode_ruas : "0",
+            parent_id: formData.check_melarosa 
+                ? (selectedRoad?.jalan?.id ? String(selectedRoad.jalan.id) : (initialData?.parent_id ? String(initialData.parent_id) : null))
+                : null,
+            kode_ruas: formData.check_melarosa 
+                ? (formData.kode_ruas && !isUUID(formData.kode_ruas) 
+                    ? formData.kode_ruas 
+                    : (selectedRoad?.jalan?.kode_ruas?.toString() || (initialData?.kode_ruas && !isUUID(initialData.kode_ruas) ? String(initialData.kode_ruas) : "0"))) 
+                : "0",
             status_parent: Boolean(formData.check_melarosa),
             check_melarosa: formData.check_melarosa ? "Ya" : "Tidak",
             sumber_data: formData.sumber_data || "Survey Desa",
@@ -383,9 +390,9 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                 <div className="space-y-4">
 
                     {/* Basic Info Readonly/Disabled */}
-                    <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                    <div className="grid grid-cols-2 gap-4 bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800">
                         <div className="space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Desa</Label>
+                            <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Desa</Label>
                             {selectedRoad ? (
                                 <div className="font-bold text-xs text-slate-700 dark:text-slate-300">
                                     {desas.find(d => d.id.toString() === formData.desa_id.toString())?.nama_desa || formData.desa}
@@ -403,7 +410,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                                     }}
                                     disabled={!formData.kecamatan_id || isLoadingLocations}
                                 >
-                                    <SelectTrigger className="h-9.5 text-xs font-bold">
+                                    <SelectTrigger >
                                         <SelectValue placeholder={isLoadingLocations ? "Loading..." : "Pilih Desa"} />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -417,7 +424,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                             )}
                         </div>
                         <div className="space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Kecamatan</Label>
+                            <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Kecamatan</Label>
                             {selectedRoad ? (
                                 <div className="font-bold text-xs text-slate-700 dark:text-slate-300">
                                     {kecamatans.find(k => k.id.toString() === formData.kecamatan_id.toString())?.nama_kecamatan || formData.kecamatan}
@@ -436,7 +443,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                                         });
                                     }}
                                 >
-                                    <SelectTrigger className="h-9.5 text-xs font-bold">
+                                    <SelectTrigger >
                                         <SelectValue placeholder="Pilih Kecamatan" />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -450,17 +457,17 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                             )}
                         </div>
                         <div className="col-span-2 space-y-1">
-                            <Label className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500">Nama Jalan</Label>
+                            <Label className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wide">Nama Jalan</Label>
                             <Input
                                 value={formData.nama_jalan}
                                 onChange={e => setFormData({ ...formData, nama_jalan: e.target.value })}
-                                className="h-9.5 text-base md:text-xs font-bold dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100"
+                                
                             />
                         </div>
                     </div>
 
                     {selectedRoad && (
-                        <div className="flex items-center space-x-2 border p-3 rounded-xl bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
+                        <div className="flex items-center space-x-2 border p-3 rounded-lg bg-blue-50/50 dark:bg-blue-900/20 border-blue-100 dark:border-blue-900/30">
                             <Checkbox
                                 id="melarosa"
                                 checked={formData.check_melarosa}
@@ -476,7 +483,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Status Jalan</Label>
                             <Select value={formData.status_jalan} onValueChange={(v) => setFormData({ ...formData, status_jalan: v })}>
-                                <SelectTrigger className="w-full h-9.5 text-xs rounded-xl"><SelectValue /></SelectTrigger>
+                                <SelectTrigger ><SelectValue /></SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="Jalan Kabupaten">Jalan Kabupaten</SelectItem>
                                     <SelectItem value="Jalan Desa">Jalan Desa</SelectItem>
@@ -485,7 +492,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                         </div>
                         <div className="space-y-2">
                             <Label className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Sumber Data</Label>
-                            <Input className="w-full h-9.5 text-xs rounded-xl" value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
+                            <Input  value={formData.sumber_data} onChange={(e) => setFormData({ ...formData, sumber_data: e.target.value })} />
                         </div>
                     </div>
 
@@ -495,7 +502,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                             value={formData.sumber_dana}
                             onValueChange={(val) => setFormData({ ...formData, sumber_dana: val })}
                         >
-                            <SelectTrigger className="w-full h-9.5 text-xs rounded-xl">
+                            <SelectTrigger >
                                 <SelectValue placeholder="Pilih Sumber Dana" />
                             </SelectTrigger>
                             <SelectContent>
@@ -525,7 +532,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                                     }
                                 }}
                             >
-                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl focus:ring-1 focus:ring-blue-500">
+                                <SelectTrigger >
                                     <SelectValue placeholder="Pilih Status Aset" />
                                 </SelectTrigger>
                                 <SelectContent className="bg-popover border-border">
@@ -540,7 +547,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                                     placeholder="Ketik status aset manual..."
                                     value={formData.status_aset}
                                     onChange={(e) => setFormData({ ...formData, status_aset: e.target.value })}
-                                    className="h-9.5 text-xs bg-background border-input rounded-xl mt-1.5 focus:border-blue-500 animate-in fade-in-50 duration-200"
+                                    className="mt-1.5 animate-in fade-in-50 duration-200"
                                 />
                             )}
                         </div>
@@ -555,7 +562,7 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
                                 onSelect={(val) => setFormData({ ...formData, plotting_id: val })}
                                 placeholder={isLoadingPlotting ? "Memuat..." : (plottingOptions.length > 0 ? "Pilih Plotting..." : "Tidak ada data")}
                                 emptyText="Data plotting tidak ditemukan"
-                                className="w-full h-9.5 text-xs rounded-xl"
+                                className="w-full h-9.5 text-xs"
                             />
                         </div>
                     </div>
@@ -650,10 +657,10 @@ export function DrawEditFormPanel({ isVisible, onClose, selectedRoad, drawnGeoJS
             </form>
 
             <div className="p-3 border-t dark:border-slate-800 bg-slate-50 dark:bg-slate-900 grid grid-cols-2 gap-2">
-                <Button type="button" variant="outline" className="h-10 text-xs font-bold uppercase tracking-wider dark:border-slate-700 dark:text-slate-300" onClick={onClose}>
+                <Button type="button" variant="outline" className="font-bold uppercase tracking-wider dark:border-slate-700 dark:text-slate-300" onClick={onClose}>
                     Ulangi
                 </Button>
-                <Button className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 h-10 text-xs font-bold uppercase tracking-wider cursor-pointer shadow-lg shadow-amber-200 dark:shadow-amber-900/40" onClick={handleSubmit}>
+                <Button className="bg-amber-600 hover:bg-amber-700 dark:bg-amber-600 dark:hover:bg-amber-700 font-bold uppercase tracking-wider cursor-pointer shadow-lg shadow-amber-200 dark:shadow-amber-900/40" onClick={handleSubmit}>
                     <PencilIcon className="w-4 h-4 mr-2" />
                     Update Data
                 </Button>

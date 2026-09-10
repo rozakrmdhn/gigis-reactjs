@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Layers, ChevronUp, ChevronDown, ListFilter } from "lucide-react";
+import { Layers, ChevronUp, ChevronDown } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn, getProxiedLayerUrl } from "~/lib/utils";
@@ -39,7 +39,7 @@ export function MapLegend({
     <div className={cn("absolute z-20 transition-all duration-300 select-none", className)}>
       <div
         className={cn(
-          "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md rounded-2xl shadow-lg border border-slate-200/80 dark:border-slate-800 transition-all duration-300 overflow-hidden",
+          "bg-[#080B11]/95 text-slate-200 backdrop-blur-xl rounded-2xl shadow-2xl border border-white/[0.08] transition-all duration-300 overflow-hidden",
           isMinimized ? "w-[180px] p-2" : "w-[240px] md:w-[260px] p-3"
         )}
       >
@@ -49,15 +49,15 @@ export function MapLegend({
             onClick={() => setIsMinimized(!isMinimized)}
             className="flex items-center gap-2 text-left flex-1 min-w-0 cursor-pointer group"
           >
-            <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0 group-hover:scale-105 transition-transform">
+            <div className="w-6 h-6 rounded-lg bg-slate-800 border border-white/[0.1] flex items-center justify-center text-emerald-400 shrink-0 group-hover:scale-105 transition-transform">
               <Layers size={14} />
             </div>
             <div className="flex items-center gap-1.5 truncate">
-              <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
+              <span className="text-xs font-bold text-white truncate">
                 {title}
               </span>
               {isMinimized && (
-                <Badge variant="secondary" className="px-1.5 py-0 text-[10px] h-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 font-semibold">
+                <Badge variant="secondary" className="px-1.5 py-0 text-[10px] h-4 bg-slate-800 border border-white/[0.08] text-slate-300 font-semibold">
                   {totalCount}
                 </Badge>
               )}
@@ -68,7 +68,7 @@ export function MapLegend({
             variant="ghost"
             size="icon"
             onClick={() => setIsMinimized(!isMinimized)}
-            className="h-6 w-6 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 shrink-0"
+            className="h-6 w-6 rounded-lg text-slate-400 hover:text-white hover:bg-white/[0.08] shrink-0 cursor-pointer"
             title={isMinimized ? "Perbesar Legenda" : "Kecilkan Legenda"}
           >
             {isMinimized ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
@@ -77,7 +77,7 @@ export function MapLegend({
 
         {/* Content (Shown when expanded) */}
         {!isMinimized && (
-          <div className="mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 space-y-3 animate-in fade-in duration-200">
+          <div className="mt-3 pt-2.5 border-t border-white/[0.08] space-y-3 animate-in fade-in duration-200">
             {/* Custom Vector Legend Items */}
             {items && items.length > 0 && (
               <div className="space-y-2">
@@ -111,7 +111,7 @@ export function MapLegend({
                     )}
 
                     {/* Label */}
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 truncate">
+                    <span className="text-xs font-medium text-slate-200 truncate">
                       {item.label}
                     </span>
                   </div>
@@ -123,11 +123,11 @@ export function MapLegend({
             {legendUrls && legendUrls.length > 0 && (
               <div className="space-y-2">
                 {legendUrls.map((url, idx) => (
-                  <div key={idx} className="bg-slate-50 dark:bg-slate-800/60 rounded-xl p-1.5 border border-slate-100 dark:border-slate-800 overflow-hidden">
+                  <div key={idx} className="bg-[#0C101A] rounded-xl p-1.5 border border-white/[0.08] overflow-hidden">
                     <img
                       src={getProxiedLayerUrl(url.startsWith('http') ? url : `https://saggaserv.my.id${url}`)}
                       alt={`Legenda ${idx + 1}`}
-                      className="max-w-full h-auto rounded dark:brightness-90 dark:contrast-125"
+                      className="max-w-full h-auto rounded invert-[0.85] hue-rotate-180 contrast-125"
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         if (!target.src.includes('/proxy/')) {
@@ -142,8 +142,8 @@ export function MapLegend({
 
             {/* Footer */}
             {footer && (
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] text-slate-400 font-medium block">
+              <div className="pt-2 border-t border-white/[0.08]">
+                <span className="text-[10px] text-slate-500 font-medium block">
                   {footer}
                 </span>
               </div>

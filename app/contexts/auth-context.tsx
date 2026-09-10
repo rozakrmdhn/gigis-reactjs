@@ -1,6 +1,7 @@
-﻿import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import { authService } from '../services/auth.service';
 import type { User } from '../services/auth.service';
 
@@ -36,7 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     useEffect(() => {
         const handleSessionExpired = () => {
             setUser(null);
-            navigate('/login');
+            navigate('/login', { replace: true });
         };
 
         window.addEventListener("auth-session-expired", handleSessionExpired);
@@ -53,9 +54,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     const signout = async () => {
-        await authService.signout();
-        setUser(null);
-        navigate('/login');
+        try {
+            await authService.signout();
+        } catch {
+            // Ignore backend signout network failure
+        } finally {
+            setUser(null);
+            toast.success('Berhasil keluar dari sistem.');
+            navigate('/login', { replace: true });
+        }
     };
 
     const updateUser = (updatedData: Partial<User>) => {

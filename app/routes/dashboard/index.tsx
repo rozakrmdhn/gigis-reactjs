@@ -51,18 +51,28 @@ export function meta({ }: Route.MetaArgs) {
 }
 
 const BASEMAPS = {
+  rupabumi: {
+    name: "Rupabumi Indonesia (BIG)",
+    type: "raster" as const,
+    url: "https://geoservices.big.go.id/rbi/rest/services/BASEMAP/Rupabumi_Indonesia/MapServer/tile/{z}/{y}/{x}",
+    attribution: '&copy; <a href="https://geoservices.big.go.id" target="_blank" rel="noreferrer">Badan Informasi Geospasial (BIG)</a>',
+    maxZoom: 18,
+  },
   cartoLight: {
     name: "Carto Light",
+    type: "raster" as const,
     url: "https://{a-c}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png",
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
   },
   cartoDark: {
     name: "Carto Dark",
+    type: "raster" as const,
     url: "https://{a-c}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
   },
   osm: {
     name: "OpenStreetMap",
+    type: "raster" as const,
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
   }
@@ -77,22 +87,26 @@ export default function DashboardIndex() {
   const tileLayerRef = useRef<TileLayer<XYZ> | null>(null);
 
   const [isLoading, setIsLoading] = useState(true);
-  const [currentBasemap, setCurrentBasemap] = useState<keyof typeof BASEMAPS>(resolvedTheme === "dark" ? "cartoDark" : "cartoLight");
+  const [currentBasemap, setCurrentBasemap] = useState<keyof typeof BASEMAPS>("rupabumi");
 
-  // Sync basemap with theme
+  // Sync basemap with theme (only if currently on a Carto raster theme)
   useEffect(() => {
     if (!resolvedTheme) return;
-    const targetBasemap = resolvedTheme === "dark" ? "cartoDark" : "cartoLight";
-    setCurrentBasemap(targetBasemap);
-    if (tileLayerRef.current) {
-      tileLayerRef.current.setSource(
-        new XYZ({
-          url: BASEMAPS[targetBasemap].url,
-          attributions: BASEMAPS[targetBasemap].attribution
-        })
-      );
+    if (currentBasemap === "cartoDark" || currentBasemap === "cartoLight") {
+      const targetBasemap = resolvedTheme === "dark" ? "cartoDark" : "cartoLight";
+      if (targetBasemap !== currentBasemap) {
+        setCurrentBasemap(targetBasemap);
+        if (tileLayerRef.current) {
+          tileLayerRef.current.setSource(
+            new XYZ({
+              url: BASEMAPS[targetBasemap].url,
+              attributions: BASEMAPS[targetBasemap].attribution
+            })
+          );
+        }
+      }
     }
-  }, [resolvedTheme]);
+  }, [resolvedTheme, currentBasemap]);
   const [heatmapRadius, setHeatmapRadius] = useState(5);
   const [heatmapBlur, setHeatmapBlur] = useState(8);
   const [viewMode, setViewMode] = useState<"heatmap" | "vector">("heatmap");
@@ -134,12 +148,16 @@ export default function DashboardIndex() {
   useEffect(() => {
     if (!mapElement.current) return;
 
-    const tileSource = new XYZ({
-      url: BASEMAPS[currentBasemap].url,
-      attributions: BASEMAPS[currentBasemap].attribution,
+    // Basemap tile layer (Default: Rupabumi Indonesia BIG raster)
+    const tileLayer = new TileLayer({
+      source: new XYZ({
+        url: BASEMAPS.rupabumi.url,
+        attributions: BASEMAPS.rupabumi.attribution,
+        crossOrigin: "anonymous",
+        maxZoom: 18,
+      }),
+      visible: true,
     });
-
-    const tileLayer = new TileLayer({ source: tileSource });
     tileLayerRef.current = tileLayer;
 
     const heatmapLayer = new HeatmapLayer({
@@ -406,11 +424,14 @@ export default function DashboardIndex() {
     const nextBasemap = keys[(currentIndex + 1) % keys.length];
     setCurrentBasemap(nextBasemap);
 
+    const config = BASEMAPS[nextBasemap];
     if (tileLayerRef.current) {
       tileLayerRef.current.setSource(
         new XYZ({
-          url: BASEMAPS[nextBasemap].url,
-          attributions: BASEMAPS[nextBasemap].attribution
+          url: config.url,
+          attributions: config.attribution,
+          crossOrigin: "anonymous",
+          maxZoom: (config as any).maxZoom || 19,
         })
       );
     }
@@ -457,7 +478,7 @@ export default function DashboardIndex() {
   const maxYear = availableYears[availableYears.length - 1] || 2026;
 
   return (
-    <div className="relative flex flex-1 flex-col w-full h-full min-h-0 overflow-hidden bg-slate-950 font-sans select-none">
+    <div className="relative flex flex-1 flex-col w-full h-full min-h-0 overflow-hidden bg-slate-100 dark:bg-slate-950 font-sans select-none">
       {/* OpenLayers Map Canvas */}
       <div ref={mapElement} className="absolute inset-0 w-full h-full" />
 

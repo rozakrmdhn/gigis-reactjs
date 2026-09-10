@@ -1,0 +1,66 @@
+### REST Client Test - Module Infrastruktur Aset & Segmen
+
+@baseUrl = http://localhost:5000
+@authToken = YOUR_JWT_TOKEN_HERE
+
+### 1. GET List Tipe Infrastruktur (Active Only)
+GET {{baseUrl}}/v1/infrastruktur
+Authorization: Bearer {{authToken}}
+
+### 2. GET GeoJSON Master Aset per Tipe
+GET {{baseUrl}}/v1/infrastruktur/jalan?format=geojson
+Authorization: Bearer {{authToken}}
+
+### 3. GET Segmen per Parent Master Aset
+GET {{baseUrl}}/v1/infrastruktur/jalan/00000000-0000-0000-0000-000000000000/segmen
+Authorization: Bearer {{authToken}}
+
+### 4. POST Create Segmen Baru
+POST {{baseUrl}}/v1/infrastruktur/jalan/00000000-0000-0000-0000-000000000000/segmen
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "panjang": 500,
+  "lebar": 3.5,
+  "kondisi": "Baik",
+  "status_kondisi": "Realisasi 100%",
+  "tahun_pembangunan": 2024,
+  "sumber_dana": "APBDes",
+  "sumber_data": "Survey Desa",
+  "status_aset": "Aset Desa"
+}
+
+### 5. GET All Area Polygon per Tipe (GeoJSON)
+GET {{baseUrl}}/v1/infrastruktur/jalan/area?format=geojson
+Authorization: Bearer {{authToken}}
+
+### 6. POST Create Area Polygon Baru
+POST {{baseUrl}}/v1/infrastruktur/jalan/area
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "namobj": "Area Perkerasan Lahan Parkir / Tambatan",
+  "panjang": 100,
+  "lebar": 5,
+  "kondisi": "Baik",
+  "status_kondisi": "Eksisting",
+  "tahun_pembangunan": 2025,
+  "sumber_dana": "APBD",
+  "sumber_data": "Survey Spasial",
+  "status_parent": false,
+  "geom": {
+    "type": "Polygon",
+    "coordinates": [
+      [
+        [111.880, -7.150],
+        [111.881, -7.150],
+        [111.881, -7.151],
+        [111.880, -7.151],
+        [111.880, -7.150]
+      ]
+    ]
+  }
+}
+

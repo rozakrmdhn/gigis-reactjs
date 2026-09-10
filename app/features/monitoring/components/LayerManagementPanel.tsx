@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Slider } from "~/components/ui/slider";
@@ -281,13 +281,13 @@ export function LayerManagementPanel({
     return (
         <Tabs value={currentActiveTab} onValueChange={handleActiveTabChange} className="flex-1 flex flex-col min-h-0 gap-0">
             {!hideTabsList && (
-                <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 px-2 py-2 shrink-0">
+                <div className="bg-background border-b border-border px-2 py-2 shrink-0">
                     <TabsList className="w-full grid h-9 grid-cols-3">
                         <TabsTrigger value="katalog" className="text-[10px] uppercase font-bold tracking-tight">Katalog</TabsTrigger>
                         <TabsTrigger value="layers" className="text-[10px] uppercase font-bold tracking-tight">
                             Layer
                             {activeOverlays.length > 0 && (
-                                <span className="ml-1 px-1.5 py-0.2 text-[8px] bg-blue-100 text-blue-700 rounded-full font-black">
+                                <span className="ml-1 px-1.5 py-0.2 text-[8px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 rounded-full font-black">
                                     {activeOverlays.length}
                                 </span>
                             )}
@@ -298,19 +298,19 @@ export function LayerManagementPanel({
             )}
 
             {/* Tab Content: Katalog Data */}
-            <TabsContent value="katalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50 relative pb-[48px]">
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-2 bg-slate-50/50">
-                    <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest">Katalog Data Spasial</span>
-                    <p className="text-[10px] text-slate-500">Pilih data spasial yang ingin ditambahkan ke peta sebagai overlay.</p>
+            <TabsContent value="katalog" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-background relative pb-[48px]">
+                <div className="p-3 border-b border-border flex flex-col gap-1.5 bg-muted/20">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Katalog Data Spasial</span>
+                    <p className="text-[10px] text-muted-foreground">Pilih data spasial yang ingin ditambahkan ke peta sebagai overlay.</p>
 
                     {/* Search & Limit Row Container */}
-                    <div className="flex gap-2 mt-1.5">
+                    <div className="flex gap-2 mt-1">
                         <div className="relative flex-1">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
                             <Input
                                 type="text"
                                 placeholder="Cari dataset..."
-                                className="pl-8 text-xs bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg placeholder:text-slate-400 focus-visible:ring-1 focus-visible:ring-blue-500"
+                                className="pl-8 h-8 text-xs bg-background border-border text-foreground rounded-xl placeholder:text-muted-foreground focus-visible:ring-1 focus-visible:ring-indigo-500"
                                 value={catalogQuery}
                                 onChange={(e) => {
                                     setCatalogQuery(e.target.value);
@@ -318,7 +318,7 @@ export function LayerManagementPanel({
                                 }}
                             />
                             {isFetchingCatalog && (
-                                <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-blue-500" />
+                                <Loader2 className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-indigo-500" />
                             )}
                         </div>
                         <Select
@@ -328,7 +328,7 @@ export function LayerManagementPanel({
                                 setCatalogPage(1);
                             }}
                         >
-                            <SelectTrigger className="h-8 w-20 text-[10px] font-semibold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg shadow-sm">
+                            <SelectTrigger className="h-8 w-24 min-w-[90px] text-[10px] font-semibold bg-background border-border text-foreground rounded-xl shadow-sm">
                                 <SelectValue placeholder="Limit" />
                             </SelectTrigger>
                             <SelectContent>
@@ -346,21 +346,21 @@ export function LayerManagementPanel({
                         catalogLayers.map((layer) => {
                             const isAdded = activeOverlays.includes(layer.id);
                             return (
-                                <div key={layer.id} className="p-2.5 rounded-xl border border-slate-105 dark:border-slate-800/80 bg-white dark:bg-slate-900/50 flex flex-col gap-2 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                                <div key={layer.id} className="p-2.5 rounded-xl border border-border bg-card hover:bg-muted/30 flex flex-col gap-2 transition-colors">
                                     <div className="min-w-0 pr-1">
-                                        <h4 className="text-[12px] font-semibold text-slate-850 dark:text-slate-200 tracking-tight line-clamp-1 leading-snug">
+                                        <h4 className="text-[12px] font-semibold text-card-foreground tracking-tight line-clamp-1 leading-snug">
                                             {layer.name}
                                         </h4>
                                         {layer.description && (
-                                            <p className="text-[9px] text-slate-400 italic line-clamp-1 mt-0.5">{layer.description}</p>
+                                            <p className="text-[9px] text-muted-foreground italic line-clamp-1 mt-0.5">{layer.description}</p>
                                         )}
                                     </div>
                                     <div className="flex items-center justify-between mt-1">
                                         <div className="flex gap-1">
-                                            <span className="text-[8px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded uppercase">
+                                            <span className="text-[8px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md uppercase">
                                                 {layer.protocol}
                                             </span>
-                                            <span className="text-[8px] font-black text-slate-400 bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded uppercase">
+                                            <span className="text-[8px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded-md uppercase">
                                                 {layer.source_type}
                                             </span>
                                         </div>
@@ -380,7 +380,10 @@ export function LayerManagementPanel({
                                                      toast.success(`Layer ${layer.name} ditambahkan ke peta`);
                                                  }
                                              }}
-                                             className="h-6 text-[10px] font-bold rounded-lg uppercase tracking-tight"
+                                             className={cn(
+                                                 "h-6 text-[10px] font-bold rounded-lg uppercase tracking-tight cursor-pointer",
+                                                 !isAdded && "bg-indigo-600 hover:bg-indigo-700 text-white"
+                                             )}
                                          >
                                              {isAdded ? "Hapus" : "Tambah"}
                                          </Button>
@@ -389,15 +392,15 @@ export function LayerManagementPanel({
                             );
                         })
                     ) : (
-                        <div className="text-center py-8 text-xs text-slate-450 dark:text-slate-500 italic">
+                        <div className="text-center py-8 text-xs text-muted-foreground italic">
                             {isFetchingCatalog ? "Memuat data..." : "Tidak ada dataset tematik."}
                         </div>
                     )}
                 </div>
 
                 {/* Fixed bottom pagination bar */}
-                <div className="absolute bottom-0 left-0 right-0 h-[48px] bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800/80 px-3 flex items-center justify-between shrink-0 z-10 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]">
-                    <span className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-tight">
+                <div className="absolute bottom-0 left-0 right-0 h-[48px] bg-background border-t border-border px-3 flex items-center justify-between shrink-0 z-10 shadow-[0_-2px_10px_rgba(0,0,0,0.02)]">
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-tight">
                         Total: {catalogTotal} Data
                     </span>
                     <div className="flex items-center gap-1">
@@ -406,11 +409,11 @@ export function LayerManagementPanel({
                             variant="outline"
                             disabled={catalogPage <= 1 || isFetchingCatalog}
                             onClick={() => setCatalogPage(prev => Math.max(prev - 1, 1))}
-                            className="h-7 px-2 text-[9px] font-bold rounded-lg uppercase tracking-tight gap-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                            className="h-7 px-2 text-[9px] font-bold rounded-lg uppercase tracking-tight gap-1 bg-background border-border text-foreground hover:bg-muted"
                         >
                             <ChevronLeft size={10} /> Prev
                         </Button>
-                        <span className="text-[9px] font-black px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 min-w-[28px] text-center">
+                        <span className="text-[9px] font-bold px-2 py-1 rounded-md bg-muted text-muted-foreground min-w-[28px] text-center">
                             {catalogPage} / {Math.ceil(catalogTotal / catalogLimit) || 1}
                         </span>
                         <Button
@@ -418,7 +421,7 @@ export function LayerManagementPanel({
                             variant="outline"
                             disabled={catalogPage >= Math.ceil(catalogTotal / catalogLimit) || isFetchingCatalog}
                             onClick={() => setCatalogPage(prev => prev + 1)}
-                            className="h-7 px-2 text-[9px] font-bold rounded-lg uppercase tracking-tight gap-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+                            className="h-7 px-2 text-[9px] font-bold rounded-lg uppercase tracking-tight gap-1 bg-background border-border text-foreground hover:bg-muted"
                         >
                             Next <ChevronRight size={10} />
                         </Button>
@@ -427,10 +430,10 @@ export function LayerManagementPanel({
             </TabsContent>
 
             {/* Tab Content: Daftar Layer */}
-            <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex flex-col gap-2 bg-slate-50/50 dark:bg-slate-900/50">
-                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Layer Aktif Peta</span>
-                    <p className="text-[10px] text-slate-500 dark:text-slate-400">Urutkan, atur transparansi, atau hapus overlay di peta.</p>
+            <TabsContent value="layers" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-background">
+                <div className="p-3 border-b border-border flex flex-col gap-1.5 bg-muted/20">
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Layer Aktif Peta</span>
+                    <p className="text-[10px] text-muted-foreground">Urutkan, atur transparansi, atau hapus overlay di peta.</p>
                 </div>
                 <div className="flex-1 overflow-y-auto p-2.5 space-y-2 custom-scrollbar">
                     {activeOverlays.length > 0 ? (
@@ -470,12 +473,10 @@ export function LayerManagementPanel({
                                         e.preventDefault();
                                     }}
                                     className={cn(
-                                        "relative rounded-xl border transition-all duration-200 overflow-hidden hover:border-blue-300 dark:hover:border-blue-700 shadow-sm",
-                                        (activeCql || isFilterOpen)
-                                            ? "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
-                                            : "bg-blue-50/30 dark:bg-blue-950/15 border-blue-100/50 dark:border-blue-900/30",
-                                        !isVisible && "opacity-60 bg-slate-50/50 dark:bg-slate-950/20",
-                                        draggingIndex === actualIndex && "opacity-30 scale-[0.98] border-blue-500 bg-blue-50/5 dark:bg-blue-950/10 shadow-inner"
+                                        "relative rounded-xl border transition-all duration-200 overflow-hidden hover:border-border/80 shadow-sm",
+                                        "bg-card border-border",
+                                        !isVisible && "opacity-60 bg-muted/30",
+                                        draggingIndex === actualIndex && "opacity-30 scale-[0.98] border-indigo-500 bg-indigo-50/10 shadow-inner"
                                     )}
                                 >
                                     {/* ── Sliding panels ── */}
@@ -492,32 +493,32 @@ export function LayerManagementPanel({
                                                 {/* Layer card header */}
                                                 <div className="flex items-center gap-2.5 px-3 py-2.5">
                                                     {/* Drag handle */}
-                                                    <div className="cursor-grab active:cursor-grabbing p-1 text-slate-300 dark:text-slate-600 hover:text-blue-600 transition-colors shrink-0">
+                                                    <div className="cursor-grab active:cursor-grabbing p-1 text-muted-foreground hover:text-foreground transition-colors shrink-0">
                                                         <GripVertical size={13} />
                                                     </div>
                                                     {/* Layer info */}
                                                     <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-1.5 mb-0.5">
-                                                            <span className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 shrink-0">
+                                                            <span className="text-[7px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 shrink-0">
                                                                 Dataset
                                                             </span>
                                                             {activeCql && (
-                                                                <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400 uppercase tracking-widest shrink-0">
+                                                                <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 uppercase tracking-widest shrink-0">
                                                                     Filtered
                                                                 </span>
                                                             )}
                                                         </div>
                                                         <h4 className={cn(
                                                             "text-[12px] font-semibold tracking-tight text-left leading-tight truncate",
-                                                            isVisible ? "text-slate-900 dark:text-slate-100" : "text-slate-400"
+                                                            isVisible ? "text-card-foreground" : "text-muted-foreground"
                                                         )}>
                                                             {layer.name}
                                                         </h4>
                                                         <div className="flex items-center gap-1.5 mt-1">
-                                                            <span className="text-[8px] font-black px-1 py-px rounded uppercase bg-slate-100 dark:bg-slate-800 text-slate-400">
+                                                            <span className="text-[8px] font-bold px-1.5 py-0.5 rounded-md uppercase bg-muted text-muted-foreground">
                                                                 {layer.protocol}
                                                             </span>
-                                                            <span className="text-[8px] font-bold text-slate-400">z:{actualIndex + 1}</span>
+                                                            <span className="text-[8px] font-bold text-muted-foreground">z:{actualIndex + 1}</span>
                                                         </div>
                                                     </div>
                                                     {/* Actions */}
@@ -532,10 +533,10 @@ export function LayerManagementPanel({
                                                                 }
                                                             }}
                                                             className={cn(
-                                                                "h-7 w-7 rounded-lg flex items-center justify-center transition-colors",
+                                                                "h-7 w-7 rounded-lg flex items-center justify-center transition-colors cursor-pointer",
                                                                 isVisible
-                                                                    ? "text-blue-600 bg-blue-50 dark:bg-blue-900/20"
-                                                                    : "text-slate-400 hover:text-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800"
+                                                                    ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-300"
+                                                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
                                                             )}
                                                             title={isVisible ? "Sembunyikan" : "Tampilkan"}
                                                         >
@@ -546,8 +547,8 @@ export function LayerManagementPanel({
                                                                 type="button"
                                                                 onClick={() => setExpandedLayerFilter(prev => ({ ...prev, [layerId]: !isFilterOpen }))}
                                                                 className={cn(
-                                                                    "h-7 w-7 rounded-lg flex items-center justify-center transition-all",
-                                                                    isFilterOpen ? "bg-blue-600 text-white shadow-md" : (activeCql ? "text-blue-600 bg-blue-50 dark:bg-blue-900/20" : "text-slate-400 hover:text-blue-600 hover:bg-slate-50 dark:hover:bg-slate-800")
+                                                                    "h-7 w-7 rounded-lg flex items-center justify-center transition-all cursor-pointer",
+                                                                    isFilterOpen ? "bg-indigo-600 text-white shadow-md" : (activeCql ? "text-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 dark:text-indigo-300" : "text-muted-foreground hover:text-foreground hover:bg-muted")
                                                                 )}
                                                                 title="Filter CQL"
                                                             >
@@ -561,24 +562,25 @@ export function LayerManagementPanel({
                                                                 setVisibleOverlays(prev => prev.filter(id => id !== layerId));
                                                                 toast.success(`Layer ${layer.name} dihapus dari peta`);
                                                             }}
-                                                            className="h-7 w-7 rounded-lg flex items-center justify-center text-rose-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20 transition-colors"
-                                                            title="Hapus dari peta"
+                                                            className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                                                            title="Hapus Layer dari Peta"
                                                         >
                                                             <Trash2 size={12} />
                                                         </button>
                                                     </div>
                                                 </div>
+
                                                 {/* Opacity slider - isolated bottom tray */}
-                                                <div className="px-3 py-2 border-t border-slate-100 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-950/20">
+                                                <div className="px-3 py-2 border-t border-border bg-muted/20">
                                                     <div className="flex items-center gap-2">
-                                                        <span className="text-[8px] text-slate-400 dark:text-slate-500 font-extrabold uppercase w-12 shrink-0 tracking-wider">Opacity</span>
+                                                        <span className="text-[8px] text-muted-foreground font-extrabold uppercase w-12 shrink-0 tracking-wider">Opacity</span>
                                                         <Slider
                                                             value={[opacity * 100]}
                                                             onValueChange={(val) => setOverlayOpacities(prev => ({ ...prev, [layerId]: val[0] / 100 }))}
                                                             max={100} min={0} step={5}
                                                             className="flex-1"
                                                         />
-                                                        <span className="text-[9px] text-slate-500 dark:text-slate-400 font-semibold w-7 text-right shrink-0">{Math.round(opacity * 100)}%</span>
+                                                        <span className="text-[9px] text-muted-foreground font-semibold w-7 text-right shrink-0">{Math.round(opacity * 100)}%</span>
                                                     </div>
                                                 </div>
                                             </div>
@@ -772,17 +774,17 @@ export function LayerManagementPanel({
             </TabsContent>
 
             {/* Tab Content: Acuan Style Layer */}
-            <TabsContent value="acuan" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-white dark:bg-slate-950/50">
-                <div className="p-3 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/50 dark:bg-slate-900/50">
+            <TabsContent value="acuan" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-background">
+                <div className="p-3 border-b border-border flex items-center justify-between gap-2 bg-muted/20">
                     <div className="min-w-0 flex-1">
-                        <span className="text-[10px] font-semibold text-slate-450 dark:text-slate-500 uppercase tracking-widest block">Acuan & Legenda Peta</span>
-                        <p className="text-[9px] text-slate-500 dark:text-slate-400 mt-0.5">Kustomisasi warna & ketebalan layer vector secara dinamis.</p>
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest block">Acuan & Legenda Peta</span>
+                        <p className="text-[9px] text-muted-foreground mt-0.5">Kustomisasi warna & ketebalan layer vector secara dinamis.</p>
                     </div>
                     <Button
                         variant="outline"
                         size="sm"
                         onClick={resetStyles}
-                        className="h-7 px-2 text-[9px] font-bold rounded-lg uppercase tracking-tight gap-1 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shrink-0 shadow-sm text-slate-700 dark:text-slate-350 hover:bg-slate-50"
+                        className="h-7 px-2 text-[9px] font-bold rounded-lg uppercase tracking-tight gap-1 bg-background border-border text-foreground hover:bg-muted shrink-0 shadow-sm cursor-pointer"
                         title="Kembalikan semua gaya ke pengaturan awal"
                     >
                         <RotateCcw size={10} />

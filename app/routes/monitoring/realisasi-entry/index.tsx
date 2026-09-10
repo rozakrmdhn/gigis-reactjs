@@ -8,6 +8,7 @@ import {
     X,
     MapPin,
     AlertCircle,
+    AlertTriangle,
     Send,
     Eye,
     FileText,
@@ -2589,48 +2590,78 @@ export default function RealisasiEntryPage() {
             />
 
             {/* Confirmation AlertDialog */}
+            {/* Confirmation AlertDialog */}
             <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
-                <AlertDialogContent className="rounded-2xl bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-800 max-w-sm sm:max-w-md shadow-2xl">
-                    <AlertDialogHeader>
+                <AlertDialogContent className="rounded-2xl bg-background border-border max-w-[calc(100%-2rem)] sm:max-w-md shadow-2xl p-0 overflow-hidden">
+                    <div className={cn(
+                        "pt-6 pb-4 px-6 text-center border-b border-border/40",
+                        (confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord')
+                            ? "bg-linear-to-b from-rose-500/10 via-rose-500/5 to-transparent"
+                            : "bg-linear-to-b from-emerald-500/10 via-emerald-500/5 to-transparent"
+                    )}>
                         <div className={cn(
-                            "w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-3",
+                            "w-14 h-14 rounded-2xl flex items-center justify-center mx-auto mb-3 ring-8 shadow-inner relative",
                             (confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord')
-                                ? "bg-rose-100 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800"
-                                : "bg-emerald-100 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800"
-                        )}>
-                            {(confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord')
-                                ? <Trash2 className="w-5 h-5 text-rose-600 dark:text-rose-400" />
-                                : <Send className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                            }
-                        </div>
-                        <AlertDialogTitle className="text-slate-800 dark:text-slate-200 text-center font-bold">
-                            {confirmDialogType === 'delete_entry' && "Hapus Data Geotagging"}
-                            {confirmDialogType === 'delete_coord' && "Hapus Titik Koordinat"}
-                            {confirmDialogType === 'submit_entry' && "Kirim Geotagging Realisasi"}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-xs leading-relaxed text-center text-slate-500 dark:text-slate-400">
-                            {confirmDialogType === 'delete_entry' && "Apakah Anda yakin ingin menghapus data geotagging ini? Seluruh titik koordinat terkait akan terhapus secara permanen."}
-                            {confirmDialogType === 'delete_coord' && "Apakah Anda yakin ingin menghapus titik koordinat ini?"}
-                            {confirmDialogType === 'submit_entry' && "Apakah Anda yakin ingin mengirim hasil geotagging ini? Data geotagging yang dikirim akan segera diproses oleh verifikator."}
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter className="gap-2 mt-2">
-                        <AlertDialogCancel className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 flex-1 font-semibold">Batal</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleConfirmAction} className={cn(
-                            "text-xs h-9 rounded-xl text-white font-bold flex-1 gap-1.5",
-                            (confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord')
-                                ? "bg-rose-600 hover:bg-rose-700 shadow-sm shadow-rose-500/25"
-                                : "bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-500/25"
+                                ? "bg-rose-500/10 dark:bg-rose-500/20 text-rose-600 dark:text-rose-400 ring-rose-500/5"
+                                : "bg-emerald-500/10 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 ring-emerald-500/5"
                         )}>
                             {(confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord') ? (
                                 <>
+                                    <Trash2 className="w-6 h-6" />
+                                    <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-600 rounded-full border-2 border-background animate-pulse" />
+                                </>
+                            ) : (
+                                <Send className="w-6 h-6" />
+                            )}
+                        </div>
+
+                        <AlertDialogHeader className="space-y-1">
+                            <AlertDialogTitle className="text-base font-bold text-foreground text-center tracking-tight">
+                                {confirmDialogType === 'delete_entry' && "Konfirmasi Hapus Data Geotagging"}
+                                {confirmDialogType === 'delete_coord' && "Konfirmasi Hapus Titik Koordinat"}
+                                {confirmDialogType === 'submit_entry' && "Konfirmasi Kirim Geotagging"}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-xs leading-relaxed text-center text-muted-foreground">
+                                {confirmDialogType === 'delete_entry' && "Apakah Anda yakin ingin menghapus data geotagging ini? Seluruh titik koordinat terkait akan terhapus secara permanen dari sistem."}
+                                {confirmDialogType === 'delete_coord' && "Apakah Anda yakin ingin menghapus titik koordinat ini dari segmen yang dipilih?"}
+                                {confirmDialogType === 'submit_entry' && "Apakah Anda yakin ingin mengirim hasil geotagging ini? Data geotagging yang dikirim akan segera diproses oleh verifikator."}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                    </div>
+
+                    {(confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord') && (
+                        <div className="p-4 pt-3 pb-0">
+                            <div className="p-3 rounded-xl bg-rose-500/8 dark:bg-rose-950/30 border border-rose-500/20 flex items-start gap-2.5">
+                                <AlertTriangle className="w-4 h-4 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                                <p className="text-[11px] text-rose-700 dark:text-rose-300 leading-relaxed font-medium">
+                                    PERINGATAN: Tindakan ini tidak dapat dibatalkan dan data akan dihapus permanen.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
+                    <AlertDialogFooter className="p-4 sm:px-5 sm:py-3.5 border-t border-border bg-muted/20 flex flex-col-reverse sm:flex-row gap-2 sm:justify-end">
+                        <AlertDialogCancel className="h-10 sm:h-9 px-4 text-xs font-semibold rounded-xl cursor-pointer w-full sm:w-auto">
+                            Batal
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmAction}
+                            className={cn(
+                                "h-10 sm:h-9 px-5 text-xs font-bold rounded-xl shadow-md gap-1.5 cursor-pointer w-full sm:w-auto",
+                                (confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord')
+                                    ? "bg-rose-600 hover:bg-rose-700 text-white shadow-rose-500/25"
+                                    : "bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-500/25"
+                            )}
+                        >
+                            {(confirmDialogType === 'delete_entry' || confirmDialogType === 'delete_coord') ? (
+                                <>
                                     <Trash2 className="w-3.5 h-3.5" />
-                                    <span>Ya, Hapus</span>
+                                    <span>Ya, Hapus Permanen</span>
                                 </>
                             ) : (
                                 <>
                                     <Send className="w-3.5 h-3.5" />
-                                    <span>Ya, Kirim</span>
+                                    <span>Ya, Kirim Data</span>
                                 </>
                             )}
                         </AlertDialogAction>

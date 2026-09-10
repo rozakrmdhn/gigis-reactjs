@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Bab III Metodologi Penelitian WebGIS</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      mermaid.initialize({ startOnLoad: true, theme: 'neutral' });
+    });
+  </script>
+  <style>
+    @page {
+      size: A4 landscape;
+      margin: 1cm;
+    }
+    body {
+      font-family: 'Times New Roman', Times, serif, Arial, sans-serif;
+      font-size: 10pt;
+      line-height: 1.4;
+      color: #111;
+      margin: 0;
+      padding: 0;
+    }
+    h1 {
+      font-size: 15pt;
+      text-align: center;
+      text-transform: uppercase;
+      margin-bottom: 15px;
+    }
+    h2 {
+      font-size: 13pt;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      border-bottom: 2px solid #333;
+      padding-bottom: 4px;
+    }
+    h3 {
+      font-size: 11pt;
+      margin-top: 15px;
+      margin-bottom: 6px;
+    }
+    h4 {
+      font-size: 10pt;
+      margin-top: 10px;
+      margin-bottom: 4px;
+    }
+    p {
+      text-align: justify;
+      margin-bottom: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      margin-bottom: 15px;
+      font-size: 8.5pt;
+      page-break-inside: auto;
+    }
+    tr {
+      page-break-inside: avoid;
+      page-break-after: auto;
+    }
+    tr.section-row td {
+      background-color: #eaeaea;
+    }
+    th {
+      background-color: #f2f4f8;
+      color: #000;
+      font-weight: bold;
+      text-align: center;
+      padding: 6px 4px;
+      border: 1px solid #333;
+      vertical-align: middle;
+    }
+    td {
+      padding: 5px 6px;
+      border: 1px solid #333;
+      vertical-align: top;
+    }
+    ul {
+      margin: 2px 0 2px 14px;
+      padding: 0;
+    }
+    li {
+      margin-bottom: 2px;
+    }
+    code {
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 8.5pt;
+      background-color: #f4f4f4;
+      padding: 1px 3px;
+      border-radius: 3px;
+    }
+    pre.mermaid {
+      text-align: center;
+      background: #fafafa;
+      padding: 15px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      margin: 15px 0;
+    }
+    hr {
+      border: none;
+      border-top: 1px solid #ccc;
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>BAB III METODOLOGI PENELITIAN</h1>
+<h2>3.1 Judul Penelitian & Framework Pengembangan</h2>
+<p>Penelitian ini berfokus pada <strong>"Pengembangan WebGIS Monitoring Realisasi Infrastruktur dan Pengolahan Data Spasial Menggunakan React Router, OpenLayers, Turf.js, dan PostGIS"</strong>.</p>
+<p>Pengembangan aplikasi menerapkan metode <strong>Agile</strong> dengan kerangka kerja <strong>Scrum</strong>. Metode ini dipilih karena memungkinkan pengembangan dilakukan secara iteratif, fleksibel terhadap perubahan kebutuhan monitoring infrastruktur, dan menghasilkan modul-modul fungsional (<em>increment</em>) secara cepat melalui rangkaian <em>sprint</em>.</p>
+<hr />
+<h2>3.2 Tahapan Pengembangan Aplikasi (Agile / Scrum Framework)</h2>
+<p>Rincian tahapan pengembangan aplikasi WebGIS berdasarkan kerangka kerja <em>Scrum</em> serta penerapan spesifik <em>tech stack</em> proyek (<em>React Router v7, TypeScript, OpenLayers, Turf.js, Tailwind CSS v4, Hapi.js/Express, dan PostGIS</em>) disajikan pada <strong>Tabel 3.1</strong> berikut:</p>
+<h3>Tabel 3.1 Tahapan Pengembangan Aplikasi WebGIS Monitoring Infrastruktur</h3>
+<table>
+  <tr>
+    <th>No</th>
+    <th>Tahapan</th>
+    <th>Deskripsi Kegiatan (Spesifik Tech Stack Proyek)</th>
+    <th>Luaran / Output</th>
+  </tr>
+  <tr>
+    <td><strong>1</strong></td>
+    <td><strong>Pra-Sprint (<em>Product Backlog & Architecture Setup</em>)</strong></td>
+    <td><ul><li>Mengidentifikasi kebutuhan sistem monitoring realisasi infrastruktur, data spasial jalan desa, dan katalog dataset (<em>User Stories</em>).</li><li>Merancang arsitektur WebGIS <em>Decoupled</em> (Frontend: <strong>React Router v7 + TypeScript</strong>, Backend: <strong>Hapi.js/Express REST API</strong>).</li><li>Merancang skema basis data spasial <strong>PostgreSQL / PostGIS</strong> (Tabel segmen jalan, titik infrastruktur, spasial geometri <code>LineString</code> & <code>Point</code>, serta data atribut monitoring).</li><li>Menyiapkan <em>environment</em> proyek berbasis <strong>Vite</strong>, <strong>Tailwind CSS v4</strong>, <strong>Radix UI</strong>, dan <em>state management</em>.</li></ul></td>
+    <td><ul><li>Dokumen <em>Product Backlog</em> (<em>User Stories</em>)</li><li>Diagram Arsitektur WebGIS & ERD PostGIS</li><li>Skema DDL Spasial Basis Data</li><li>Inisialisasi Project Repository (<em>React Router v7</em>)</li></ul></td>
+  </tr>
+  <tr>
+    <td><strong>2</strong></td>
+    <td><strong>Sprint 1: <em>Core API</em>, Peta Dasar, & Visualisasi Spasial (<em>OpenLayers</em>)</strong></td>
+    <td><ul><li>Membangun <em>endpoint</em> REST API pada <strong>Hapi.js/Express</strong> untuk query spasial PostGIS (<code>ST_AsGeoJSON</code>, <code>ST_BBox</code>).</li><li>Membuat komponen peta dasar interaktif (<strong>React 19</strong>) menggunakan <strong>OpenLayers</strong> (<code>ol/Map</code>, <code>ol/View</code>, <code>ol/layer/Tile</code>, <code>ol/source/OSM</code>).</li><li>Mengintegrasikan <em>Vector Layer</em> OpenLayers (<code>ol/layer/Vector</code>) untuk merender layer spasial infrastruktur dan batas wilayah.</li><li>Mengimplementasikan fitur <em>Layer Switcher</em> dan <em>Zoom Control</em> kustom dengan styling <strong>Tailwind CSS v4</strong> dan <strong>Lucide Icons</strong>.</li></ul></td>
+    <td><ul><li>REST API Endpoint Spasial (Hapi.js/PostGIS)</li><li>Komponen Peta Dasar Interaktif (<code>MapWorkspaceView</code>)</li><li>Visualisasi Vector Layer Data Spasial Infrastruktur</li><li>Kontrol Peta dasar & Peta Tematik</li></ul></td>
+  </tr>
+  <tr>
+    <td><strong>3</strong></td>
+    <td><strong>Sprint 2: Digitasi Spasial, Manajemen Data Atribut, & Hak Akses (RBAC)</strong></td>
+    <td><ul><li>Mengimplementasikan modul digitasi dan modifikasi spasial di <strong>OpenLayers</strong> (<code>ol/interaction/Draw</code>, <code>ol/interaction/Modify</code>, <code>ol/interaction/Snap</code>).</li><li>Mengolah dan memvalidasi perhitungan geometri spasial di sisi <em>client</em> menggunakan <strong>Turf.js</strong> (<code>@turf/turf</code> untuk panjang segmen & luas area).</li><li>Membuat antarmuka input data atribut infrastruktur berbasis <strong>React Hook Form</strong> + <strong>Zod</strong> dan <strong>TanStack Table</strong> untuk <em>data grid</em>.</li><li>Mengimplementasikan kontrol hak akses pengguna (<em>Role-Based Access Control</em>) menggunakan <strong>CASL</strong> (<code>@casl/ability</code>).</li></ul></td>
+    <td><ul><li>Modul Digitasi & Editor Geometri Spasial</li><li>Fitur Kalkulasi Spasial Client-side (Turf.js)</li><li>Form Input & Tabel Data Grid (TanStack Table)</li><li>Sistem Autentikasi & Otorisasi RBAC (CASL)</li></ul></td>
+  </tr>
+  <tr>
+    <td><strong>4</strong></td>
+    <td><strong>Sprint 3: Dashboard Monitoring, Analisis Spasial, & Ekspor Cetak Peta</strong></td>
+    <td><ul><li>Membuat <em>Dashboard Monitoring Realisasi Infrastruktur</em> interaktif memanfaatkan <strong>Recharts</strong> untuk grafik statistik dan progres fisik/keuangan.</li><li>Mengembangkan fungsi analisis spasial PostGIS (spasial buffer <code>ST_Buffer</code> & pencarian radius <code>ST_DWithin</code>).</li><li>Mengintegrasikan fitur ekspor peta spasial dan laporan monitoring ke format PDF/Gambar menggunakan <strong>jsPDF</strong>, <strong>html2canvas</strong>, dan <strong>XLSX</strong>.</li><li>Mengimplementasikan komponen notifikasi (<em>toast</em>) menggunakan <strong>Sonner</strong> dan dialog konfirmasi (<strong>Radix UI Alert Dialog</strong>).</li></ul></td>
+    <td><ul><li>Dashboard Monitoring & Grafik Statistik (Recharts)</li><li>Fitur Analisis & Pencarian Spasial Radius</li><li>Modul Cetak & Ekspor Peta/Laporan (PDF & Excel)</li><li>Antarmuka Monitoring Infrastruktur Lengkap</li></ul></td>
+  </tr>
+  <tr>
+    <td><strong>5</strong></td>
+    <td><strong>Sprint Testing & Integrasi System (<em>Testing & Review</em>)</strong></td>
+    <td><ul><li>Melakukan pengujian <em>Black Box Testing</em> pada seluruh komponen <strong>React Router v7</strong>, navigasi halaman, dan interaksi peta <strong>OpenLayers</strong>.</li><li>Melakukan pengujian <em>Integration Testing</em> antara <em>frontend</em> React dan <em>backend REST API</em> Hapi.js/PostGIS.</li><li>Melakukan validasi topologi geometri spasial (memastikan tidak ada geometri <em>invalid</em> atau <em>self-intersecting</em>).</li><li>Melaksanakan <em>Sprint Review</em> bersama <em>stakeholder</em> untuk evaluasi fungsionalitas sistem monitoring.</li></ul></td>
+    <td><ul><li>Dokumen Hasil Pengujian (<em>Test Report</em>)</li><li>Matriks Pengujian <em>Black Box</em> & Integrasi</li><li><em>Bug Tracking Log</em> & Perbaikan Aplikasi</li><li>Sistem WebGIS Versi Siap Rilis (<em>Release Candidate</em>)</li></ul></td>
+  </tr>
+  <tr>
+    <td><strong>6</strong></td>
+    <td><strong>Rilis, Deployment, & Retrospektif (<em>Deployment & Retrospective</em>)</strong></td>
+    <td><ul><li>Melakukan optimasi <em>build production</em> (<strong>Vite</strong> & React Router Server/Node).</li><li>Mengonfigurasi <em>Proxy Middleware</em> (<code>http-proxy-middleware</code>) dan <em>deployment</em> basis data <strong>PostGIS</strong> serta aplikasi ke Cloud Server / VPS.</li><li>Mengatur <em>environment variable</em>, variabel CORS, dan proteksi <em>endpoint API</em>.</li><li>Melakukan <em>Sprint Retrospective</em> untuk evaluasi proses pengembangan serta dokumentasi teknis sistem.</li></ul></td>
+    <td><ul><li>Aplikasi WebGIS Monitoring Infrastruktur (Live Server)</li><li>Dokumentasi REST API & Skema Data Spasial</li><li>Dokumen Retrospektif & Laporan Akhir Sistem</li></ul></td>
+  </tr>
+</table>
+<p>Berdasarkan Tabel 3.1 di atas, arsitektur WebGIS dibangun dengan memanfaatkan <strong>React Router v7</strong> dan <strong>OpenLayers</strong> di sisi <em>frontend</em> untuk menyajikan peta interaktif dan modul digitasi, <strong>Turf.js</strong> untuk komputasi spasial di sisi klien, <strong>Recharts</strong> untuk grafik dashboard monitoring, <strong>CASL</strong> untuk manajemen hak akses, <strong>Hapi.js/Express</strong> di sisi <em>backend API</em>, serta <strong>PostgreSQL/PostGIS</strong> sebagai basis data spasial utama.</p>
+<hr />
+<h2>3.3 Jadwal Pelaksanaan Penelitian (Gantt Chart 4 Bulan)</h2>
+<p>Jadwal pelaksanaan penelitian dan pengembangan aplikasi WebGIS Monitoring Infrastruktur dilaksanakan selama 4 (empat) bulan (16 minggu, dengan asumsi 1 bulan terdiri dari 4 minggu) yang terbagi dalam siklus <em>Agile Sprint</em> sebagaimana tercantum dalam <strong>Tabel 3.2</strong> berikut:</p>
+<h3>Tabel 3.2 Jadwal Pelaksanaan Penelitian dan Pengembangan Aplikasi (4 Bulan / 16 Minggu)</h3>
+<table>
+<thead>
+<tr>
+<th rowspan="2" style="text-align: center; width: 4%;">No</th>
+<th rowspan="2" style="text-align: center; width: 32%;">Tahapan Kegiatan</th>
+<th colspan="4" style="text-align: center;">Bulan 1</th>
+<th colspan="4" style="text-align: center;">Bulan 2</th>
+<th colspan="4" style="text-align: center;">Bulan 3</th>
+<th colspan="4" style="text-align: center;">Bulan 4</th>
+</tr>
+<tr>
+<th style="text-align: center; width: 4%;">M1</th>
+<th style="text-align: center; width: 4%;">M2</th>
+<th style="text-align: center; width: 4%;">M3</th>
+<th style="text-align: center; width: 4%;">M4</th>
+<th style="text-align: center; width: 4%;">M1</th>
+<th style="text-align: center; width: 4%;">M2</th>
+<th style="text-align: center; width: 4%;">M3</th>
+<th style="text-align: center; width: 4%;">M4</th>
+<th style="text-align: center; width: 4%;">M1</th>
+<th style="text-align: center; width: 4%;">M2</th>
+<th style="text-align: center; width: 4%;">M3</th>
+<th style="text-align: center; width: 4%;">M4</th>
+<th style="text-align: center; width: 4%;">M1</th>
+<th style="text-align: center; width: 4%;">M2</th>
+<th style="text-align: center; width: 4%;">M3</th>
+<th style="text-align: center; width: 4%;">M4</th>
+</tr>
+</thead>
+<tbody>
+<tr class="section-row">
+<td style="text-align: center;"><strong>1</strong></td>
+<td colspan="17"><strong>Analisis Kebutuhan</strong></td>
+</tr>
+<tr>
+<td style="text-align: center;">1.1</td>
+<td>Observasi data spasial infrastruktur & studi literatur</td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">1.2</td>
+<td>Penyusunan <em>User Story</em> & <em>Product Backlog</em> WebGIS</td>
+<td></td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr class="section-row">
+<td style="text-align: center;"><strong>2</strong></td>
+<td colspan="17"><strong>Perancangan Sistem & UI/UX</strong></td>
+</tr>
+<tr>
+<td style="text-align: center;">2.1</td>
+<td>Perancangan arsitektur WebGIS & ERD PostGIS</td>
+<td></td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">2.2</td>
+<td>Desain antarmuka UI/UX (Tailwind v4 & Radix UI)</td>
+<td></td><td></td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">2.3</td>
+<td>Perancangan RESTful API Endpoint Hapi.js</td>
+<td></td><td></td><td></td><td style="text-align: center;">■</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr class="section-row">
+<td style="text-align: center;"><strong>3</strong></td>
+<td colspan="17"><strong>Implementasi & Pengkodean</strong></td>
+</tr>
+<tr>
+<td style="text-align: center;">3.1</td>
+<td>Setup <em>environment</em> (React Router v7, OpenLayers, PostGIS)</td>
+<td></td><td></td><td></td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">3.2</td>
+<td>Pengembangan Backend API Hapi.js & Query PostGIS</td>
+<td></td><td></td><td></td><td></td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">3.3</td>
+<td>Pengembangan Peta Dasar OpenLayers & Client State</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">3.4</td>
+<td>Fitur Digitasi (Turf.js), Dashboard Recharts, & CASL RBAC</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr class="section-row">
+<td style="text-align: center;"><strong>4</strong></td>
+<td colspan="17"><strong>Pengujian Aplikasi</strong></td>
+</tr>
+<tr>
+<td style="text-align: center;">4.1</td>
+<td>Pengujian <em>Black Box Testing</em> (UI React Router & Map)</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+<td></td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">4.2</td>
+<td>Pengujian Integration & API Spasial Testing</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td></td><td></td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">4.3</td>
+<td>Pengujian <em>User Acceptance Testing</em> (UAT) Monitoring</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td><td></td>
+</tr>
+<tr class="section-row">
+<td style="text-align: center;"><strong>5</strong></td>
+<td colspan="17"><strong>Deployment & Penyusunan Laporan</strong></td>
+</tr>
+<tr>
+<td style="text-align: center;">5.1</td>
+<td><em>Deployment</em> WebGIS ke Cloud Server / VPS</td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td></td><td></td><td></td>
+<td></td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td></td>
+</tr>
+<tr>
+<td style="text-align: center;">5.2</td>
+<td>Penyusunan & finalisasi dokumen laporan penelitian</td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+<td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td><td style="text-align: center;">■</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>3.4 Penjabaran Jadwal Pelaksanaan Penelitian</h2>
+<p>Berikut adalah rincian penjelasan dari setiap sub-tahapan kegiatan pengembangan aplikasi WebGIS Monitoring Realisasi Infrastruktur berdasarkan <strong>Tabel 3.2</strong>:</p>
+<h3>1. Tahap Analisis Kebutuhan</h3>
+<ul>
+  <li><strong>1.1 Observasi Data Spasial Infrastruktur & Studi Literatur (Bulan 1: Minggu 1 – Minggu 2)</strong></li>
+</ul>
+<p>Mengumpulkan referensi pustaka mengenai konsep sistem informasi geografis berbasis web, standar data spasial jalan desa dan infrastruktur, serta menganalisis kebutuhan format geometri spasial (<code>LineString</code> dan <code>Point</code>). Pada kegiatan ini dilakukan pula kajian teknis terhadap pustaka OpenLayers, Turf.js, dan PostGIS.</p>
+<ul>
+  <li><strong>1.2 Penyusunan <em>User Story</em> & <em>Product Backlog</em> WebGIS (Bulan 1: Minggu 2 – Minggu 3)</strong></li>
+</ul>
+<p>Mengidentifikasi seluruh alur pengguna (administrator, staf monitoring, dan publik) serta menyusunnya ke dalam <em>Product Backlog</em>. Kebutuhan fungsional dipetakan menjadi unit-unit <em>user story</em> seperti visualisasi layer peta dasar, digitasi segmen jalan, filter atribut, dashboard monitoring, serta kontrol akses pengguna.</p>
+<h3>2. Tahap Perancangan Sistem & UI/UX</h3>
+<ul>
+  <li><strong>2.1 Perancangan Arsitektur WebGIS & ERD PostGIS (Bulan 1: Minggu 2 – Minggu 3)</strong></li>
+</ul>
+<p>Merancang arsitektur sistem terpisah (<em>decoupled architecture</em>) yang menghubungkan aplikasi <em>frontend</em> berbasis React Router v7 dengan <em>backend REST API</em> Hapi.js. Pada tahap ini dirancang pula skema <em>Entity Relationship Diagram</em> (ERD) dan struktur tabel spasial PostgreSQL/PostGIS untuk menyimpan koordinat geometri spasial beserta data atribut realisasi fisik dan keuangan infrastruktur.</p>
+<ul>
+  <li><strong>2.2 Desain Antarmuka UI/UX (Bulan 1: Minggu 3 – Minggu 4)</strong></li>
+</ul>
+<p>Merancang <em>wireframe</em> dan prototipe antarmuka sistem menggunakan prinsip desain modern berbasis Tailwind CSS v4 dan Radix UI Primitives. Perancangan difokuskan pada <em>layout workspace</em> peta interaktif (<code>MapWorkspaceView</code>), panel navigasi sidebar, tabel data grid monitoring, dan dialog konfirmasi.</p>
+<ul>
+  <li><strong>2.3 Perancangan RESTful API Endpoint Hapi.js (Bulan 1: Minggu 4)</strong></li>
+</ul>
+<p>Merancang spesifikasi <em>endpoint</em> REST API mencakup struktur <em>request payload</em>, <em>response GeoJSON</em>, format status HTTP, serta query spasial PostGIS yang akan dipanggil oleh <em>frontend</em> (seperti <code>ST_AsGeoJSON</code> dan <code>ST_GeomFromGeoJSON</code>).</p>
+<h3>3. Tahap Implementasi & Pengkodean</h3>
+<ul>
+  <li><strong>3.1 Setup <em>Environment</em> Pengembangan (Bulan 1: Minggu 4 – Bulan 2: Minggu 1)</strong></li>
+</ul>
+<p>Menyiapkan repositori kode (<em>React Router v7 + TypeScript</em>), mengonfigurasi <em>bundler</em> Vite, memasang pustaka pendukung seperti OpenLayers (<code>ol</code>), Turf.js (<code>@turf/turf</code>), Tailwind CSS v4, Radix UI, TanStack Table, Recharts, dan CASL, serta melakukan inisialisasi basis data PostgreSQL dengan ekstensi PostGIS.</p>
+<ul>
+  <li><strong>3.2 Pengembangan Backend API Hapi.js & Query PostGIS (Bulan 2: Minggu 1 – Minggu 3)</strong></li>
+</ul>
+<p>Mengimplementasikan <em>handler</em> dan <em>route</em> API pada Hapi.js/Express untuk melayani permintaan data spasial, operasi CRUD data infrastruktur, serta mengeksekusi query fungsi spasial ke basis data PostGIS.</p>
+<ul>
+  <li><strong>3.3 Pengembangan Peta Dasar OpenLayers & Client State (Bulan 2: Minggu 2 – Bulan 3: Minggu 1)</strong></li>
+</ul>
+<p>Membangun komponen peta interaktif menggunakan OpenLayers di sisi React.js. Kegiatan meliputi integrasi layer dasar (<em>OpenStreetMap/Tile layer</em>), rendering <em>Vector Layer</em> untuk data spasial infrastruktur, pembuatan kontrol <em>Layer Switcher</em>, <em>Zoom Control</em>, serta penanganan <em>state management</em> peta.</p>
+<ul>
+  <li><strong>3.4 Fitur Digitasi (Turf.js), Dashboard Recharts, & CASL RBAC (Bulan 2: Minggu 4 – Bulan 3: Minggu 2)</strong></li>
+</ul>
+<p>Mengembangkan fitur interaktif seperti alat digitasi spasial (<code>ol/interaction/Draw</code> dan <code>Modify</code>), validasi geometri spasial client-side menggunakan Turf.js, visualisasi grafik progres realisasi infrastruktur menggunakan Recharts, serta penerapan pembatasan hak akses berbasis peran pengguna (<em>Role-Based Access Control</em>) menggunakan CASL (<code>@casl/ability</code>).</p>
+<h3>4. Tahap Pengujian Aplikasi</h3>
+<ul>
+  <li><strong>4.1 Pengujian <em>Black Box Testing</em> (Bulan 3: Minggu 3 – Minggu 4)</strong></li>
+</ul>
+<p>Melakukan pengujian fungsionalitas antarmuka React Router, interaksi peta OpenLayers, tombol navigasi, form masukan data, dan respon tampilan tanpa melihat struktur kode internal untuk memastikan aplikasi berjalan bebas dari kesalahan logika tampilan.</p>
+<ul>
+  <li><strong>4.2 Pengujian Integration & API Spasial Testing (Bulan 3: Minggu 4 – Bulan 4: Minggu 1)</strong></li>
+</ul>
+<p>Menguji komunikasi data antara <em>frontend</em> React dan <em>backend REST API</em> Hapi.js/PostGIS, menguji performa pengiriman payload GeoJSON, serta memastikan validitas query spasial saat menangani koordinat spasial kompleks.</p>
+<ul>
+  <li><strong>4.3 Pengujian <em>User Acceptance Testing</em> / UAT (Bulan 4: Minggu 1 – Minggu 2)</strong></li>
+</ul>
+<p>Melakukan pengujian penerimaan pengguna (<em>UAT</em>) bersama pihak pengelola data infrastruktur dan calon pengguna untuk mengevaluasi kesesuaian sistem dengan alur kerja operasional di lapangan.</p>
+<h3>5. Tahap Deployment & Penyusunan Laporan</h3>
+<ul>
+  <li><strong>5.1 <em>Deployment</em> WebGIS ke Cloud Server / VPS (Bulan 4: Minggu 2 – Minggu 3)</strong></li>
+</ul>
+<p>Melakukan proses <em>build production</em> pada React Router v7 & Vite, mengonfigurasi <em>proxy middleware</em>, memasang aplikasi dan basis data PostGIS pada server (<em>VPS / Cloud Infrastructure</em>), serta mengatur sertifikat SSL dan proteksi keamanan sistem.</p>
+<ul>
+  <li><strong>5.2 Penyusunan & Finalisasi Dokumen Laporan Penelitian (Bulan 1: Minggu 1 – Bulan 4: Minggu 4)</strong></li>
+</ul>
+<p>Menyusun dokumentasi teknis, catatan hasil pengujian, dan menyempurnakan seluruh bab laporan hasil penelitian secara bertahap dan berkesinambungan dari awal hingga akhir siklus pengembangan.</p>
+<hr />
+<h2>3.5 Flowchart Pelaksanaan Penelitian dan Pengembangan Aplikasi</h2>
+<p>Berikut adalah diagram alir (<em>flowchart</em>) metodologi pelaksanaan penelitian dan pengembangan aplikasi WebGIS Monitoring Infrastruktur berbasis kerangka kerja <strong>Agile / Scrum</strong> dengan tata letak matriks 2D (<strong>Kesamping untuk Tahap Utama & Kebawah untuk Sub-langkah</strong>):</p>
+<pre class="mermaid">
+flowchart TD
+subgraph FlowchartPenelitian [Metodologi Pelaksanaan Penelitian WebGIS]
+direction LR
+
+subgraph Col1 [1. Analisis Kebutuhan]
+direction TB
+Start([Mulai Penelitian]) --> Obs[Observasi Data Spasial]
+Obs --> Story[Penyusunan User Story & Product Backlog]
+end
+
+subgraph Col2 [2. Perancangan Sistem]
+direction TB
+Arch[Perancangan Arsitektur WebGIS] --> ERD[Skema ERD PostGIS]
+ERD --> Env[Setup React Router v7 & Hapi.js]
+end
+
+subgraph Col3 [3. Iterasi Development]
+direction TB
+S1[Sprint 1: Core API & OpenLayers] --> S2[Sprint 2: Digitasi, Turf.js & RBAC]
+S2 --> S3[Sprint 3: Recharts & PostGIS Buffer]
+end
+
+subgraph Col4 [4. Pengujian & Deployment]
+direction TB
+Test[Black Box & Integration Testing] --> UAT[User Acceptance Testing UAT]
+UAT --> Eval{Lolos UAT?}
+Eval -- Ya --> Deploy[Deployment Server VPS]
+Deploy --> End([Selesai])
+end
+
+Story --> Arch
+Env --> S1
+S3 --> Test
+Eval -- Tidak (Perbaikan Bug) --> Story
+end
+</pre>
+<h3>Penjelasan Alur Flowchart Pelaksanaan Penelitian:</h3>
+<p>1. <strong>Tahap 1: Analisis Kebutuhan (Kolom 1 - Vertical)</strong>:</p>
+<p>Penelitian diawali dari simpul <code>Mulai Penelitian</code>, dilanjutkan dengan observasi data spasial infrastruktur, dan penyusunan <em>User Story / Product Backlog</em>.</p>
+<p>2. <strong>Tahap 2: Perancangan Sistem (Kolom 2 - Vertical)</strong>:</p>
+<p>Dari <em>Product Backlog</em>, alur berpindah <strong>kesamping</strong> ke perancangan arsitektur <em>decoupled</em>, skema ERD PostGIS, dan pengesetup <em>environment</em> proyek React Router v7 & Hapi.js.</p>
+<p>3. <strong>Tahap 3: Iterasi Development (Kolom 3 - Vertical)</strong>:</p>
+<p>Alur berpindah <strong>kesamping</strong> mengeksekusi <em>Sprint 1</em> (API & Peta Dasar OpenLayers), dilanjutkan ke bawah ke <em>Sprint 2</em> (Digitasi Turf.js & CASL RBAC), dan <em>Sprint 3</em> (Dashboard Recharts & Buffer PostGIS).</p>
+<p>4. <strong>Tahap 4: Pengujian & Deployment (Kolom 4 - Vertical)</strong>:</p>
+<p>Alur berpindah <strong>kesamping</strong> mengeksekusi <em>Black Box & Integration Testing</em>, <em>User Acceptance Testing (UAT)</em>, dan evaluasi kelayakan sistem. Apabila tidak lolos (<code>Tidak</code>), alur berulang kembali ke perbaikan <em>User Story</em>. Apabila lolos (<code>Ya</code>), sistem di-<em>deploy</em> ke VPS/Cloud Server hingga simpul <code>Selesai</code>.</p>
+
+</body>
+</html>

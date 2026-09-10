@@ -32,7 +32,7 @@ export function MapViewSidebar({
     return (
         <div
             className={cn(
-                "absolute bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border border-slate-200/80 dark:border-slate-800 transition-all duration-300 ease-in-out flex flex-col z-30 shadow-xl will-change-transform",
+                "absolute bg-[#080B11]/95 text-slate-200 backdrop-blur-xl border border-white/[0.08] transition-all duration-300 ease-in-out flex flex-col z-30 shadow-2xl will-change-transform",
                 widthClass,
                 isOpen
                     ? "translate-x-0 opacity-100 pointer-events-auto"
@@ -48,11 +48,11 @@ export function MapViewSidebar({
             <Button
                 variant="secondary"
                 size="icon"
-                className="absolute top-1/2 -translate-y-1/2 -right-9 h-10 w-9 rounded-l-none rounded-r-xl pointer-events-auto cursor-pointer shadow-md z-40 bg-white/95 dark:bg-slate-900/95 border border-l-0 border-slate-200/80 dark:border-slate-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-slate-700 dark:text-slate-200 hover:text-blue-600 transition-all"
+                className="absolute top-1/2 -translate-y-1/2 -right-9 h-10 w-9 rounded-l-none rounded-r-xl pointer-events-auto cursor-pointer shadow-md z-40 bg-[#0C101A] border border-l-0 border-white/[0.08] hover:bg-slate-800 text-slate-300 hover:text-white transition-all"
                 onClick={handleToggle}
                 title={isOpen ? "Sembunyikan Panel Spasial" : "Tampilkan Panel Spasial"}
             >
-                {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
+                {isOpen ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4 text-emerald-400" />}
             </Button>
         </div>
     );

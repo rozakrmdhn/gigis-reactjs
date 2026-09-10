@@ -1,6 +1,8 @@
+import React from "react";
 import { Button } from "~/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~/components/ui/select";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { cn } from "~/lib/utils";
 
 interface UsulanDesaPaginationProps {
     pageCount: number;
@@ -10,6 +12,7 @@ interface UsulanDesaPaginationProps {
     onPageChange: (pageIndex: number) => void;
     onPageSizeChange: (pageSize: number) => void;
     compact?: boolean;
+    className?: string;
 }
 
 export function UsulanDesaPagination({
@@ -20,53 +23,58 @@ export function UsulanDesaPagination({
     onPageChange,
     onPageSizeChange,
     compact = false,
+    className
 }: UsulanDesaPaginationProps) {
-    if (compact) {
-        const startItem = totalItems === 0 ? 0 : pageIndex * pageSize + 1;
-        const endItem = Math.min((pageIndex + 1) * pageSize, totalItems);
+    const startItem = totalItems === 0 ? 0 : pageIndex * pageSize + 1;
+    const endItem = Math.min((pageIndex + 1) * pageSize, totalItems);
+    const currentPage = pageIndex + 1;
+    const maxPages = Math.max(1, pageCount || 1);
 
+    if (compact) {
         return (
-            <div className="w-full bg-slate-50/90 dark:bg-slate-900/90 border-t border-slate-200/80 dark:border-slate-800/80 backdrop-blur-md px-3 py-1.5 flex items-center justify-between gap-2 text-xs select-none">
+            <div className={cn("w-full px-3 py-2 flex items-center justify-between gap-2 text-xs select-none", className)}>
                 <div className="flex items-center gap-1.5 min-w-0">
                     <Select
                         value={String(pageSize)}
                         onValueChange={(val) => onPageSizeChange(Number(val))}
                     >
-                        <SelectTrigger className="h-7 w-[64px] text-[10px] px-2 font-medium rounded-lg bg-background border-slate-200 dark:border-slate-700">
+                        <SelectTrigger className="h-7 w-[68px] text-[11px] px-2 font-mono font-semibold rounded-lg bg-background border-border shadow-2xs">
                             <SelectValue placeholder={String(pageSize)} />
                         </SelectTrigger>
                         <SelectContent side="top">
                             {[10, 20, 25, 50, 100].map((size) => (
                                 <SelectItem key={size} value={String(size)} className="text-xs">
-                                    {size}
+                                    {size} / hal
                                 </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
-                    <span className="text-[10px] text-muted-foreground truncate">
-                        {startItem}-{endItem} dari {totalItems}
+                    <span className="text-[11px] text-muted-foreground truncate">
+                        <strong className="text-foreground font-mono">{startItem}–{endItem}</strong> dari <strong className="text-foreground font-mono">{totalItems}</strong>
                     </span>
                 </div>
 
                 <div className="flex items-center gap-1 shrink-0">
-                    <span className="text-[10px] font-bold text-slate-700 dark:text-slate-300 mr-1 font-mono">
-                        {pageIndex + 1}/{pageCount || 1}
+                    <span className="text-[11px] font-bold text-muted-foreground font-mono px-1">
+                        {currentPage}/{maxPages}
                     </span>
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7 rounded-lg border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        className="h-7 w-7 rounded-lg border-border hover:bg-muted cursor-pointer"
                         onClick={() => onPageChange(pageIndex - 1)}
                         disabled={pageIndex === 0}
+                        title="Halaman Sebelumnya"
                     >
                         <ChevronLeft className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-7 w-7 rounded-lg border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        className="h-7 w-7 rounded-lg border-border hover:bg-muted cursor-pointer"
                         onClick={() => onPageChange(pageIndex + 1)}
-                        disabled={pageIndex >= pageCount - 1 || pageCount === 0}
+                        disabled={pageIndex >= maxPages - 1 || totalItems === 0}
+                        title="Halaman Berikutnya"
                     >
                         <ChevronRight className="h-3.5 w-3.5" />
                     </Button>
@@ -76,24 +84,25 @@ export function UsulanDesaPagination({
     }
 
     return (
-        <div className="w-full bg-background/95 dark:bg-slate-950/95 border-t border-border backdrop-blur-sm py-2.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <div className="flex items-center gap-4 sm:gap-6 flex-wrap">
-                <div className="text-xs text-slate-500 bg-slate-100 dark:bg-slate-800 dark:text-slate-400 px-2.5 py-1.5 rounded-full shrink-0 border border-slate-200 dark:border-slate-700">
-                    Total: {totalItems} Data
-                </div>
-                <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">Rows per page</span>
+        <div className={cn("w-full py-2.5 px-3 sm:px-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs select-none", className)}>
+            {/* Left: Summary Info & Page Size */}
+            <div className="flex items-center justify-between sm:justify-start gap-2.5 w-full sm:w-auto">
+                <span className="text-[11px] sm:text-xs text-muted-foreground">
+                    Menampilkan <strong className="font-semibold text-foreground font-mono">{startItem}–{endItem}</strong> dari <strong className="font-semibold text-foreground font-mono">{totalItems}</strong> data
+                </span>
+
+                <div className="flex items-center gap-1.5 shrink-0">
                     <Select
                         value={String(pageSize)}
                         onValueChange={(val) => onPageSizeChange(Number(val))}
                     >
-                        <SelectTrigger className="h-8 w-[70px] dark:border-slate-800">
+                        <SelectTrigger className="h-7 sm:h-8 w-[76px] sm:w-[84px] text-[11px] sm:text-xs px-2 font-mono font-semibold rounded-xl bg-background border-border shadow-2xs">
                             <SelectValue placeholder={String(pageSize)} />
                         </SelectTrigger>
                         <SelectContent side="top">
-                            {[5, 10, 20, 30, 40, 50].map((size) => (
-                                <SelectItem key={size} value={String(size)}>
-                                    {size}
+                            {[10, 20, 25, 50, 100].map((size) => (
+                                <SelectItem key={size} value={String(size)} className="text-xs">
+                                    {size} / hal
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -101,44 +110,50 @@ export function UsulanDesaPagination({
                 </div>
             </div>
 
-            <div className="flex items-center gap-4">
-                <div className="text-xs font-medium text-muted-foreground">
-                    Page {pageIndex + 1} of {pageCount || 1}
-                </div>
+            {/* Right: Modern Navigation Controls */}
+            <div className="flex items-center justify-between sm:justify-end gap-1.5 w-full sm:w-auto">
+                <span className="text-[11px] sm:text-xs font-medium text-muted-foreground mr-1">
+                    Halaman <strong className="text-foreground font-mono font-bold">{currentPage}</strong> dari <span className="font-mono">{maxPages}</span>
+                </span>
+
                 <div className="flex items-center gap-1">
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 dark:border-slate-800"
+                        className="h-8 w-8 rounded-xl border-border hover:bg-muted hidden sm:inline-flex cursor-pointer"
                         onClick={() => onPageChange(0)}
                         disabled={pageIndex === 0}
+                        title="Halaman Pertama"
                     >
-                        <ChevronsLeft className="h-4 w-4" />
+                        <ChevronsLeft className="h-3.5 w-3.5" />
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 dark:border-slate-800"
+                        className="h-8 w-8 rounded-xl border-border hover:bg-muted cursor-pointer"
                         onClick={() => onPageChange(pageIndex - 1)}
                         disabled={pageIndex === 0}
+                        title="Halaman Sebelumnya"
                     >
                         <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 dark:border-slate-800"
+                        className="h-8 w-8 rounded-xl border-border hover:bg-muted cursor-pointer"
                         onClick={() => onPageChange(pageIndex + 1)}
-                        disabled={pageIndex >= pageCount - 1 || pageCount === 0}
+                        disabled={pageIndex >= maxPages - 1 || totalItems === 0}
+                        title="Halaman Berikutnya"
                     >
                         <ChevronRight className="h-4 w-4" />
                     </Button>
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-8 w-8 dark:border-slate-800"
-                        onClick={() => onPageChange(pageCount - 1)}
-                        disabled={pageIndex >= pageCount - 1 || pageCount === 0}
+                        className="h-8 w-8 rounded-xl border-border hover:bg-muted hidden sm:inline-flex cursor-pointer"
+                        onClick={() => onPageChange(maxPages - 1)}
+                        disabled={pageIndex >= maxPages - 1 || totalItems === 0}
+                        title="Halaman Terakhir"
                     >
                         <ChevronsRight className="h-4 w-4" />
                     </Button>

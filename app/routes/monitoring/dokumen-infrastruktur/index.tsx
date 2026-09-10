@@ -28,7 +28,22 @@ import {
     Download,
     Loader2,
     AlertCircle,
-    AlertTriangle
+    AlertTriangle,
+    ShieldCheck,
+    Clock,
+    CheckCheck,
+    TrendingUp,
+    Compass,
+    ArrowRight,
+    ArrowUpRight,
+    Copy,
+    ZoomIn,
+    ZoomOut,
+    Maximize2,
+    Activity,
+    Coins,
+    Ruler,
+    Info
 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Card, CardContent } from "~/components/ui/card";
@@ -63,21 +78,46 @@ import {
     DialogDescription,
     DialogFooter,
 } from "~/components/ui/dialog";
+import {
+    Tabs,
+    TabsList,
+    TabsTrigger,
+    TabsContent
+} from "~/components/ui/tabs";
+import {
+    AlertDialog,
+    AlertDialogContent,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogCancel,
+    AlertDialogAction,
+} from "~/components/ui/alert-dialog";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from "~/components/ui/tooltip";
 import { UsulanDesaPagination } from "~/features/usulan-desa/components/UsulanDesaPagination";
-import { monitoringLaporanService } from "~/features/monitoring/services/monitoring_laporan.service";
+import { monitoringLaporanService, type MonitoringLaporan } from "~/features/monitoring/services/monitoring_laporan.service";
+import { BulkCreateDraftModal } from "~/features/monitoring/components/dokumen-infrastruktur/BulkCreateDraftModal";
+import { EditDokumenModal } from "~/features/monitoring/components/dokumen-infrastruktur/EditDokumenModal";
+import { ConfirmDeleteDialog } from "~/components/ConfirmDeleteDialog";
 import { monitoringService } from "~/features/monitoring/services/monitoring.service";
 import { plottingAnggaranService } from "~/features/monitoring/services/plotting_anggaran.service";
 import { kecamatanService } from "~/services/kecamatan";
 import { desaService } from "~/services/desa";
 import { useAuth } from "~/contexts/auth-context";
-import { useNavigate } from "react-router";
+import { canManagePenugasan, canPrintBeritaAcara, hasGlobalRegionalScope, isReadOnlyRole } from "~/utils/permissions";
+import { useNavigate, useSearchParams } from "react-router";
 import type { MetaFunction } from "react-router";
 
-// OpenLayers imports for map attachment rendering
 import OLMap from "ol/Map";
 import View from "ol/View";
 import Feature from "ol/Feature";
 import TileLayer from "ol/layer/Tile";
+import OSM from "ol/source/OSM";
 import XYZ from "ol/source/XYZ";
 import VectorLayer from "ol/layer/Vector";
 import VectorSource from "ol/source/Vector";
@@ -85,17 +125,41 @@ import GeoJSON from "ol/format/GeoJSON";
 import { Point, LineString } from "ol/geom";
 import { fromLonLat } from "ol/proj";
 import { Stroke, Style, Circle as CircleStyle, Fill } from "ol/style";
+import { BasemapToggle } from "~/features/monitoring/components/BasemapToggle";
 import "ol/ol.css";
+
+const BASEMAP_URLS: Record<string, string> = {
+    'google-sat': 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    'google-hybrid': 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    'google-road': 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',
+    'osm': 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    'carto-light': 'https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png',
+    'carto-dark': 'https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png',
+    'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+};
+
+const getBasemapSource = (basemapId: string) => {
+    if (basemapId === "osm") {
+        return new OSM({ crossOrigin: "anonymous" });
+    }
+    const url = BASEMAP_URLS[basemapId] || BASEMAP_URLS["google-sat"];
+    return new XYZ({
+        url,
+        crossOrigin: "anonymous",
+        maxZoom: 19
+    });
+};
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Dokumen Infrastruktur Desa - MELAROSA" },
+        { title: "Dokumen Infrastruktur - MELAROSA" },
         { name: "description", content: "Halaman pengarsipan dan cetak dokumen resmi Berita Acara realisasi infrastruktur desa" },
     ];
 };
 
 export default function DokumenInfrastrukturPage() {
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const { user } = useAuth();
     const currentUserName = React.useMemo(() => user?.nama || (user as any)?.nama_user || (user as any)?.name || (user as any)?.username || (user as any)?.email || "Operator Bappeda", [user]);
 
@@ -175,6 +239,11 @@ export default function DokumenInfrastrukturPage() {
     const [selectedDetailLaporan, setSelectedDetailLaporan] = useState<any>(null);
     const [loadingDetail, setLoadingDetail] = useState(false);
     const [mapElement, setMapElement] = useState<HTMLDivElement | null>(null);
+    const [detailActiveTab, setDetailActiveTab] = useState<'map' | 'segments'>('map');
+    const [detailActiveBasemap, setDetailActiveBasemap] = useState<string>("google-sat");
+    const [segmentSearch, setSegmentSearch] = useState<string>("");
+    const [segmentFilter, setSegmentFilter] = useState<'all' | 'poros' | 'non_poros'>('all');
+    const [isPrintDraftAlertOpen, setIsPrintDraftAlertOpen] = useState(false);
 
     // Revert to Draft Modal State
     const [revertDialogOpen, setRevertDialogOpen] = useState(false);
@@ -186,18 +255,55 @@ export default function DokumenInfrastrukturPage() {
     const mapDetailContainerRef = useRef<HTMLDivElement | null>(null);
     const detailMapRef = useRef<OLMap | null>(null);
     const detailSourceRef = useRef<VectorSource | null>(null);
+    const detailBaseLayerRef = useRef<TileLayer<XYZ | OSM> | null>(null);
+
+    const handleDetailMapZoomIn = () => {
+        if (!detailMapRef.current) return;
+        const view = detailMapRef.current.getView();
+        view.animate({ zoom: (view.getZoom() || 13) + 1, duration: 200 });
+    };
+
+    const handleDetailMapZoomOut = () => {
+        if (!detailMapRef.current) return;
+        const view = detailMapRef.current.getView();
+        view.animate({ zoom: (view.getZoom() || 13) - 1, duration: 200 });
+    };
+
+    const handleDetailMapFitBounds = () => {
+        if (!detailMapRef.current || !detailSourceRef.current) return;
+        const extent = detailSourceRef.current.getExtent();
+        if (extent && extent.some(v => isFinite(v)) && extent[0] !== Infinity && extent[0] !== -Infinity) {
+            detailMapRef.current.getView().fit(extent, {
+                padding: [60, 60, 60, 60],
+                maxZoom: 17,
+                duration: 300
+            });
+        }
+    };
+
+    const handleCopyNomorBa = (nomorBa: string) => {
+        if (!nomorBa) return;
+        navigator.clipboard.writeText(nomorBa);
+        toast.success("Nomor dokumen berhasil disalin ke clipboard!");
+    };
 
     // Modal Create State
     const [isCreateOpen, setIsCreateOpen] = useState(false);
-    const [createDesa, setCreateDesa] = useState<string>("");
-    const [createTahun, setCreateTahun] = useState<string>("2026");
-    const [createNomorBa, setCreateNomorBa] = useState<string>("050/XXX/412.302/2026");
-    const [createSumberDana, setCreateSumberDana] = useState<string>("BKK");
-    const [createRencanaPanjang, setCreateRencanaPanjang] = useState<string>("0");
-    const [createPlottingList, setCreatePlottingList] = useState<any[]>([]);
-    const [createPlottingId, setCreatePlottingId] = useState<string>("none");
-    const [loadingPlottingList, setLoadingPlottingList] = useState(false);
-    const [createSubmitting, setCreateSubmitting] = useState(false);
+
+    // Modal Edit Dokumen State
+    const [editModalOpen, setEditModalOpen] = useState(false);
+    const [selectedLaporanToEdit, setSelectedLaporanToEdit] = useState<MonitoringLaporan | null>(null);
+
+    const handleOpenEdit = (lap: MonitoringLaporan) => {
+        setSelectedLaporanToEdit(lap);
+        setEditModalOpen(true);
+    };
+
+    // Delete Confirmation Modal State
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [selectedLaporanToDelete, setSelectedLaporanToDelete] = useState<MonitoringLaporan | null>(null);
+    const [isDeletingLaporan, setIsDeletingLaporan] = useState(false);
+    const [loadingDeleteDetail, setLoadingDeleteDetail] = useState(false);
 
     // Inline Edit Nomor Dokumen State
     const [editingBaId, setEditingBaId] = useState<string | null>(null);
@@ -205,71 +311,33 @@ export default function DokumenInfrastrukturPage() {
     const [savingBa, setSavingBa] = useState(false);
     const [isSyncingTarget, setIsSyncingTarget] = useState(false);
 
-    useEffect(() => {
-        setCreateNomorBa(prev => {
-            if (!prev || prev.startsWith("050/")) {
-                const parts = prev.split("/");
-                if (parts.length === 4) {
-                    return `${parts[0]}/${parts[1]}/${parts[2]}/${createTahun}`;
-                }
-            }
-            return `050/XXX/412.302/${createTahun}`;
-        });
-    }, [createTahun]);
-
-    // Fetch Plotting Anggaran when desa or modal opens to link plotting_id & derive tahun anggaran
-    useEffect(() => {
-        if (!createDesa || !isCreateOpen) {
-            setCreatePlottingList([]);
-            setCreatePlottingId("none");
-            return;
-        }
-        const fetchPlotting = async () => {
-            setLoadingPlottingList(true);
-            try {
-                const res = await plottingAnggaranService.getPlottingList({
-                    id_desa: createDesa,
-                    id_kecamatan: selectedKec !== "all" ? selectedKec : undefined
-                });
-                const list = Array.isArray(res?.result) ? res.result : (Array.isArray(res?.data) ? res.data : []);
-                setCreatePlottingList(list);
-                if (list.length > 0) {
-                    const first = list[0];
-                    setCreatePlottingId(first.id.toString());
-                    if (first.tahun_anggaran) setCreateTahun(first.tahun_anggaran.toString());
-                    if (first.sumber_dana) setCreateSumberDana(first.sumber_dana);
-                    if (first.target_panjang_m) setCreateRencanaPanjang(first.target_panjang_m.toString());
-                } else {
-                    setCreatePlottingId("none");
-                }
-            } catch (err) {
-                console.warn("Failed to fetch plotting for create draft:", err);
-                setCreatePlottingList([]);
-                setCreatePlottingId("none");
-            } finally {
-                setLoadingPlottingList(false);
-            }
-        };
-        fetchPlotting();
-    }, [createDesa, isCreateOpen, selectedKec]);
-
-    const handleSelectPlotting = (plottingId: string) => {
-        setCreatePlottingId(plottingId);
-        if (plottingId === "none") return;
-        const selected = createPlottingList.find(p => p.id.toString() === plottingId);
-        if (selected) {
-            if (selected.tahun_anggaran) setCreateTahun(selected.tahun_anggaran.toString());
-            if (selected.sumber_dana) setCreateSumberDana(selected.sumber_dana);
-            if (selected.target_panjang_m) setCreateRencanaPanjang(selected.target_panjang_m.toString());
-        }
-    };
-
     // Load kecamatan list on mount & set default for operator_kecamatan
     useEffect(() => {
         if (user?.role === 'operator_kecamatan' && (user as any)?.id_kecamatan) {
             setSelectedKec(String((user as any).id_kecamatan));
         }
     }, [user]);
+
+    // Handle incoming search params (e.g. from WebGIS realisasi-infrastruktur)
+    useEffect(() => {
+        const paramTahun = searchParams.get("tahun");
+        const paramKec = searchParams.get("kec") || searchParams.get("id_kecamatan");
+        const paramDesa = searchParams.get("desa") || searchParams.get("id_desa");
+        const paramAction = searchParams.get("action");
+
+        if (paramTahun) {
+            setSelectedTahun(paramTahun);
+        }
+        if (paramKec) {
+            setSelectedKec(paramKec);
+        }
+        if (paramDesa) {
+            setSelectedDesa(paramDesa);
+        }
+        if (paramAction === "create_draft") {
+            setIsCreateOpen(true);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const fetchKec = async () => {
@@ -357,12 +425,9 @@ export default function DokumenInfrastrukturPage() {
         detailSourceRef.current = vectorSource;
 
         const baseLayer = new TileLayer({
-            source: new XYZ({
-                url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-                crossOrigin: "anonymous",
-                maxZoom: 19
-            })
+            source: getBasemapSource(detailActiveBasemap)
         });
+        detailBaseLayerRef.current = baseLayer;
 
         const vectorLayer = new VectorLayer({
             source: vectorSource,
@@ -432,6 +497,7 @@ export default function DokumenInfrastrukturPage() {
         });
 
         detailMapRef.current = map;
+        detailSourceRef.current = vectorSource;
 
         const updateAndFit = () => {
             if (!isMounted || !detailMapRef.current) return;
@@ -486,12 +552,17 @@ export default function DokumenInfrastrukturPage() {
 
         return () => {
             isMounted = false;
-            if (detailMapRef.current) {
-                detailMapRef.current.setTarget(undefined);
-                detailMapRef.current = null;
+            if (map) {
+                map.setTarget(undefined);
             }
         };
     }, [isDetailOpen, selectedDetailLaporan, mapElement]);
+
+    // Dynamically update basemap source without recreating the map
+    useEffect(() => {
+        if (!detailBaseLayerRef.current) return;
+        detailBaseLayerRef.current.setSource(getBasemapSource(detailActiveBasemap));
+    }, [detailActiveBasemap]);
 
     const fetchLaporan = useCallback(async () => {
         setLoading(true);
@@ -503,7 +574,10 @@ export default function DokumenInfrastrukturPage() {
                 status: selectedStatus !== "all" ? selectedStatus : undefined
             });
             if (res.status === "success" && Array.isArray(res.result)) {
-                setLaporanList(res.result);
+                setLaporanList(res.result.map((item: any) => ({
+                    ...item,
+                    total_segmen: item.total_segmen ?? item.SegmensFormatted?.length ?? item.LaporanSegmens?.length ?? item.segmens?.length ?? item.total_segments ?? item.jumlah_segmen ?? undefined
+                })));
             } else {
                 setLaporanList([]);
             }
@@ -545,6 +619,9 @@ export default function DokumenInfrastrukturPage() {
             const res = await monitoringLaporanService.getLaporanById(laporanId);
             if (res.status === "success" && res.result) {
                 setSelectedDetailLaporan(res.result);
+                setDetailActiveTab('map');
+                setSegmentSearch("");
+                setSegmentFilter("all");
                 setIsDetailOpen(true);
                 toast.dismiss(toastId);
             } else {
@@ -611,57 +688,62 @@ export default function DokumenInfrastrukturPage() {
         }
     };
 
-    const handleCreateLaporan = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (user?.role === 'operator_kecamatan') {
-            toast.error("Role Operator Kecamatan bertugas mengirimkan digitasi segmen ke Bappeda. Pembuatan dan Cetak Berita Acara hanya dapat dilakukan oleh Operator Bappeda setelah hasil digitasi diverifikasi.");
-            return;
-        }
-        if (!createDesa) {
-            toast.error("Silakan pilih Desa terlebih dahulu");
-            return;
-        }
-        setCreateSubmitting(true);
-        const toastId = toast.loading("Menerbitkan Draft Dokumen Monitoring...");
-        try {
-            const res = await monitoringLaporanService.createLaporan({
-                id_desa: createDesa,
-                id_kecamatan: selectedKec !== "all" ? selectedKec : undefined,
-                tahun_anggaran: createTahun,
-                sumber_dana: createSumberDana,
-                rencana_panjang: createRencanaPanjang,
-                nomor_ba: createNomorBa,
-                plotting_id: (createPlottingId && createPlottingId !== 'none') ? createPlottingId : null,
-                status: "Draft"
-            });
-            if (res.status === "success" || res.data || res.result) {
-                const nomorDoc = res.result?.nomor_ba || res.data?.nomor_ba || createNomorBa;
-                toast.success(`Draft Dokumen Monitoring (${nomorDoc}) berhasil diterbitkan! Akses digitasi untuk Operator Kecamatan telah terbuka.`, { id: toastId });
-                setIsCreateOpen(false);
-                await fetchLaporan();
-            } else {
-                toast.error("Gagal membuat Draft Dokumen Monitoring", { id: toastId });
+
+
+    const handleDeleteClick = async (lap: MonitoringLaporan) => {
+        setSelectedLaporanToDelete(lap);
+        setDeleteDialogOpen(true);
+
+        // Fetch detail laporan untuk memastikan jumlah segmen terikat akurat (dari SegmensFormatted)
+        if (lap?.id && (!lap.SegmensFormatted || lap.SegmensFormatted.length === 0)) {
+            setLoadingDeleteDetail(true);
+            try {
+                const res = await monitoringLaporanService.getLaporanById(lap.id);
+                if (res?.status === "success" && res.result) {
+                    const fullData = res.result;
+                    const segmentCount = fullData.SegmensFormatted?.length ?? fullData.LaporanSegmens?.length ?? fullData.segmens?.length ?? fullData.total_segmen ?? 0;
+                    setSelectedLaporanToDelete((prev: any) => {
+                        if (prev && prev.id === lap.id) {
+                            return {
+                                ...prev,
+                                ...fullData,
+                                total_segmen: segmentCount
+                            };
+                        }
+                        return prev;
+                    });
+                }
+            } catch (err) {
+                console.warn("Failed to fetch full detail for delete confirmation:", err);
+            } finally {
+                setLoadingDeleteDetail(false);
             }
-        } catch (err: any) {
-            console.error("Create BA error:", err);
-            toast.error(err?.message || "Terjadi kesalahan saat membuat Draft Dokumen Monitoring", { id: toastId });
-        } finally {
-            setCreateSubmitting(false);
         }
     };
 
-    const handleDeleteLaporan = async (id: string) => {
-        if (!confirm("Apakah Anda yakin ingin menghapus Dokumen Berita Acara ini beserta seluruh segmen realisasi yang terikat?")) return;
-        const toastId = toast.loading("Menghapus Berita Acara dan segmen terkait...");
+    const handleConfirmDeleteLaporan = async () => {
+        if (!selectedLaporanToDelete) return;
+        setIsDeletingLaporan(true);
+        const toastId = toast.loading("Menghapus Dokumen Berita Acara dan segmen terkait...");
         try {
-            await monitoringLaporanService.deleteLaporan(id, true);
+            await monitoringLaporanService.deleteLaporan(selectedLaporanToDelete.id, true);
             toast.success("Berita Acara dan seluruh segmen yang terikat berhasil dihapus", { id: toastId });
-            setLaporanList(prev => prev.filter(item => item.id !== id));
+            setLaporanList(prev => prev.filter(item => item.id !== selectedLaporanToDelete.id));
+            setDeleteDialogOpen(false);
+            setSelectedLaporanToDelete(null);
             await fetchLaporan();
         } catch (err) {
             console.error("Delete error:", err);
-            toast.error("Gagal menghapus Berita Acara", { id: toastId });
+            toast.error("Gagal menghapus Dokumen Berita Acara", { id: toastId });
+        } finally {
+            setIsDeletingLaporan(false);
         }
+    };
+
+    const handleOpenRevert = (laporan: any) => {
+        setSelectedLaporanToRevert(laporan);
+        setCatatanRevisiInput(laporan.catatan_revisi || "");
+        setRevertDialogOpen(true);
     };
 
     const handleRevertToDraft = async () => {
@@ -779,23 +861,38 @@ export default function DokumenInfrastrukturPage() {
             toast.error("Role Operator Kecamatan bertugas mengirimkan digitasi segmen ke Bappeda. Cetak Berita Acara hanya dapat dilakukan oleh Operator Bappeda setelah hasil digitasi diverifikasi.");
             return;
         }
+
+        const segmens = selectedDetailLaporan.SegmensFormatted || selectedDetailLaporan.Segmens || selectedDetailLaporan.segmens || [];
+        const totalRealized = parseFloat(selectedDetailLaporan.realisasi_panjang || selectedDetailLaporan.panjang_realisasi || selectedDetailLaporan.total_panjang_m || 0);
+        const isDraft = (selectedDetailLaporan.status || "draft").toLowerCase() === "draft";
+
+        // VALIDASI KEAMANAN: Buka Alert Dialog jika dokumen masih Draft dan 0 segmen
+        if (segmens.length === 0 && totalRealized <= 0 && isDraft) {
+            setIsPrintDraftAlertOpen(true);
+            return;
+        }
+
         const toastId = toast.loading("Mempersiapkan dokumen cetak & lampiran peta Berita Acara...");
         try {
             const mapImageSrc = await getDetailMapImage();
             const lap = selectedDetailLaporan;
 
-            // Automatically transition status to Final upon printing Berita Acara
-            if (lap?.id && (lap.status === 'Submitted' || lap.status === 'Draft' || !lap.status)) {
+            // Automatically transition status to Final upon printing Berita Acara HANYA jika memiliki segmen
+            if (lap?.id && (segmens.length > 0 || totalRealized > 0) && (lap.status === 'Submitted' || lap.status === 'Draft' || !lap.status)) {
                 try {
                     await monitoringLaporanService.updateLaporan(lap.id, { status: "Final" });
                     lap.status = "Final";
+                    setSelectedDetailLaporan((prev: any) => prev ? { ...prev, status: "Final" } : prev);
                     setLaporanList(prev => prev.map(item => item.id === lap.id ? { ...item, status: "Final" } : item));
-                } catch (errUpdateStatus) {
+                } catch (errUpdateStatus: any) {
                     console.warn("Failed to update status to Final on print:", errUpdateStatus);
+                    const errMsg = errUpdateStatus?.response?.data?.message || errUpdateStatus?.message;
+                    if (errMsg) {
+                        toast.error(`Peringatan: ${errMsg}`);
+                    }
                 }
             }
 
-            const segmens = lap.SegmensFormatted || [];
             const targetDesaName = lap.Desa?.nama_desa || "Desa";
             const targetKecName = lap.Kecamatan?.nama_kecamatan || "Kecamatan";
             const targetDesaPimpinan = lap.Desa?.nama_pimpinan || "";
@@ -810,7 +907,7 @@ export default function DokumenInfrastrukturPage() {
                 "Januari", "Februari", "Maret", "April", "Mei", "Juni",
                 "Juli", "Agustus", "September", "Oktober", "November", "Desember"
             ];
-            
+
             // Tanggal Pembuatan Berita Acara (created_at)
             const baDate = new Date(lap.created_at || new Date());
             const currentDayName = indonesianDays[baDate.getDay()];
@@ -824,7 +921,6 @@ export default function DokumenInfrastrukturPage() {
             const formattedPrintDateOnly = printDate.toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' });
             const formattedPrintTimeOnly = printDate.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
-            const totalRealized = parseFloat(lap.realisasi_panjang || 0);
             const rencanaPanjang = parseFloat(lap.rencana_panjang || 0);
 
             const verifikatorName = (segmens.find((s: any) => s.verifikator && s.verifikator !== "Operator Bappeda")?.verifikator) || lap.verifikator || currentUserName;
@@ -1105,7 +1201,7 @@ export default function DokumenInfrastrukturPage() {
                 "Januari", "Februari", "Maret", "April", "Mei", "Juni",
                 "Juli", "Agustus", "September", "Oktober", "November", "Desember"
             ];
-            
+
             const baDate = new Date(lap.created_at || new Date());
             const currentDayName = indonesianDays[baDate.getDay()];
             const currentDayNum = baDate.getDate();
@@ -1279,8 +1375,8 @@ export default function DokumenInfrastrukturPage() {
                                     ${targetDesaPimpinan || '_________________________'}
                                 </p>
                                 ${targetDesaNip
-                                    ? `<p style="margin: 0; font-size: 12px; margin-top: 0px;">NIP. ${targetDesaNip}</p>`
-                                    : ''}
+                        ? `<p style="margin: 0; font-size: 12px; margin-top: 0px;">NIP. ${targetDesaNip}</p>`
+                        : ''}
                             </div>
 
                             <!-- Baris 1 Kolom 2 -->
@@ -1309,8 +1405,8 @@ export default function DokumenInfrastrukturPage() {
                                     ${targetKecPimpinan || '_________________________'}
                                 </p>
                                 ${targetKecNip
-                                    ? `<p style="margin: 0; font-size: 12px; margin-top: 0px;">NIP. ${targetKecNip}</p>`
-                                    : ''}
+                        ? `<p style="margin: 0; font-size: 12px; margin-top: 0px;">NIP. ${targetKecNip}</p>`
+                        : ''}
                             </div>
 
                             </div>
@@ -1377,12 +1473,22 @@ export default function DokumenInfrastrukturPage() {
         }
     };
 
+    const stats = React.useMemo(() => {
+        const total = laporanList.length;
+        const draft = laporanList.filter(l => (l.status || "").toLowerCase() === 'draft').length;
+        const submitted = laporanList.filter(l => (l.status || "").toLowerCase() === 'submitted').length;
+        const revisi = laporanList.filter(l => (l.status || "").toLowerCase() === 'revisi').length;
+        const final = laporanList.filter(l => (l.status || "").toLowerCase() === 'final' || !l.status).length;
+        return { total, draft, submitted, revisi, final };
+    }, [laporanList]);
+
     const filteredList = laporanList.filter(lap => {
         const q = searchTerm.toLowerCase();
         const matchQuery = (
             (lap.nomor_ba && lap.nomor_ba.toLowerCase().includes(q)) ||
             (lap.Desa?.nama_desa && lap.Desa.nama_desa.toLowerCase().includes(q)) ||
-            (lap.Kecamatan?.nama_kecamatan && lap.Kecamatan.nama_kecamatan.toLowerCase().includes(q))
+            (lap.Kecamatan?.nama_kecamatan && lap.Kecamatan.nama_kecamatan.toLowerCase().includes(q)) ||
+            (lap.PlottingAnggaran?.nama_kegiatan && lap.PlottingAnggaran.nama_kegiatan.toLowerCase().includes(q))
         );
 
         let matchDate = true;
@@ -1409,217 +1515,276 @@ export default function DokumenInfrastrukturPage() {
     const totalPages = Math.ceil(totalItems / limit) || 1;
     const paginatedList = filteredList.slice((page - 1) * limit, page * limit);
 
+    const renderStatusBadge = (status: string | undefined) => {
+        const s = (status || "Final").toLowerCase();
+        if (s === "draft") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 shrink-0">
+                    <Clock className="w-3 h-3 text-amber-600 dark:text-amber-400" />
+                    <span>Draft (Penugasan)</span>
+                </span>
+            );
+        }
+        if (s === "submitted") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-sky-500/10 text-sky-700 dark:text-sky-300 border border-sky-500/30 shrink-0">
+                    <Loader2 className="w-3 h-3 animate-spin text-sky-600 dark:text-sky-400" />
+                    <span>Submitted (Menunggu Review)</span>
+                </span>
+            );
+        }
+        if (s === "revisi") {
+            return (
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-500/10 text-rose-700 dark:text-rose-300 border border-rose-500/30 shrink-0">
+                    <AlertTriangle className="w-3 h-3 text-rose-600 dark:text-rose-400" />
+                    <span>Perlu Revisi</span>
+                </span>
+            );
+        }
+        return (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30 shrink-0">
+                <ShieldCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                <span>Final / Disahkan</span>
+            </span>
+        );
+    };
+
     return (
-        <div className="absolute inset-0 flex flex-col gap-4 p-4 bg-background dark:bg-slate-950 overflow-hidden">
-            {/* Header */}
-            <div className="flex items-center justify-between gap-4 shrink-0 pb-1 border-b border-slate-100 dark:border-slate-800/50">
-                <div>
-                    <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">Dokumen Infrastruktur Desa</h1>
-                    <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">Kelola dokumen resmi Berita Acara realisasi infrastruktur desa per Tahun Anggaran.</p>
+        <div className="relative min-h-full flex-1 flex flex-col bg-background dark:bg-slate-950 overflow-y-auto overflow-x-hidden custom-scrollbar">
+            {/* 1. Header Area with Clean Modern Hierarchy (Scrolls with page) */}
+            <div className="px-4 sm:px-6 pt-3 sm:pt-5 pb-2.5 sm:pb-3 border-b border-border/80 shrink-0">
+                <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+                    <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-base sm:text-xl font-bold text-foreground tracking-tight">Dokumen Infrastruktur</h1>
+                            <Badge variant="outline" className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30">
+                                Berita Acara
+                            </Badge>
+                        </div>
+                        <p className="hidden sm:block text-xs text-muted-foreground">
+                            Kelola dokumen monitoring penugasan & pengarsipan resmi Berita Acara realisasi per Tahun Anggaran.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {canManagePenugasan(user) && (
+                            <Button
+                                onClick={() => setIsCreateOpen(true)}
+                                className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 shadow-sm rounded-xl cursor-pointer"
+                            >
+                                <Plus className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
+                                <span className="hidden sm:inline">Terbitkan Draft Baru</span>
+                                <span className="sm:hidden">Draft Baru</span>
+                            </Button>
+                        )}
+                    </div>
                 </div>
-                {user?.role !== 'operator_kecamatan' && (
-                    <Button onClick={() => setIsCreateOpen(true)} className="h-9 bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1.5 shrink-0">
-                        <Plus className="h-4 w-4" />
-                        <span>Buat Berita Acara Baru</span>
-                    </Button>
+
+                {user?.role === 'operator_kecamatan' && (
+                    <div className="mt-3 p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-900 dark:text-indigo-200 flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <Compass className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                            <span>
+                                <strong>Mode Penugasan & Digitasi:</strong> Operator Kecamatan mendigitasi segmen jalan berdasarkan <strong>Draft Dokumen</strong> yang diterbitkan Bappeda. Setelah selesai, kirimkan hasil digitasi ke Bappeda untuk diverifikasi.
+                            </span>
+                        </div>
+                    </div>
                 )}
             </div>
 
-            {user?.role === 'operator_kecamatan' && (
-                <div className="p-3 bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200/80 dark:border-indigo-800/60 rounded-xl text-xs text-indigo-800 dark:text-indigo-300 flex items-center justify-between shrink-0">
-                    <div className="flex items-center gap-2">
-                        <span className="text-base">ℹ️</span>
-                        <span>
-                            <strong>Mode Lihat dan Unduh:</strong> Anda dapat melihat dan mengunduh dokumen <strong>Berita Acara</strong> yang tersedia di kecamatan Anda. Pembuatan, perubahan status, dan penghapusan hanya dapat dilakukan oleh <strong>Operator Bappeda</strong>.
-                        </span>
+            {/* 2. STICKY TOP MENUBAR: Search, Filters, Reset, Refresh, Status Pill Tabs */}
+            <div className="sticky top-0 z-40 bg-background dark:bg-slate-950 border-b border-border shadow-xs">
+                {/* Search & Actions Toolbar */}
+                <div className="px-4 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 bg-muted/20">
+                    {/* Search Input on Left */}
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input
+                            placeholder="Cari Nomor Dokumen / Desa / Plotting..."
+                            value={searchTerm}
+                            onChange={(e) => {
+                                setSearchTerm(e.target.value);
+                                setPage(1);
+                            }}
+                            className="pl-9 h-9 w-full text-xs rounded-xl bg-background border-border"
+                            autoComplete="off"
+                        />
+                        {searchTerm && (
+                            <button
+                                onClick={() => setSearchTerm("")}
+                                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </div>
-                </div>
-            )}
 
-            {/* Card Table Area with Toolbar */}
-            <div className="flex-1 min-h-0 flex flex-col">
-                <Card className="gap-0 py-0 overflow-hidden border dark:border-slate-800 bg-white dark:bg-slate-950 relative flex flex-col flex-1 min-h-0">
-                    {/* Sleek Toolbar matching UsulanDesaTable */}
-                    <div className="p-4 border-b border-border flex items-center justify-between gap-4 shrink-0 bg-slate-50/30 dark:bg-slate-900/10">
-                        {/* Search Input on Left */}
-                        <div className="relative w-full max-w-xs sm:max-w-sm">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Cari Nomor Dokumen / Desa..."
-                                value={searchTerm}
-                                onChange={(e) => {
-                                    setSearchTerm(e.target.value);
-                                    setPage(1);
-                                }}
-                                className="pl-9 h-9 w-full text-xs"
-                                autoComplete="off"
-                            />
-                        </div>
+                    {/* Filter Popover & Action Controls on Right */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn(
+                                        "h-9 text-xs font-bold gap-2 rounded-xl border-border cursor-pointer",
+                                        activeFilterCount > 0 && "border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10"
+                                    )}
+                                >
+                                    <SlidersHorizontal className="h-3.5 w-3.5" />
+                                    <span>Filter</span>
+                                    {activeFilterCount > 0 && (
+                                        <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-indigo-600 text-white rounded-full">
+                                            {activeFilterCount}
+                                        </Badge>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl border border-border rounded-2xl">
+                                <div className="flex items-center justify-between border-b pb-2">
+                                    <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                                        <Filter className="h-3.5 w-3.5 text-indigo-600" />
+                                        <span>Filter Dokumen Infrastruktur</span>
+                                    </div>
+                                    {activeFilterCount > 0 && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleReset}
+                                            className="h-6 text-[10px] text-muted-foreground hover:text-foreground px-1 cursor-pointer"
+                                        >
+                                            Reset
+                                        </Button>
+                                    )}
+                                </div>
 
-                        {/* Filter Popover & Action Controls on Right */}
-                        <div className="flex items-center gap-2 shrink-0">
-                            <Popover open={isFilterPopoverOpen} onOpenChange={setIsFilterPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className={cn(
-                                            "h-9 text-xs font-semibold gap-2 dark:border-slate-800",
-                                            activeFilterCount > 0 && "border-blue-500 text-blue-600 bg-blue-50/50 dark:bg-blue-950/40"
-                                        )}
-                                    >
-                                        <SlidersHorizontal className="h-3.5 w-3.5" />
-                                        <span>Filter</span>
-                                        {activeFilterCount > 0 && (
-                                            <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-blue-600 text-white rounded-full">
-                                                {activeFilterCount}
-                                            </Badge>
-                                        )}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent align="end" className="w-80 p-4 space-y-4 shadow-xl border dark:border-slate-800">
-                                    <div className="flex items-center justify-between border-b pb-2">
-                                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-900 dark:text-slate-100">
-                                            <Filter className="h-3.5 w-3.5 text-blue-600" />
-                                            <span>Filter Dokumen Infrastruktur</span>
-                                        </div>
-                                        {activeFilterCount > 0 && (
-                                            <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={handleReset}
-                                                className="h-6 text-[10px] text-muted-foreground hover:text-foreground px-1"
-                                            >
-                                                Reset
-                                            </Button>
-                                        )}
+                                <div className="space-y-3 text-xs">
+                                    {/* Kecamatan Filter */}
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase">Kecamatan</Label>
+                                        <Combobox
+                                            options={kecamatanFilterOptions}
+                                            value={selectedKec}
+                                            onChange={(value) => { setSelectedKec(value); setPage(1); }}
+                                            placeholder="Semua Kecamatan"
+                                            searchPlaceholder="Cari kecamatan..."
+                                            disabled={user?.role === 'operator_kecamatan'}
+                                            className="w-full"
+                                        />
                                     </div>
 
-                                    <div className="space-y-3 text-xs">
-                                        {/* Kecamatan Filter — Full Width Combobox */}
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Kecamatan</Label>
-                                            <Combobox
-                                                options={kecamatanFilterOptions}
-                                                value={selectedKec}
-                                                onChange={(value) => { setSelectedKec(value); setPage(1); }}
-                                                placeholder="Semua Kecamatan"
-                                                searchPlaceholder="Cari kecamatan..."
-                                                disabled={user?.role === 'operator_kecamatan'}
-                                                className="w-full"
-                                            />
-                                        </div>
+                                    {/* Desa Filter */}
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase">Desa</Label>
+                                        <Combobox
+                                            options={desaFilterOptions}
+                                            value={selectedDesa}
+                                            onChange={(value) => { setSelectedDesa(value); setPage(1); }}
+                                            placeholder="Semua Desa"
+                                            searchPlaceholder="Cari desa..."
+                                            disabled={!selectedKec || selectedKec === "all"}
+                                            className="w-full"
+                                        />
+                                    </div>
 
-                                        {/* Desa Filter — Full Width Combobox */}
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Desa</Label>
-                                            <Combobox
-                                                options={desaFilterOptions}
-                                                value={selectedDesa}
-                                                onChange={(value) => { setSelectedDesa(value); setPage(1); }}
-                                                placeholder="Semua Desa"
-                                                searchPlaceholder="Cari desa..."
-                                                disabled={!selectedKec || selectedKec === "all"}
-                                                className="w-full"
-                                            />
-                                        </div>
+                                    {/* Tahun Filter */}
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase">Tahun Anggaran</Label>
+                                        <Combobox
+                                            options={tahunFilterOptions}
+                                            value={selectedTahun}
+                                            onChange={(value) => { setSelectedTahun(value); setPage(1); }}
+                                            placeholder="Semua Tahun"
+                                            searchPlaceholder="Cari tahun..."
+                                            className="w-full"
+                                        />
+                                    </div>
 
-                                        {/* Tahun Filter — Full Width Combobox */}
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Tahun Anggaran</Label>
-                                            <Combobox
-                                                options={tahunFilterOptions}
-                                                value={selectedTahun}
-                                                onChange={(value) => { setSelectedTahun(value); setPage(1); }}
-                                                placeholder="Semua Tahun"
-                                                searchPlaceholder="Cari tahun..."
-                                                className="w-full"
-                                            />
-                                        </div>
+                                    {/* Status Filter */}
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase">Status Dokumen</Label>
+                                        <Combobox
+                                            options={statusFilterOptions}
+                                            value={selectedStatus}
+                                            onChange={(value) => { setSelectedStatus(value); setPage(1); }}
+                                            placeholder="Semua Status"
+                                            searchPlaceholder="Cari status..."
+                                            className="w-full"
+                                        />
+                                    </div>
 
-                                        {/* Status Filter — Full Width Combobox */}
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Status Dokumen</Label>
-                                            <Combobox
-                                                options={statusFilterOptions}
-                                                value={selectedStatus}
-                                                onChange={(value) => { setSelectedStatus(value); setPage(1); }}
-                                                placeholder="Semua Status"
-                                                searchPlaceholder="Cari status..."
-                                                className="w-full"
-                                            />
-                                        </div>
-
-                                        {/* Filter Tanggal Dibuat — Shadcn UI DatePicker */}
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] font-bold text-muted-foreground uppercase">Rentang Tanggal Dibuat</Label>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <div>
-                                                    <span className="text-[10px] text-muted-foreground block mb-0.5">Dari Tanggal</span>
-                                                    <DatePicker
-                                                        value={startDate}
-                                                        onChange={(val) => { setStartDate(val); setPage(1); }}
-                                                        placeholder="Dari tanggal"
-                                                    />
-                                                </div>
-                                                <div>
-                                                    <span className="text-[10px] text-muted-foreground block mb-0.5">Sampai Tanggal</span>
-                                                    <DatePicker
-                                                        value={endDate}
-                                                        onChange={(val) => { setEndDate(val); setPage(1); }}
-                                                        placeholder="Sampai tanggal"
-                                                    />
-                                                </div>
+                                    {/* Filter Rentang Tanggal */}
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-bold text-muted-foreground uppercase">Rentang Tanggal Dibuat</Label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground block mb-0.5">Dari</span>
+                                                <DatePicker
+                                                    value={startDate}
+                                                    onChange={(val) => { setStartDate(val); setPage(1); }}
+                                                    placeholder="Mulai..."
+                                                />
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] text-muted-foreground block mb-0.5">Sampai</span>
+                                                <DatePicker
+                                                    value={endDate}
+                                                    onChange={(val) => { setEndDate(val); setPage(1); }}
+                                                    placeholder="Selesai..."
+                                                />
                                             </div>
                                         </div>
                                     </div>
+                                </div>
 
-                                    <div className="pt-2 border-t flex gap-2">
-                                        <Button
-                                            onClick={() => {
-                                                setPage(1);
-                                                fetchLaporan();
-                                                setIsFilterPopoverOpen(false);
-                                            }}
-                                            size="sm"
-                                            className="w-full h-8 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold"
-                                        >
-                                            Terapkan Filter
-                                        </Button>
-                                    </div>
-                                </PopoverContent>
-                            </Popover>
+                                <div className="pt-2 border-t flex gap-2">
+                                    <Button
+                                        onClick={() => {
+                                            setPage(1);
+                                            fetchLaporan();
+                                            setIsFilterPopoverOpen(false);
+                                        }}
+                                        size="sm"
+                                        className="w-full h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl cursor-pointer"
+                                    >
+                                        Terapkan Filter
+                                    </Button>
+                                </div>
+                            </PopoverContent>
+                        </Popover>
 
-                            {(activeFilterCount > 0 || searchTerm) && (
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={handleReset}
-                                    className="h-9 text-xs text-muted-foreground hover:text-foreground"
-                                >
-                                    Reset
-                                </Button>
-                            )}
-
+                        {(activeFilterCount > 0 || searchTerm) && (
                             <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-9 w-9 dark:border-slate-800"
-                                onClick={fetchLaporan}
-                                disabled={loading}
+                                variant="ghost"
+                                size="sm"
+                                onClick={handleReset}
+                                className="h-9 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
                             >
-                                <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                                Reset
                             </Button>
-                        </div>
-                    </div>
+                        )}
 
-                    {/* Quick Status Filter Tabs */}
-                    <div className="flex flex-wrap items-center gap-1.5 px-6 py-2.5 border-b border-border bg-slate-50/50 dark:bg-slate-900/30">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 rounded-xl border-border cursor-pointer"
+                            onClick={fetchLaporan}
+                            disabled={loading}
+                            title="Perbarui Data"
+                        >
+                            <RotateCw className={cn("h-4 w-4", loading && "animate-spin")} />
+                        </Button>
+                    </div>
+                </div>
+
+                {/* Quick Status Filter Tabs with Counts (Horizontally scrollable on mobile/small screens) */}
+                <div className="relative border-t border-border/60 bg-muted/10 shrink-0">
+                    <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:overflow-x-visible sm:flex-wrap scroll-smooth touch-pan-x overscroll-x-contain">
                         {[
-                            { value: "all", label: "Semua Dokumen", count: totalItems, color: "slate" },
-                            { value: "Draft", label: "Perlu Revisi", count: laporanList.filter(l => l.status === 'Draft' || l.status === 'draft' || l.status === 'Revisi').length, color: "amber" },
-                            { value: "Submitted", label: "Menunggu Bappeda", count: laporanList.filter(l => l.status === 'Submitted' || l.status === 'submitted').length, color: "blue" },
-                            { value: "Final", label: "Final / Disahkan", count: laporanList.filter(l => l.status === 'Final' || l.status === 'final' || !l.status).length, color: "emerald" },
+                            { value: "all", label: "Semua Dokumen", count: stats.total, color: "slate" },
+                            { value: "Draft", label: "Draft Penugasan", count: stats.draft, color: "amber" },
+                            { value: "Submitted", label: "Menunggu Review", count: stats.submitted, color: "sky" },
+                            { value: "Revisi", label: "Perlu Revisi", count: stats.revisi, color: "rose" },
+                            { value: "Final", label: "Final / Disahkan", count: stats.final, color: "emerald" },
                         ].map((tab) => (
                             <button
                                 key={tab.value}
@@ -1628,22 +1793,24 @@ export default function DokumenInfrastrukturPage() {
                                     setPage(1);
                                 }}
                                 className={cn(
-                                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all cursor-pointer border",
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shrink-0 whitespace-nowrap select-none active:scale-95",
                                     selectedStatus === tab.value
                                         ? tab.color === 'amber'
                                             ? "bg-amber-600 text-white border-amber-600 shadow-xs"
-                                            : tab.color === 'blue'
-                                                ? "bg-blue-600 text-white border-blue-600 shadow-xs"
-                                                : tab.color === 'emerald'
-                                                    ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
-                                                    : "bg-foreground text-background border-foreground shadow-xs"
+                                            : tab.color === 'sky'
+                                                ? "bg-sky-600 text-white border-sky-600 shadow-xs"
+                                                : tab.color === 'rose'
+                                                    ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                                                    : tab.color === 'emerald'
+                                                        ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                                        : "bg-foreground text-background border-foreground shadow-xs"
                                         : "bg-background text-muted-foreground border-border hover:bg-muted"
                                 )}
                             >
                                 <span>{tab.label}</span>
-                                {tab.value !== "all" && tab.count > 0 && (
+                                {tab.count > 0 && (
                                     <span className={cn(
-                                        "inline-flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full text-[10px] font-extrabold",
+                                        "inline-flex items-center justify-center min-w-[18px] h-4 px-1 rounded-full text-[10px] font-mono font-black",
                                         selectedStatus === tab.value ? "bg-white/20 text-white" : "bg-muted-foreground/15 text-foreground"
                                     )}>
                                         {tab.count}
@@ -1652,763 +1819,1133 @@ export default function DokumenInfrastrukturPage() {
                             </button>
                         ))}
                     </div>
+                </div>
 
-                    {/* Table Area matching bataswilayah-desa & ploting-anggaran */}
-                    <CardContent className="p-0 overflow-auto custom-scrollbar flex-1 min-h-0 [&_[data-slot=table-container]]:overflow-visible">
-                        <Table>
-                            <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 border-b border-border shadow-[0_1px_1px_rgba(0,0,0,0.1)]">
+                {/* Active Filter Chips (if any active filter applied) */}
+                {activeFilterCount > 0 && (
+                    <div className="flex items-center gap-1.5 px-4 sm:px-6 py-1.5 border-t border-border/60 bg-muted/5 text-[11px] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-wrap shrink-0">
+                        <span className="text-muted-foreground font-semibold shrink-0">Filter aktif:</span>
+                        {selectedKec !== "all" && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                Kec: {kecamatanList.find(k => k.id.toString() === selectedKec)?.nama_kecamatan}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedKec("all")} />
+                            </Badge>
+                        )}
+                        {selectedDesa !== "all" && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                Desa: {desaList.find(d => d.id.toString() === selectedDesa)?.nama_desa}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedDesa("all")} />
+                            </Badge>
+                        )}
+                        {selectedTahun !== "Semua" && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                TA {selectedTahun}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => setSelectedTahun("Semua")} />
+                            </Badge>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 3. Main Data Content Area (Natural page flow, no inner scroll on card/table) */}
+            <div className="flex-1 px-4 sm:px-6 py-4 space-y-4 max-w-full overflow-x-hidden">
+                {/* A. Desktop High-Density Table View (hidden on small screens) */}
+                <div className="hidden md:block rounded-sm border border-border bg-card shadow-xs overflow-x-auto custom-scrollbar">
+                    <Table className="min-w-[1050px]">
+                        <TableHeader className="bg-muted/60 dark:bg-slate-900 border-b border-border">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="text-center font-bold sticky left-0 z-20 bg-muted/90 dark:bg-slate-900 border-r border-border w-[165px] min-w-[165px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                                    Aksi
+                                </TableHead>
+                                <TableHead className="w-12 text-center font-bold text-xs text-foreground">
+                                    No
+                                </TableHead>
+                                <TableHead className="font-bold min-w-[200px] text-xs text-foreground">
+                                    Nomor Dokumen
+                                </TableHead>
+                                <TableHead className="font-bold min-w-[180px] text-xs text-foreground">
+                                    Desa & Kecamatan
+                                </TableHead>
+                                <TableHead className="text-center font-bold min-w-[130px] text-xs text-foreground">
+                                    Tahun / Sumber
+                                </TableHead>
+                                <TableHead className="font-bold min-w-[180px] text-xs text-foreground">
+                                    Plotting Anggaran
+                                </TableHead>
+                                <TableHead className="font-bold min-w-[180px] text-xs text-foreground">
+                                    Target vs Realisasi
+                                </TableHead>
+                                <TableHead className="text-center font-bold min-w-[130px] text-xs text-foreground">
+                                    Status
+                                </TableHead>
+                                <TableHead className="text-center font-bold min-w-[110px] text-xs text-foreground">
+                                    Tanggal
+                                </TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {loading ? (
                                 <TableRow>
-                                    <TableHead className="text-center font-semibold sticky top-0 left-0 z-30 bg-slate-50 dark:bg-slate-900 border-r shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] w-[155px] min-w-[155px] md:w-[155px] md:min-w-[155px]">Aksi</TableHead>
-                                    <TableHead className="w-12 text-center font-semibold">No</TableHead>
-                                    <TableHead className="font-semibold">Nomor Dokumen</TableHead>
-                                    <TableHead className="font-semibold">Desa / Kecamatan</TableHead>
-                                    <TableHead className="text-center font-semibold">Tahun</TableHead>
-                                    <TableHead className="text-center font-semibold">Sumber Dana</TableHead>
-                                    <TableHead className="text-right font-semibold">Realisasi (m)</TableHead>
-                                    <TableHead className="text-center font-semibold">Status</TableHead>
-                                    <TableHead className="text-center font-semibold">Tanggal Dibuat</TableHead>
+                                    <TableCell colSpan={9} className="h-40">
+                                        <div className="p-4 space-y-3">
+                                            <Skeleton className="h-10 w-full rounded-xl" />
+                                            {Array.from({ length: 4 }).map((_, i) => (
+                                                <Skeleton key={i} className="h-12 w-full rounded-xl" />
+                                            ))}
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {loading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={9} className="h-24">
-                                            <div className="p-4 space-y-4">
-                                                <Skeleton className="h-10 w-full" />
-                                                {Array.from({ length: 5 }).map((_, i) => (
-                                                    <Skeleton key={i} className="h-12 w-full" />
-                                                ))}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : paginatedList.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={9} className="h-32 text-center text-muted-foreground text-xs">
-                                            Belum ada dokumen Berita Acara tersimpan.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    paginatedList.map((lap, idx) => (
-                                        <TableRow key={lap.id} className="group transition-colors">
-                                            {/* Action Column matching UsulanDesaTable pattern */}
-                                            <TableCell className="w-[155px] min-w-[155px] md:w-[155px] md:min-w-[155px] p-0 relative sticky left-0 bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900 border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] z-10 transition-colors">
-                                                {/* Desktop Actions Layout */}
-                                                <div className="hidden md:flex flex-row items-center justify-center gap-1.5 h-12 w-full px-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 shrink-0"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleOpenDetail(lap.id);
-                                                        }}
-                                                        title="Detail & Peta Dokumen"
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-7 w-7 p-0 border-indigo-200 dark:border-indigo-800 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 shrink-0"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleNavigateToPeta(lap);
-                                                        }}
-                                                        title="Buka di Peta Realisasi & Revisi"
-                                                    >
-                                                        <MapPin className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    {user?.role !== 'operator_kecamatan' && (lap.status === 'Final' || lap.status === 'Submitted' || !lap.status) && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setSelectedLaporanToRevert(lap);
-                                                                setCatatanRevisiInput(lap.catatan_revisi || "");
-                                                                setRevertDialogOpen(true);
-                                                            }}
-                                                            title="Kembalikan Status ke Draft (Buka Kunci untuk Revisi)"
-                                                        >
-                                                            <RotateCcw className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    )}
-                                                    {user?.role !== 'operator_kecamatan' && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleDeleteLaporan(lap.id);
-                                                            }}
-                                                            title="Hapus BA"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    )}
-                                                </div>
+                            ) : paginatedList.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={9} className="h-48 text-center text-muted-foreground text-xs">
+                                        <div className="flex flex-col items-center justify-center gap-2">
+                                            <FileText className="w-8 h-8 opacity-40 text-muted-foreground" />
+                                            <p className="font-semibold">Tidak ada dokumen monitoring yang sesuai filter.</p>
+                                            <p className="text-[11px] text-muted-foreground">Silakan sesuaikan kriteria pencarian atau terbitkan draft penugasan baru.</p>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                paginatedList.map((lap, idx) => {
+                                    const targetPanjang = parseFloat(lap.rencana_panjang || lap.target_panjang_m || 0);
+                                    const realisasiPanjang = parseFloat(lap.realisasi_panjang || lap.panjang_realisasi || lap.total_panjang_m || 0);
+                                    const pct = targetPanjang > 0 ? Math.min(100, Math.round((realisasiPanjang / targetPanjang) * 100)) : 0;
+                                    const segCount = lap.total_segmen ?? lap.jumlah_segmen ?? lap.SegmensFormatted?.length ?? lap.LaporanSegmens?.length ?? lap.segmens?.length;
+                                    const segmenLabel = typeof segCount === 'number' && segCount > 0 ? `${segCount} Segmen` : 'Belum Ada Segmen';
 
-                                                {/* Mobile Trigger Menu */}
-                                                <div className="flex md:hidden items-center justify-center h-12 w-full">
-                                                    <Button
-                                                        variant="ghost"
-                                                        onClick={(e) => { e.stopPropagation(); setActiveRowId(lap.id); }}
-                                                        className="h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"
-                                                    >
-                                                        <MoreHorizontal className="h-4 w-4 text-slate-500" />
-                                                    </Button>
-                                                </div>
+                                    return (
+                                        <TableRow key={lap.id} className="hover:bg-muted/50 transition-colors group">
+                                            {/* Action Buttons Column */}
+                                            <TableCell className="sticky left-0 z-10 bg-card group-hover:bg-muted/80 border-r border-border p-2 text-center shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted cursor-pointer"
+                                                                onClick={() => handleOpenDetail(lap.id)}
+                                                            >
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>Lihat Detail Dokumen</TooltipContent>
+                                                    </Tooltip>
 
-                                                {/* Mobile Sliding Actions Panel */}
-                                                <div className={cn(
-                                                    "md:hidden absolute top-0 bottom-0 left-0 z-20 flex items-center justify-center gap-1 bg-blue-50/95 dark:bg-blue-950/95 backdrop-blur-xs transition-all duration-300 ease-in-out px-1.5 border-r border-slate-200 dark:border-slate-800 rounded-r-xl w-[175px]",
-                                                    activeRowId === lap.id ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0 pointer-events-none"
-                                                )}>
-                                                    <Button
-                                                        variant="ghost" size="sm"
-                                                        className="h-7 w-7 p-0 hover:bg-slate-200 text-slate-500 rounded-md shrink-0"
-                                                        onClick={(e) => { e.stopPropagation(); setActiveRowId(null); }}
-                                                    >
-                                                        <ChevronLeft className="h-4 w-4" />
-                                                    </Button>
-                                                    <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800 mx-0.5 shrink-0" />
-                                                    <Button
-                                                        variant="outline" size="sm"
-                                                        className="h-7 w-7 p-0 border-slate-200 text-blue-600 hover:text-blue-700 hover:bg-blue-50 shrink-0"
-                                                        onClick={(e) => { e.stopPropagation(); handleOpenDetail(lap.id); setActiveRowId(null); }}
-                                                        title="Detail & Peta"
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="outline" size="sm"
-                                                        className="h-7 w-7 p-0 border-slate-200 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 shrink-0"
-                                                        onClick={(e) => { e.stopPropagation(); handleNavigateToPeta(lap); setActiveRowId(null); }}
-                                                        title="Buka di Peta Realisasi"
-                                                    >
-                                                        <MapPin className="h-3.5 w-3.5" />
-                                                    </Button>
-                                                    {user?.role !== 'operator_kecamatan' && (lap.status === 'Final' || lap.status === 'Submitted' || !lap.status) && (
-                                                        <Button
-                                                            variant="outline" size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 text-amber-600 hover:text-amber-700 hover:bg-amber-50 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setActiveRowId(null);
-                                                                setSelectedLaporanToRevert(lap);
-                                                                setCatatanRevisiInput(lap.catatan_revisi || "");
-                                                                setRevertDialogOpen(true);
-                                                            }}
-                                                            title="Kembalikan ke Draft"
-                                                        >
-                                                            <RotateCcw className="h-3.5 w-3.5" />
-                                                        </Button>
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 rounded-lg text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/50 cursor-pointer"
+                                                                onClick={() => handleNavigateToPeta(lap)}
+                                                            >
+                                                                <MapPin className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>Buka Peta Monitoring</TooltipContent>
+                                                    </Tooltip>
+
+                                                    <Tooltip>
+                                                        <TooltipTrigger asChild>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="icon"
+                                                                className="h-7 w-7 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/50 cursor-pointer"
+                                                                onClick={() => handleOpenDetail(lap.id)}
+                                                            >
+                                                                <Printer className="w-3.5 h-3.5" />
+                                                            </Button>
+                                                        </TooltipTrigger>
+                                                        <TooltipContent>Cetak Berita Acara (PDF)</TooltipContent>
+                                                    </Tooltip>
+
+                                                    {(user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin') && (lap.status === 'Submitted' || lap.status === 'Final') && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 rounded-lg text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/50 cursor-pointer"
+                                                                    onClick={() => handleOpenRevert(lap)}
+                                                                >
+                                                                    <RotateCcw className="w-3.5 h-3.5" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Kembalikan ke Draft (Buka Revisi)</TooltipContent>
+                                                        </Tooltip>
                                                     )}
-                                                    {user?.role !== 'operator_kecamatan' && (
-                                                        <Button
-                                                            variant="outline" size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 text-rose-600 hover:text-rose-700 hover:bg-rose-50 shrink-0"
-                                                            onClick={(e) => { e.stopPropagation(); handleDeleteLaporan(lap.id); setActiveRowId(null); }}
-                                                            title="Hapus BA"
-                                                        >
-                                                            <Trash2 className="h-3.5 w-3.5" />
-                                                        </Button>
+
+                                                    {canManagePenugasan(user) && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/50 cursor-pointer"
+                                                                    onClick={() => handleOpenEdit(lap)}
+                                                                >
+                                                                    <Edit3 className="w-3.5 h-3.5" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Edit Metadata Dokumen</TooltipContent>
+                                                        </Tooltip>
+                                                    )}
+
+                                                    {canManagePenugasan(user) && (
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="icon"
+                                                                    className="h-7 w-7 rounded-lg text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50 cursor-pointer"
+                                                                    onClick={() => handleDeleteClick(lap)}
+                                                                >
+                                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                                </Button>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>Hapus Dokumen</TooltipContent>
+                                                        </Tooltip>
                                                     )}
                                                 </div>
                                             </TableCell>
 
+                                            {/* Number */}
                                             <TableCell className="text-center font-mono text-xs text-muted-foreground">
                                                 {(page - 1) * limit + idx + 1}
                                             </TableCell>
-                                            <TableCell className="font-bold text-xs text-foreground font-mono">
-                                                {editingBaId === lap.id ? (
-                                                    <div className="flex items-center gap-1">
-                                                        <Input
-                                                            value={editingBaValue}
-                                                            onChange={(e) => setEditingBaValue(e.target.value)}
-                                                            className="h-7 text-xs font-mono w-48 bg-background border-blue-500"
-                                                            autoFocus
-                                                            onKeyDown={(e) => {
-                                                                if (e.key === "Enter") handleSaveNomorBa(lap.id);
-                                                                if (e.key === "Escape") setEditingBaId(null);
-                                                            }}
-                                                        />
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => handleSaveNomorBa(lap.id)}
-                                                            disabled={savingBa}
-                                                            className="h-7 w-7 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 shrink-0"
-                                                            title="Simpan Nomor Dokumen"
-                                                        >
-                                                            <Check className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            size="sm"
-                                                            variant="ghost"
-                                                            onClick={() => setEditingBaId(null)}
-                                                            className="h-7 w-7 p-0 text-rose-500 hover:text-rose-600 hover:bg-rose-50 shrink-0"
-                                                            title="Batal"
-                                                        >
-                                                            <X className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                ) : (
-                                                    <div
-                                                        className={cn("flex items-center gap-1.5 group/ba", user?.role !== 'operator_kecamatan' && "cursor-pointer")}
-                                                        onClick={() => {
-                                                            if (user?.role === 'operator_kecamatan') return;
-                                                            setEditingBaId(lap.id);
-                                                            setEditingBaValue(lap.nomor_ba || "");
-                                                        }}
-                                                        title={user?.role !== 'operator_kecamatan' ? "Klik untuk mengubah Nomor Dokumen" : undefined}
-                                                    >
-                                                        <span className={cn(user?.role !== 'operator_kecamatan' && "group-hover/ba:text-blue-600 transition-colors")}>{lap.nomor_ba || "-"}</span>
-                                                        {user?.role !== 'operator_kecamatan' && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                className="h-6 w-6 p-0 opacity-0 group-hover/ba:opacity-100 transition-opacity text-slate-400 hover:text-blue-600 shrink-0"
-                                                            >
-                                                                <Edit3 className="h-3 w-3" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-xs">
-                                                <div className="font-semibold text-foreground">{lap.Desa?.nama_desa || '-'}</div>
-                                                <div className="text-[10px] text-muted-foreground">Kec. {lap.Kecamatan?.nama_kecamatan || '-'}</div>
-                                                {lap.PlottingAnggaran?.nama_kegiatan && (
-                                                    <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 truncate mt-0.5" title={lap.PlottingAnggaran.nama_kegiatan}>
-                                                        📌 {lap.PlottingAnggaran.nama_kegiatan}
-                                                    </div>
-                                                )}
-                                                {lap.catatan_revisi && (lap.status === 'Draft' || lap.status === 'draft' || lap.status === 'Revisi') && (
-                                                    <div className="mt-1 p-1.5 rounded-md bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-900 dark:text-amber-300 font-sans flex items-start gap-1 max-w-xs">
-                                                        <RotateCcw className="size-3 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                                                        <div className="truncate" title={lap.catatan_revisi}>
-                                                            <strong className="font-semibold">Catatan Bappeda:</strong> {lap.catatan_revisi}
-                                                        </div>
-                                                    </div>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-center text-xs font-medium font-mono">
-                                                {lap.tahun_anggaran}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                                                    {lap.sumber_dana}
+
+                                            {/* Nomor BA */}
+                                            <TableCell className="font-semibold text-xs text-foreground">
+                                                <span className="font-mono text-xs">
+                                                    {lap.nomor_ba || `050/XXX/412.302/${lap.tahun_anggaran || '2026'}`}
                                                 </span>
                                             </TableCell>
-                                            <TableCell className="text-right font-mono font-bold text-xs">
-                                                {parseFloat(lap.realisasi_panjang || 0).toFixed(1)} m
+
+                                            {/* Desa & Kecamatan */}
+                                            <TableCell className="text-xs">
+                                                <div className="font-semibold text-foreground">
+                                                    Desa {lap.Desa?.nama_desa || "-"}
+                                                </div>
+                                                <div className="text-[11px] text-muted-foreground">
+                                                    Kec. {lap.Kecamatan?.nama_kecamatan || lap.Desa?.nama_kecamatan || "-"}
+                                                </div>
                                             </TableCell>
-                                            <TableCell className="text-center">
-                                                {lap.status === 'Draft' || lap.status === 'draft' || lap.status === 'Revisi' ? (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20" title={lap.catatan_revisi ? `Catatan: ${lap.catatan_revisi}` : "Status Draft (Dapat diedit kecamatan)"}>
-                                                        <RotateCcw className="w-3 h-3" />
-                                                        DRAFT / REVISI
-                                                    </span>
-                                                ) : lap.status === 'Submitted' || lap.status === 'submitted' ? (
-                                                    <span className={cn(
-                                                        "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold border",
-                                                        lap.catatan_revisi || (Array.isArray(lap.history_revisi) && lap.history_revisi.length > 0)
-                                                            ? "bg-cyan-500/10 text-cyan-700 dark:text-cyan-300 border-cyan-500/30"
-                                                            : "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20"
-                                                    )}>
-                                                        {lap.catatan_revisi || (Array.isArray(lap.history_revisi) && lap.history_revisi.length > 0) ? (
-                                                            <>
-                                                                <CheckCircle className="w-3 h-3 text-cyan-600 dark:text-cyan-400" />
-                                                                <span>REVISI TERKIRIM</span>
-                                                            </>
-                                                        ) : (
-                                                            <>
-                                                                <FileText className="w-3 h-3" />
-                                                                <span>SUBMITTED</span>
-                                                            </>
-                                                        )}
-                                                    </span>
-                                                ) : (
-                                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                                                        <Lock className="w-3 h-3" />
-                                                        FINAL (LOCKED)
-                                                    </span>
-                                                )}
+
+                                            {/* Tahun & Sumber Dana */}
+                                            <TableCell className="text-center text-xs">
+                                                <div className="font-mono font-bold text-foreground">
+                                                    {lap.tahun_anggaran || "2026"}
+                                                </div>
+                                                <Badge variant="outline" className="text-[9.5px] px-1.5 py-0 h-4 bg-muted/30">
+                                                    {lap.sumber_dana || "BKK"}
+                                                </Badge>
                                             </TableCell>
-                                            <TableCell className="text-center text-xs whitespace-nowrap">
-                                                {lap.created_at ? (
-                                                    <div className="flex flex-col items-center">
-                                                        <span className="font-medium text-foreground text-[11px]">
-                                                            {new Date(lap.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}
+
+                                            {/* Plotting Anggaran */}
+                                            <TableCell className="text-xs">
+                                                {lap.PlottingAnggaran ? (
+                                                    <div className="space-y-0.5 max-w-[220px]">
+                                                        <span className="font-semibold text-foreground truncate block" title={lap.PlottingAnggaran.nama_kegiatan}>
+                                                            {lap.PlottingAnggaran.nama_kegiatan}
                                                         </span>
-                                                        <span className="text-[10px] text-muted-foreground font-mono">
-                                                            {new Date(lap.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB
+                                                        <span className="text-[10.5px] text-muted-foreground block font-mono">
+                                                            Rp {parseFloat(lap.PlottingAnggaran.target_pagu_anggaran || '0').toLocaleString('id-ID')}
                                                         </span>
                                                     </div>
                                                 ) : (
-                                                    <span className="text-muted-foreground text-[11px]">-</span>
+                                                    <span className="text-muted-foreground text-xs italic">Tanpa Tautan Plotting</span>
                                                 )}
+                                            </TableCell>
+
+                                            {/* Target vs Realisasi */}
+                                            <TableCell className="text-xs">
+                                                <div className="space-y-1 max-w-[180px]">
+                                                    <div className="flex justify-between text-[10.5px] font-mono">
+                                                        <span className="font-bold text-foreground">
+                                                            {realisasiPanjang.toLocaleString('id-ID')}m
+                                                        </span>
+                                                        <span className="text-muted-foreground">
+                                                            / {targetPanjang > 0 ? `${targetPanjang.toLocaleString('id-ID')}m` : '-'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                                                        <div
+                                                            className={cn(
+                                                                "h-full rounded-full transition-all",
+                                                                pct >= 80 ? "bg-emerald-600" : pct >= 50 ? "bg-amber-500" : "bg-rose-500"
+                                                            )}
+                                                            style={{ width: `${Math.min(100, pct)}%` }}
+                                                        />
+                                                    </div>
+                                                    <div className="flex justify-between items-center text-[9.5px]">
+                                                        <span className={cn("font-bold", pct >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                                                            {targetPanjang > 0 ? `${pct}% Tercapai` : (realisasiPanjang > 0 ? "Realisasi Fisik" : "Belum Ada Target")}
+                                                        </span>
+                                                        <span className={cn("text-[9px] font-medium", typeof segCount === 'number' && segCount > 0 ? "text-indigo-600 dark:text-indigo-400" : "text-muted-foreground")}>
+                                                            {segmenLabel}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+
+                                            {/* Status Badge */}
+                                            <TableCell className="text-center">
+                                                {renderStatusBadge(lap.status)}
+                                            </TableCell>
+
+                                            {/* Creation Date */}
+                                            <TableCell className="text-center text-[10.5px] text-muted-foreground font-mono">
+                                                {lap.created_at ? new Date(lap.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </CardContent>
-                </Card>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+
+                {/* B. Mobile / Tablet Responsive Reflow Cards (visible only on small screens) */}
+                <div className="block md:hidden space-y-3">
+                    {loading ? (
+                        <div className="space-y-3">
+                            <Skeleton className="h-28 w-full rounded-2xl" />
+                            <Skeleton className="h-28 w-full rounded-2xl" />
+                        </div>
+                    ) : paginatedList.length === 0 ? (
+                        <div className="p-8 text-center text-muted-foreground text-xs rounded-2xl border border-border bg-card">
+                            <FileText className="w-8 h-8 opacity-40 mx-auto mb-2" />
+                            <p className="font-semibold">Belum ada dokumen yang sesuai filter.</p>
+                        </div>
+                    ) : (
+                        paginatedList.map((lap) => {
+                            const targetPanjang = parseFloat(lap.rencana_panjang || lap.target_panjang_m || 0);
+                            const realisasiPanjang = parseFloat(lap.realisasi_panjang || lap.panjang_realisasi || lap.total_panjang_m || 0);
+                            const pct = targetPanjang > 0 ? Math.min(100, Math.round((realisasiPanjang / targetPanjang) * 100)) : 0;
+                            const segCount = lap.total_segmen ?? lap.jumlah_segmen ?? lap.SegmensFormatted?.length ?? lap.LaporanSegmens?.length ?? lap.segmens?.length;
+
+                            return (
+                                <div key={lap.id} className="p-4 rounded-2xl border border-border bg-card space-y-3 shadow-xs">
+                                    {/* Header Card: Nomor & Status */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="space-y-0.5">
+                                            <span className="font-mono font-bold text-xs text-foreground block">
+                                                {lap.nomor_ba || `050/XXX/412.302/${lap.tahun_anggaran || '2026'}`}
+                                            </span>
+                                            <span className="text-[11px] font-semibold text-foreground">
+                                                Desa {lap.Desa?.nama_desa}, Kec. {lap.Kecamatan?.nama_kecamatan || lap.Desa?.nama_kecamatan}
+                                            </span>
+                                        </div>
+                                        {renderStatusBadge(lap.status)}
+                                    </div>
+
+                                    {/* Linked Plotting Anggaran if available */}
+                                    {lap.PlottingAnggaran && (
+                                        <div className="p-2.5 rounded-xl bg-indigo-500/5 border border-indigo-500/20 text-xs space-y-1">
+                                            <div className="flex items-center gap-1 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] uppercase">
+                                                <Layers className="w-3 h-3" />
+                                                <span>Kegiatan Plotting</span>
+                                            </div>
+                                            <span className="font-semibold text-foreground block truncate">
+                                                {lap.PlottingAnggaran.nama_kegiatan}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {/* Progress Target Fisik */}
+                                    <div className="space-y-1.5 p-2.5 rounded-xl bg-muted/20 border border-border/60">
+                                        <div className="flex justify-between text-xs font-mono">
+                                            <span className="font-bold text-foreground">Realisasi: {realisasiPanjang.toLocaleString('id-ID')}m</span>
+                                            <span className="text-muted-foreground">Target: {targetPanjang.toLocaleString('id-ID')}m</span>
+                                        </div>
+                                        <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
+                                            <div
+                                                className={cn(
+                                                    "h-full rounded-full transition-all",
+                                                    pct >= 80 ? "bg-emerald-600" : pct >= 50 ? "bg-amber-500" : "bg-rose-500"
+                                                )}
+                                                style={{ width: `${Math.min(100, pct)}%` }}
+                                            />
+                                        </div>
+                                        <div className="flex justify-between items-center text-[10px]">
+                                            <span className={cn("font-bold", pct >= 80 ? "text-emerald-600 dark:text-emerald-400" : "text-muted-foreground")}>
+                                                {targetPanjang > 0 ? `${pct}% Tercapai` : (realisasiPanjang > 0 ? "Realisasi Fisik" : "Belum Ada Target")}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {typeof segCount === 'number' && segCount > 0 ? `${segCount} Segmen • ` : ''}TA {lap.tahun_anggaran || '2026'} ({lap.sumber_dana || 'BKK'})
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    {/* Action Buttons with 44px touch targets */}
+                                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-border/60">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleOpenDetail(lap.id)}
+                                            className="h-9 text-xs font-bold rounded-xl gap-1 cursor-pointer"
+                                        >
+                                            <Eye className="w-3.5 h-3.5 text-foreground" />
+                                            <span>Detail</span>
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleNavigateToPeta(lap)}
+                                            className="h-9 text-xs font-bold rounded-xl text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 gap-1 cursor-pointer"
+                                        >
+                                            <MapPin className="w-3.5 h-3.5" />
+                                            <span>Peta</span>
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleOpenDetail(lap.id)}
+                                            className="h-9 text-xs font-bold rounded-xl text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 gap-1 cursor-pointer"
+                                        >
+                                            <Printer className="w-3.5 h-3.5" />
+                                            <span>Cetak</span>
+                                        </Button>
+                                        {canManagePenugasan(user) && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleOpenEdit(lap)}
+                                                className="h-9 text-xs font-bold rounded-xl text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 gap-1 cursor-pointer"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5" />
+                                                <span>Edit</span>
+                                            </Button>
+                                        )}
+                                        {(user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin') && (lap.status === 'Submitted' || lap.status === 'Final') && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleOpenRevert(lap)}
+                                                className="h-9 text-xs font-bold rounded-xl text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 gap-1 cursor-pointer col-span-2 sm:col-span-1"
+                                            >
+                                                <RotateCcw className="w-3.5 h-3.5" />
+                                                <span>Revisi</span>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+
+                {/* 4. Non-Sticky Bottom Pagination (Minimalist flush layout) */}
+                <div className="pt-1 pb-0">
+                    <UsulanDesaPagination
+                        className="p-0 py-0 sm:py-0 px-0 sm:px-0 gap-2"
+                        pageIndex={page - 1}
+                        pageCount={totalPages}
+                        totalItems={totalItems}
+                        pageSize={limit}
+                        onPageChange={(newIdx: number) => setPage(newIdx + 1)}
+                        onPageSizeChange={(newSize: number) => {
+                            setLimit(newSize);
+                            setPage(1);
+                        }}
+                    />
+                </div>
             </div>
 
-            {/* Sticky Bottom Pagination */}
-            <UsulanDesaPagination
-                pageIndex={page - 1}
-                pageCount={totalPages}
-                pageSize={limit}
-                totalItems={totalItems}
-                onPageChange={(idx) => setPage(idx + 1)}
-                onPageSizeChange={(newSize) => { setLimit(newSize); setPage(1); }}
-            />
-
-            {/* DETAIL & MAP MODAL */}
+            {/* MODAL DETAIL & PRATINJAU DOKUMEN (WITH SHADCN UI TABS & EXPANDED RESPONSIVE SIZING) */}
             <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
-                <DialogContent className="sm:max-w-[900px] bg-popover border-border max-h-[90vh] flex flex-col p-0 overflow-hidden rounded-2xl shadow-2xl">
-                    <DialogHeader className="px-6 py-4 border-b border-border bg-popover shrink-0">
-                        <DialogTitle className="text-base font-bold flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                                <FileText className="w-5 h-5 text-blue-600" />
-                                <span>Detail Dokumen Infrastruktur — {selectedDetailLaporan?.nomor_ba}</span>
-                            </div>
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
-                                {selectedDetailLaporan?.status || 'Final'}
-                            </span>
-                        </DialogTitle>
-                    </DialogHeader>
-
+                <DialogContent className="max-w-[100vw] w-full h-[100dvh] sm:h-[92vh] sm:max-h-[94vh] sm:max-w-[96vw] xl:max-w-[1440px] 2xl:max-w-[1600px] flex flex-col gap-0 p-0 overflow-hidden bg-background border-0 sm:border sm:border-border rounded-none sm:rounded-2xl shadow-2xl">
                     {selectedDetailLaporan && (() => {
-                        const realisasiPanjangVal = parseFloat(selectedDetailLaporan.realisasi_panjang || 0);
-                        const targetPanjangVal = parseFloat(selectedDetailLaporan.PlottingAnggaran?.target_panjang_m || selectedDetailLaporan.rencana_panjang || selectedDetailLaporan.target_panjang_plotting || 0);
-                        const persentaseCapaian = targetPanjangVal > 0 ? (realisasiPanjangVal / targetPanjangVal) * 100 : 0;
-                        const targetPaguVal = selectedDetailLaporan.PlottingAnggaran?.target_pagu_anggaran || selectedDetailLaporan.target_pagu || 0;
+                        const targetPaguVal = parseFloat(selectedDetailLaporan.PlottingAnggaran?.target_pagu_anggaran || selectedDetailLaporan.pagu_anggaran || 0);
+                        const targetPanjangVal = parseFloat(selectedDetailLaporan.rencana_panjang || selectedDetailLaporan.target_panjang_m || selectedDetailLaporan.PlottingAnggaran?.target_panjang_m || 0);
+
+                        // Extract segmens list & calculate actual mapped sum fallback
+                        const segmensList = selectedDetailLaporan.SegmensFormatted || selectedDetailLaporan.Segmens || selectedDetailLaporan.segmens || [];
+                        const totalSegmenLengthAll = segmensList.reduce((acc: number, s: any) => acc + parseFloat(s.panjang_m || s.panjang || 0), 0);
+                        const rawRealisasi = parseFloat(selectedDetailLaporan.realisasi_panjang || selectedDetailLaporan.panjang_realisasi || selectedDetailLaporan.total_panjang_m || 0);
+                        const realisasiPanjangVal = rawRealisasi > 0 ? rawRealisasi : totalSegmenLengthAll;
+
+                        const persentaseCapaian = targetPanjangVal > 0 ? Math.min(100, (realisasiPanjangVal / targetPanjangVal) * 100) : 0;
+                        const statusLower = (selectedDetailLaporan.status || "final").toLowerCase();
+
+                        // Filter segmen for Tab Daftar Segmen
+                        const filteredSegmens = segmensList.filter((s: any) => {
+                            let matchCat = true;
+                            if (segmentFilter === 'poros') matchCat = s.is_jalan_poros === true;
+                            if (segmentFilter === 'non_poros') matchCat = s.is_jalan_poros === false;
+
+                            let matchQuery = true;
+                            if (segmentSearch.trim()) {
+                                const q = segmentSearch.toLowerCase();
+                                matchQuery = (
+                                    (s.kode_ruas && s.kode_ruas.toLowerCase().includes(q)) ||
+                                    (s.namobj && s.namobj.toLowerCase().includes(q)) ||
+                                    (s.nama_jalan && s.nama_jalan.toLowerCase().includes(q)) ||
+                                    (s.jenis_perkerasan && s.jenis_perkerasan.toLowerCase().includes(q)) ||
+                                    (s.kondisi && s.kondisi.toLowerCase().includes(q))
+                                );
+                            }
+                            return matchCat && matchQuery;
+                        });
+
+                        const totalSegmenLength = filteredSegmens.reduce((acc: number, s: any) => acc + parseFloat(s.panjang_m || s.panjang || 0), 0);
+                        const porosCount = segmensList.filter((s: any) => s.is_jalan_poros).length;
+                        const nonPorosCount = segmensList.filter((s: any) => !s.is_jalan_poros).length;
 
                         return (
-                            <div className="flex-1 overflow-y-auto px-6 pt-0 pb-0 space-y-4 custom-scrollbar">
-                                {/* Summary Cards */}
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                                    <div className="p-3 bg-muted/40 border border-border rounded-xl">
-                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Desa & Kecamatan</span>
-                                        <span className="text-xs font-extrabold text-foreground block mt-0.5">
-                                            Desa {selectedDetailLaporan.Desa?.nama_desa || '-'}
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground block">Kec. {selectedDetailLaporan.Kecamatan?.nama_kecamatan || '-'}</span>
-                                        {selectedDetailLaporan.Desa?.nama_pimpinan && (
-                                            <span className="text-[10px] text-blue-600 font-bold block mt-1">
-                                                Kades: {selectedDetailLaporan.Desa.nama_pimpinan}
-                                            </span>
-                                        )}
-                                        {selectedDetailLaporan.Kecamatan?.nama_pimpinan && (
-                                            <span className="text-[10px] text-muted-foreground font-semibold block mt-0.5">
-                                                Camat: {selectedDetailLaporan.Kecamatan.nama_pimpinan}
-                                            </span>
-                                        )}
-                                    </div>
+                            <>
+                                {/* 1. Executive Top Header (Clean Mobile & Desktop Layout) */}
+                                <DialogHeader className="px-3.5 py-3 sm:px-6 sm:py-3.5 border-b border-border bg-muted/20 shrink-0 pr-12 sm:pr-14 gap-0">
+                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
+                                        <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+                                            <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0 border border-indigo-500/20 shadow-xs mt-0.5 sm:mt-0">
+                                                <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
+                                            </div>
+                                            <div className="space-y-1 min-w-0 flex-1">
+                                                {/* Title & Desktop Status Badge */}
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <DialogTitle className="text-sm sm:text-base font-bold text-foreground tracking-tight leading-tight">
+                                                        Detail Dokumen Monitoring
+                                                    </DialogTitle>
+                                                    <div className="hidden sm:inline-flex">
+                                                        {renderStatusBadge(selectedDetailLaporan.status)}
+                                                    </div>
+                                                </div>
 
-                                    <div className="p-3 bg-muted/40 border border-border rounded-xl">
-                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Tahun / Sumber Dana</span>
-                                        <span className="text-xs font-extrabold text-foreground block mt-0.5">
-                                            TA {selectedDetailLaporan.tahun_anggaran}
-                                        </span>
-                                        <span className="text-[10px] text-blue-600 font-semibold block">{selectedDetailLaporan.sumber_dana || 'BKK'}</span>
-                                        {selectedDetailLaporan.created_at && (
-                                            <span className="text-[10px] text-muted-foreground font-medium block mt-1 pt-1 border-t border-border/50">
-                                                📅 Dibuat: <span className="font-bold text-foreground">{new Date(selectedDetailLaporan.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}, {new Date(selectedDetailLaporan.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })} WIB</span>
-                                            </span>
-                                        )}
-                                    </div>
+                                                {/* Village / District / Year Metadata */}
+                                                <DialogDescription className="text-[11px] sm:text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
+                                                    <span className="font-semibold text-foreground">Desa {selectedDetailLaporan.Desa?.nama_desa || '-'}</span>
+                                                    <span>•</span>
+                                                    <span>Kec. {selectedDetailLaporan.Kecamatan?.nama_kecamatan || selectedDetailLaporan.Desa?.nama_kecamatan || '-'}</span>
+                                                    <span>•</span>
+                                                    <span>TA {selectedDetailLaporan.tahun_anggaran || '2026'} ({selectedDetailLaporan.sumber_dana || 'BKK'})</span>
+                                                </DialogDescription>
 
-                                    <div className="p-3 bg-muted/40 border border-border rounded-xl">
-                                        <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Realisasi Fisik</span>
-                                        <span className="text-xs font-extrabold text-blue-600 block mt-0.5">
-                                            {realisasiPanjangVal.toFixed(1)} m
-                                        </span>
-                                        <span className="text-[10px] text-muted-foreground">
-                                            {selectedDetailLaporan.SegmensFormatted?.length || selectedDetailLaporan.Segmens?.length || 0} Segmen Terikat
-                                        </span>
-                                    </div>
-
-                                    <div className="p-3 bg-muted/40 border border-border rounded-xl">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider block">Target Capaian Fisik</span>
-                                            {user?.role !== 'operator_kecamatan' && (
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={handleSyncTargetFisik}
-                                                    disabled={isSyncingTarget}
-                                                    className="h-5 px-1.5 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/50 gap-1 rounded border border-blue-200/60 dark:border-blue-800/40 shrink-0 cursor-pointer"
-                                                    title="Sinkronkan nilai target fisik dari Plotting Anggaran"
-                                                >
-                                                    <RotateCw className={cn("w-2.5 h-2.5", isSyncingTarget && "animate-spin")} />
-                                                    <span>Sync</span>
-                                                </Button>
-                                            )}
-                                        </div>
-                                        <span className="text-xs font-extrabold text-foreground block mt-0.5">
-                                            {targetPanjangVal > 0 ? `${targetPanjangVal.toFixed(1)} m` : '-'}
-                                        </span>
-                                        {targetPanjangVal > 0 ? (
-                                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-extrabold block mt-0.5">
-                                                {persentaseCapaian.toFixed(1)}% Capaian Fisik
-                                            </span>
-                                        ) : (
-                                            <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium block mt-0.5">
-                                                Target fisik belum diisi (Klik Sync)
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Linked Plotting Anggaran Banner if present */}
-                                {selectedDetailLaporan.PlottingAnggaran && (
-                                    <div className="p-3 bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/80 dark:border-blue-800/50 rounded-xl flex items-center justify-between text-xs">
-                                        <div className="space-y-0.5">
-                                            <span className="font-extrabold text-slate-900 dark:text-slate-100 block">
-                                                {selectedDetailLaporan.PlottingAnggaran.nama_kegiatan}
-                                            </span>
-                                            {selectedDetailLaporan.PlottingAnggaran.lokasi_kegiatan && (
-                                                <span className="text-[10px] text-muted-foreground block">
-                                                    Lokasi: {selectedDetailLaporan.PlottingAnggaran.lokasi_kegiatan}
-                                                </span>
-                                            )}
-                                        </div>
-                                        <div className="text-right shrink-0 ml-3">
-                                            <span className="text-[10px] font-bold text-muted-foreground block uppercase">Pagu Anggaran</span>
-                                            <span className="font-extrabold text-emerald-600 dark:text-emerald-400 text-xs">
-                                                {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(targetPaguVal)}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* REVISION AUDIT TRAIL / CATATAN REVISI */}
-                                {(selectedDetailLaporan.catatan_revisi || (Array.isArray(selectedDetailLaporan.history_revisi) && selectedDetailLaporan.history_revisi.length > 0)) && (
-                                    <div className="p-3.5 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 space-y-2">
-                                        <div className="flex items-center gap-2">
-                                            <RotateCcw className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
-                                            <span className="font-bold text-xs">Catatan Revisi & Riwayat Pengembalian dari Bappeda</span>
-                                        </div>
-                                        {selectedDetailLaporan.catatan_revisi && (
-                                            <p className="text-xs bg-background/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-amber-200/60 dark:border-amber-800/40 text-foreground font-mono leading-relaxed">
-                                                {selectedDetailLaporan.catatan_revisi}
-                                            </p>
-                                        )}
-                                        {Array.isArray(selectedDetailLaporan.history_revisi) && selectedDetailLaporan.history_revisi.length > 0 && (
-                                            <div className="space-y-1.5 pt-1">
-                                                <span className="text-[10px] font-bold uppercase text-muted-foreground block">Log Riwayat Siklus ({selectedDetailLaporan.history_revisi.length}x Revisi):</span>
-                                                <div className="space-y-1 max-h-32 overflow-y-auto custom-scrollbar">
-                                                    {selectedDetailLaporan.history_revisi.map((hist: any, hIdx: number) => (
-                                                        <div key={hIdx} className="text-[11px] p-2 rounded-md bg-muted/40 border border-border/60 flex flex-col gap-0.5">
-                                                            <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                                                                <span>Oleh: <strong className="text-foreground">{hist.reverted_by_name || 'Operator Bappeda'}</strong></span>
-                                                                <span className="font-mono">{hist.reverted_at ? new Date(hist.reverted_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }) : '-'}</span>
-                                                            </div>
-                                                            <p className="text-[10.5px] text-foreground font-sans mt-0.5">"{hist.catatan || '-'}"</p>
+                                                {/* Mobile Only: Unified Status Badge & Nomor BA Row */}
+                                                <div className="flex sm:hidden items-center gap-1.5 flex-wrap pt-0.5">
+                                                    {renderStatusBadge(selectedDetailLaporan.status)}
+                                                    {selectedDetailLaporan.nomor_ba && (
+                                                        <div className="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-background border border-border text-[10.5px] font-mono font-bold text-foreground shadow-2xs">
+                                                            <span className="truncate max-w-[170px]">{selectedDetailLaporan.nomor_ba}</span>
+                                                            <button
+                                                                onClick={() => handleCopyNomorBa(selectedDetailLaporan.nomor_ba)}
+                                                                className="text-muted-foreground hover:text-indigo-600 p-0.5 rounded cursor-pointer transition-colors"
+                                                                title="Salin Nomor Dokumen"
+                                                            >
+                                                                <Copy className="w-3 h-3" />
+                                                            </button>
                                                         </div>
-                                                    ))}
+                                                    )}
                                                 </div>
                                             </div>
-                                        )}
-                                    </div>
-                                )}
+                                        </div>
 
-                                {/* INTERACTIVE OPENLAYERS MAP */}
-                                <div className="space-y-1.5">
-                                    <div className="flex justify-between items-center">
-                                        <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                            <MapPin className="w-3.5 h-3.5 text-blue-600" /> Pratinjau Peta Spasial Segmen Realisasi
-                                        </Label>
-                                        <span className="text-[10px] text-muted-foreground italic">
-                                            * Peta spasial ini akan dilampirkan secara otomatis saat Berita Acara dicetak
-                                        </span>
-                                    </div>
-                                    <div
-                                        ref={(node) => {
-                                            mapDetailContainerRef.current = node;
-                                            setMapElement(node);
-                                        }}
-                                        className="w-full aspect-[16/9] min-h-[300px] rounded-xl border border-border overflow-hidden bg-slate-100 shadow-inner relative"
-                                    />
-                                </div>
-
-                                {/* Segments Table */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                                        <TableIcon className="w-3.5 h-3.5 text-blue-600" /> Segmen Terikat dalam Berita Acara Ini
-                                    </Label>
-                                    <div className="border border-border rounded-xl overflow-hidden max-h-48 overflow-y-auto">
-                                        <table className="w-full text-xs text-left">
-                                            <thead className="bg-muted/60 text-[10px] uppercase font-bold text-muted-foreground">
-                                                <tr>
-                                                    <th className="p-2 text-center">No</th>
-                                                    <th className="p-2 text-center">Kode</th>
-                                                    <th className="p-2">Nama Objek / Ruas</th>
-                                                    <th className="p-2 text-center">Kategori</th>
-                                                    <th className="p-2 text-right">Panjang (m)</th>
-                                                    <th className="p-2 text-center">Lebar (m)</th>
-                                                    <th className="p-2 text-center">Material / Perkerasan</th>
-                                                    <th className="p-2 text-center">Kondisi</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-border">
-                                                {(selectedDetailLaporan.SegmensFormatted || []).length === 0 ? (
-                                                    <tr>
-                                                        <td colSpan={8} className="p-4 text-center text-muted-foreground">
-                                                            Tidak ada segmen realisasi yang terikat dalam laporan ini.
-                                                        </td>
-                                                    </tr>
-                                                ) : (
-                                                    (selectedDetailLaporan.SegmensFormatted || []).map((s: any, idx: number) => (
-                                                        <tr key={s.id || idx} className="hover:bg-muted/20">
-                                                            <td className="p-2 text-center font-mono">{idx + 1}</td>
-                                                            <td className="p-2 text-center font-mono">{s.kode_ruas || '-'}</td>
-                                                            <td className="p-2 font-bold">{s.namobj || s.nama_jalan}</td>
-                                                            <td className="p-2 text-center">
-                                                                <span className={cn("px-1.5 py-0.5 text-[9px] rounded font-bold", s.is_jalan_poros ? "bg-blue-500/10 text-blue-600" : "bg-emerald-500/10 text-emerald-600")}>
-                                                                    {s.is_jalan_poros ? "Sesuai Basis Data" : "Diluar Basis Data"}
-                                                                </span>
-                                                            </td>
-                                                            <td className="p-2 text-right font-mono font-bold">{parseFloat(s.panjang_m || 0).toFixed(1)}</td>
-                                                            <td className="p-2 text-center">{s.lebar_m || '-'}</td>
-                                                            <td className="p-2 text-center font-medium">{s.jenis_perkerasan || s.perkerasan || (s.atribut && (s.atribut.jenis_perkerasan || s.atribut.perkerasan)) || "Beton Cor"}</td>
-                                                            <td className="p-2 text-center capitalize">{s.kondisi || 'Baik'}</td>
-                                                        </tr>
-                                                    ))
+                                        {/* Desktop Only: Nomor BA Pill & Copy Action */}
+                                        <div className="hidden sm:flex items-center gap-2 shrink-0 self-start sm:self-auto">
+                                            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-background border border-border text-xs font-mono font-bold text-foreground shadow-xs">
+                                                <span className="truncate max-w-[200px]">{selectedDetailLaporan.nomor_ba || '-'}</span>
+                                                {selectedDetailLaporan.nomor_ba && (
+                                                    <button
+                                                        onClick={() => handleCopyNomorBa(selectedDetailLaporan.nomor_ba)}
+                                                        className="text-muted-foreground hover:text-indigo-600 p-0.5 rounded cursor-pointer transition-colors"
+                                                        title="Salin Nomor Dokumen"
+                                                    >
+                                                        <Copy className="w-3.5 h-3.5" />
+                                                    </button>
                                                 )}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
-
-                    <DialogFooter className="px-6 py-4 border-t border-border bg-popover shrink-0 flex flex-wrap gap-2 justify-end">
-                        <Button variant="outline" onClick={() => setIsDetailOpen(false)} className="h-9 text-xs">
-                            Tutup
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => {
-                                setIsDetailOpen(false);
-                                handleNavigateToPeta(selectedDetailLaporan);
-                            }}
-                            className="h-9 px-4 text-xs font-bold rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 gap-1.5 cursor-pointer"
-                        >
-                            <MapPin className="w-3.5 h-3.5" />
-                            <span>Buka di Peta Realisasi (TA {selectedDetailLaporan?.tahun_anggaran})</span>
-                        </Button>
-                        {user?.role === 'operator_kecamatan' && (
-                            <Button
-                                onClick={handleDownloadFromDetail}
-                                className="h-9 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-2 font-bold shadow-md"
-                            >
-                                <Download className="w-4 h-4" />
-                                <span>Unduh Dokumen BA</span>
-                            </Button>
-                        )}
-                        {(user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin') && (
-                            <Button
-                                onClick={handlePrintFromDetail}
-                                className="h-9 text-xs bg-blue-600 hover:bg-blue-700 text-white gap-2 font-bold shadow-md"
-                            >
-                                <Printer className="w-4 h-4" />
-                                <span>Cetak Berita Acara & Peta Spasial</span>
-                            </Button>
-                        )}
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Create Dialog */}
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-                <DialogContent className="sm:max-w-[480px]">
-                    <DialogHeader>
-                        <DialogTitle className="text-sm font-bold flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-blue-600" />
-                            <span>Terbitkan Draft Dokumen Monitoring Baru</span>
-                        </DialogTitle>
-                        <p className="text-xs text-muted-foreground pt-1">
-                            Inisiasi dokumen monitoring sebagai dasar perencanaan & target fisik bagi Operator Kecamatan untuk melakukan digitasi spasial.
-                        </p>
-                    </DialogHeader>
-                    <form onSubmit={handleCreateLaporan} className="space-y-4 py-2">
-                        <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Kecamatan</Label>
-                            <Combobox
-                                options={kecamatanFilterOptions.filter(o => o.value !== "all")}
-                                value={selectedKec}
-                                onChange={setSelectedKec}
-                                placeholder="Pilih Kecamatan"
-                                searchPlaceholder="Cari kecamatan..."
-                                className="w-full"
-                            />
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Desa Target</Label>
-                            <Combobox
-                                options={desaFilterOptions.filter(o => o.value !== "all")}
-                                value={createDesa}
-                                onChange={setCreateDesa}
-                                placeholder="Pilih Desa"
-                                searchPlaceholder="Cari desa..."
-                                disabled={!selectedKec || selectedKec === "all"}
-                                className="w-full"
-                            />
-                        </div>
-
-                        {createDesa && (
-                            <div className="space-y-1.5 p-3 rounded-xl bg-indigo-500/5 border border-indigo-500/20">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-[10px] font-bold uppercase text-indigo-700 dark:text-indigo-300 flex items-center gap-1.5">
-                                        <Layers className="w-3.5 h-3.5" />
-                                        <span>Plotting Anggaran / Kegiatan Terkait</span>
-                                    </Label>
-                                    {loadingPlottingList && (
-                                        <span className="text-[9px] text-muted-foreground flex items-center gap-1">
-                                            <Loader2 className="w-2.5 h-2.5 animate-spin" /> Memuat...
-                                        </span>
-                                    )}
-                                </div>
-                                <Combobox
-                                    options={[
-                                        { value: "none", label: "-- Tanpa Plotting (Input Manual) --" },
-                                        ...createPlottingList.map(p => ({
-                                            value: p.id.toString(),
-                                            label: `${p.nama_kegiatan} (${p.sumber_dana || 'BKK'} TA ${p.tahun_anggaran} - Target: ${p.target_panjang_m || 0}m)`
-                                        }))
-                                    ]}
-                                    value={createPlottingId}
-                                    onChange={handleSelectPlotting}
-                                    placeholder="Pilih Plotting Kegiatan"
-                                    searchPlaceholder="Cari kegiatan plotting..."
-                                    className="w-full"
-                                />
-                                {createPlottingId !== "none" && (() => {
-                                    const p = createPlottingList.find(item => item.id.toString() === createPlottingId);
-                                    if (!p) return null;
-                                    return (
-                                        <div className="text-[10.5px] bg-background/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-indigo-500/20 space-y-1 mt-1.5">
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Nama Kegiatan:</span>
-                                                <span className="font-semibold text-foreground truncate max-w-[240px]">{p.nama_kegiatan}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Pagu Anggaran:</span>
-                                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                                                    Rp {Number(p.target_pagu_anggaran || 0).toLocaleString('id-ID')}
-                                                </span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Tahun Anggaran Terpilih:</span>
-                                                <span className="font-bold text-amber-600 dark:text-amber-400">TA {p.tahun_anggaran}</span>
-                                            </div>
-                                            <div className="flex justify-between">
-                                                <span className="text-muted-foreground">Target Rencana Fisik:</span>
-                                                <span className="font-bold text-indigo-600 dark:text-indigo-400">{p.target_panjang_m || 0} meter</span>
                                             </div>
                                         </div>
-                                    );
-                                })()}
-                            </div>
-                        )}
+                                    </div>
+                                </DialogHeader>
 
-                        <div className="space-y-1.5">
-                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">Nomor Dokumen Penugasan / BA</Label>
-                            <Input
-                                value={createNomorBa}
-                                onChange={(e) => setCreateNomorBa(e.target.value)}
-                                placeholder={`050/XXX/412.302/${createTahun}`}
-                                className="h-9 text-xs font-mono bg-background"
-                                required
-                            />
-                            <p className="text-[9.5px] text-muted-foreground">Default: 050/XXX/412.302/{createTahun}. Ganti XXX dengan nomor urut dokumen.</p>
-                        </div>
+                                {/* 2. Scrollable Body: Metrics + Tabs (Header & Footer fixed) */}
+                                <div className="flex-1 min-h-0 overflow-y-auto">
 
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Tahun Anggaran</Label>
-                                    {createPlottingId !== "none" && (
-                                        <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400">Dari Plotting</span>
+                                {/* Document Metrics & Lifecycle Summary Strip */}
+                                <div className="p-3 sm:p-4 border-b border-border bg-muted/10 space-y-2.5 sm:space-y-3">
+                                    {/* 4 KPI Metrics Strip */}
+                                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-2.5">
+                                        {/* KPI 1: Total Segmen */}
+                                        <div className="p-2 sm:p-2.5 rounded-xl bg-background border border-border/80 flex items-center gap-2 sm:gap-3">
+                                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                                <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">Total Segmen</p>
+                                                <p className="text-[11px] sm:text-xs font-bold text-foreground truncate">{segmensList.length} Ruas Segmen</p>
+                                                <p className="text-[9.5px] text-muted-foreground truncate">{porosCount} Poros • {nonPorosCount} Non-Poros</p>
+                                            </div>
+                                        </div>
+
+                                        {/* KPI 2: Realisasi Fisik */}
+                                        <div className="p-2 sm:p-2.5 rounded-xl bg-background border border-border/80 flex items-center gap-2 sm:gap-3">
+                                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                                                <Ruler className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="flex items-center justify-between gap-1">
+                                                    <p className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">Realisasi Fisik</p>
+                                                    {canManagePenugasan(user) && (
+                                                        <button
+                                                            onClick={handleSyncTargetFisik}
+                                                            disabled={isSyncingTarget}
+                                                            className="text-[9px] text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                                                            title="Sinkronkan target fisik dari Plotting Anggaran"
+                                                        >
+                                                            <RotateCw className={cn("w-2.5 h-2.5", isSyncingTarget && "animate-spin")} />
+                                                            <span>Sync</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <p className="text-[11px] sm:text-xs font-bold font-mono text-foreground truncate">
+                                                    {realisasiPanjangVal.toLocaleString('id-ID')} m <span className="text-[9.5px] font-normal text-muted-foreground">({(realisasiPanjangVal / 1000).toFixed(2)} km)</span>
+                                                </p>
+                                                <p className={cn("text-[9.5px] font-bold truncate", targetPanjangVal > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400")}>
+                                                    {targetPanjangVal > 0 ? `${persentaseCapaian.toFixed(1)}% dari target ${targetPanjangVal.toLocaleString('id-ID')} m` : "Target fisik belum diisi"}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* KPI 3: Plotting Kegiatan */}
+                                        <div className="p-2 sm:p-2.5 rounded-xl bg-background border border-border/80 flex items-center gap-2 sm:gap-3">
+                                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center shrink-0">
+                                                <Layers className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">Plotting Kegiatan</p>
+                                                <p className="text-[11px] sm:text-xs font-bold text-foreground truncate" title={selectedDetailLaporan.PlottingAnggaran?.nama_kegiatan || 'Non-Plotting'}>
+                                                    {selectedDetailLaporan.PlottingAnggaran?.nama_kegiatan || 'Non-Plotting / Mandiri'}
+                                                </p>
+                                                <p className="text-[9.5px] text-muted-foreground truncate">
+                                                    {selectedDetailLaporan.PlottingAnggaran?.lokasi_kegiatan || `Desa ${selectedDetailLaporan.Desa?.nama_desa || '-'}`}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* KPI 4: Pagu Anggaran */}
+                                        <div className="p-2 sm:p-2.5 rounded-xl bg-background border border-border/80 flex items-center gap-2 sm:gap-3">
+                                            <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                                <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-[9px] sm:text-[10px] uppercase font-bold text-muted-foreground tracking-wider truncate">Pagu Anggaran</p>
+                                                <p className="text-[11px] sm:text-xs font-extrabold text-emerald-600 dark:text-emerald-400 font-mono truncate">
+                                                    {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(targetPaguVal)}
+                                                </p>
+                                                <p className="text-[9.5px] text-muted-foreground truncate">
+                                                    Sumber: {selectedDetailLaporan.sumber_dana || 'BKK'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Revision Alert Banner if any */}
+                                    {(selectedDetailLaporan.catatan_revisi || (Array.isArray(selectedDetailLaporan.history_revisi) && selectedDetailLaporan.history_revisi.length > 0)) && (
+                                        <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-900 dark:text-amber-200 text-xs space-y-2">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <div className="flex items-center gap-2 font-bold text-amber-800 dark:text-amber-300">
+                                                    <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                                                    <span>Catatan Evaluasi & Riwayat Revisi oleh Bappeda</span>
+                                                </div>
+                                                {Array.isArray(selectedDetailLaporan.history_revisi) && selectedDetailLaporan.history_revisi.length > 0 && (
+                                                    <Badge variant="outline" className="text-[9.5px] bg-amber-500/20 text-amber-800 dark:text-amber-300 border-amber-500/30 font-mono">
+                                                        {selectedDetailLaporan.history_revisi.length}x Pengembalian
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {selectedDetailLaporan.catatan_revisi && (
+                                                <p className="bg-background/80 dark:bg-slate-900/80 p-2.5 rounded-lg border border-amber-500/20 text-foreground font-mono text-[11px] leading-relaxed">
+                                                    {selectedDetailLaporan.catatan_revisi}
+                                                </p>
+                                            )}
+                                        </div>
                                     )}
+
+                                    {/* Streamlined Lifecycle Stepper */}
+                                    <div className="p-2.5 sm:p-3 rounded-xl bg-background border border-border/80">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                                                <TrendingUp className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                                                <span>Alur Siklus Dokumen</span>
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground font-mono">
+                                                Dibuat: {selectedDetailLaporan.created_at ? new Date(selectedDetailLaporan.created_at).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" }) : "-"}
+                                            </span>
+                                        </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+                                            {/* Step 1 */}
+                                            <div className={cn(
+                                                "p-2 rounded-lg border text-left transition-all",
+                                                ["draft", "submitted", "revisi", "final"].includes(statusLower)
+                                                    ? "bg-muted/30 border-indigo-500/30"
+                                                    : "bg-muted/10 border-border opacity-50"
+                                            )}>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={cn(
+                                                        "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
+                                                        statusLower === "draft" ? "bg-amber-600 text-white animate-pulse" : "bg-emerald-600 text-white"
+                                                    )}>
+                                                        {statusLower === "draft" ? "1" : <Check className="w-2.5 h-2.5" />}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-foreground truncate">1. Draft Penugasan</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Step 2 */}
+                                            <div className={cn(
+                                                "p-2 rounded-lg border text-left transition-all",
+                                                ["submitted", "revisi", "final"].includes(statusLower)
+                                                    ? "bg-muted/30 border-sky-500/30"
+                                                    : "bg-muted/10 border-border opacity-50"
+                                            )}>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={cn(
+                                                        "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
+                                                        statusLower === "submitted" ? "bg-sky-600 text-white animate-pulse" : ["revisi", "final"].includes(statusLower) ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
+                                                    )}>
+                                                        {["revisi", "final"].includes(statusLower) ? <Check className="w-2.5 h-2.5" /> : "2"}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-foreground truncate">2. Pengajuan Digitasi</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Step 3 */}
+                                            <div className={cn(
+                                                "p-2 rounded-lg border text-left transition-all",
+                                                ["revisi", "final"].includes(statusLower)
+                                                    ? "bg-muted/30 border-amber-500/30"
+                                                    : "bg-muted/10 border-border opacity-50"
+                                            )}>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={cn(
+                                                        "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
+                                                        statusLower === "revisi" ? "bg-rose-600 text-white animate-pulse" : statusLower === "final" ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
+                                                    )}>
+                                                        {statusLower === "final" ? <Check className="w-2.5 h-2.5" /> : "3"}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-foreground truncate">3. Evaluasi Bappeda</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Step 4 */}
+                                            <div className={cn(
+                                                "p-2 rounded-lg border text-left transition-all",
+                                                statusLower === "final"
+                                                    ? "bg-muted/30 border-emerald-500/40 ring-1 ring-emerald-500/20"
+                                                    : "bg-muted/10 border-border opacity-50"
+                                            )}>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className={cn(
+                                                        "w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0",
+                                                        statusLower === "final" ? "bg-emerald-600 text-white" : "bg-muted text-muted-foreground"
+                                                    )}>
+                                                        {statusLower === "final" ? <Check className="w-2.5 h-2.5" /> : "4"}
+                                                    </div>
+                                                    <span className="text-[11px] font-bold text-foreground truncate">4. Berita Acara Final</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                                <Combobox
-                                    options={tahunFilterOptions.filter(o => o.value !== "Semua")}
-                                    value={createTahun}
-                                    onChange={setCreateTahun}
-                                    placeholder="Pilih Tahun"
-                                    searchPlaceholder="Cari tahun..."
-                                    className="w-full"
-                                />
-                            </div>
 
-                            <div className="space-y-1.5">
-                                <div className="flex items-center justify-between">
-                                    <Label className="text-[10px] font-bold uppercase text-muted-foreground">Sumber Dana</Label>
-                                    {createPlottingId !== "none" && (
-                                        <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400">Dari Plotting</span>
-                                    )}
-                                </div>
-                                <Combobox
-                                    options={[
-                                        { value: "BKK", label: "BKK" },
-                                        { value: "Sektoral", label: "Sektoral" },
-                                        { value: "Lainnya", label: "Lainnya" }
-                                    ]}
-                                    value={createSumberDana}
-                                    onChange={setCreateSumberDana}
-                                    placeholder="Pilih Sumber Dana"
-                                    searchPlaceholder="Cari..."
-                                    className="w-full"
-                                />
-                            </div>
-                        </div>
+                                {/* 3. SHADCN UI TABS COMPONENT (Preview Peta | Daftar Segmen) */}
+                                <Tabs
+                                    value={detailActiveTab}
+                                    onValueChange={(val) => {
+                                        setDetailActiveTab(val as 'map' | 'segments');
+                                        if (val === 'map') {
+                                            setTimeout(() => {
+                                                if (detailMapRef.current) {
+                                                    detailMapRef.current.updateSize();
+                                                    handleDetailMapFitBounds();
+                                                }
+                                            }, 100);
+                                        }
+                                    }}
+                                    className="flex flex-col gap-0"
+                                >
+                                    {/* Tabs Header Navigation */}
+                                    <div className="px-4 sm:px-6 py-2.5 border-b border-border bg-muted/10 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                                        <TabsList className="bg-muted/80 border border-border p-1 rounded-xl h-auto grid grid-cols-2 w-full sm:w-auto">
+                                            <TabsTrigger
+                                                value="map"
+                                                className="gap-2 px-4 py-1.5 text-xs font-bold rounded-lg cursor-pointer data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
+                                            >
+                                                <MapPin className="w-3.5 h-3.5" />
+                                                <span>Preview Peta</span>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={cn(
+                                                        "px-1.5 py-0.2 text-[10px] font-mono rounded-full",
+                                                        detailActiveTab === 'map' ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {segmensList.length}
+                                                </Badge>
+                                            </TabsTrigger>
 
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <Label className="text-[10px] font-bold uppercase text-muted-foreground">Rencana Panjang (Meter)</Label>
-                                {createPlottingId !== "none" && (
-                                    <span className="text-[8.5px] font-bold text-indigo-600 dark:text-indigo-400">Dari Plotting</span>
-                                )}
-                            </div>
-                            <Input
-                                type="number"
-                                placeholder="Target perencanaan..."
-                                value={createRencanaPanjang}
-                                onChange={e => setCreateRencanaPanjang(e.target.value)}
-                                className="h-9 text-xs rounded-lg font-mono font-bold"
-                            />
-                        </div>
+                                            <TabsTrigger
+                                                value="segments"
+                                                className="gap-2 px-4 py-1.5 text-xs font-bold rounded-lg cursor-pointer data-[state=active]:bg-indigo-600 data-[state=active]:text-white data-[state=active]:shadow-xs transition-all"
+                                            >
+                                                <TableIcon className="w-3.5 h-3.5" />
+                                                <span>Daftar Segmen</span>
+                                                <Badge
+                                                    variant="secondary"
+                                                    className={cn(
+                                                        "px-1.5 py-0.2 text-[10px] font-mono rounded-full",
+                                                        detailActiveTab === 'segments' ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                                                    )}
+                                                >
+                                                    {segmensList.length}
+                                                </Badge>
+                                            </TabsTrigger>
+                                        </TabsList>
 
-                        <DialogFooter className="pt-2">
-                            <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)} className="h-9 text-xs cursor-pointer">
-                                Batal
-                            </Button>
-                            <Button type="submit" disabled={createSubmitting} className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5 shadow-sm cursor-pointer">
-                                {createSubmitting ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                ) : (
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                )}
-                                <span>{createSubmitting ? "Menerbitkan..." : "Terbitkan Draft Penugasan"}</span>
-                            </Button>
-                        </DialogFooter>
-                    </form>
+                                        {/* Right Tab Meta indicator */}
+                                        <div className="hidden sm:flex items-center gap-2 text-xs text-muted-foreground">
+                                            <span>Wilayah Desa:</span>
+                                            <strong className="text-foreground">Desa {selectedDetailLaporan.Desa?.nama_desa || '-'}</strong>
+                                        </div>
+                                    </div>
+
+                                    {/* TAB CONTENT 1: PREVIEW PETA (forceMount to keep map canvas attached) */}
+                                    <TabsContent
+                                        value="map"
+                                        forceMount
+                                        className={cn(
+                                            "flex flex-col p-3 sm:p-4 space-y-3 mt-0",
+                                            detailActiveTab === 'map' ? "flex" : "hidden"
+                                        )}
+                                    >
+                                        {/* Map Header Toolbar with Zoom & Fit Controls (Always Single Row) */}
+                                        <div className="flex items-center justify-between gap-2 p-2 sm:p-2.5 rounded-xl bg-muted/30 border border-border text-xs shrink-0">
+                                            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                                                <MapPin className="w-4 h-4 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                                <span className="font-bold text-foreground truncate text-[11px] sm:text-xs">
+                                                    Pratinjau Peta ({segmensList.length} Segmen Terpetakan)
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleDetailMapZoomIn}
+                                                    className="h-7 w-7 p-0 rounded-lg cursor-pointer"
+                                                    title="Perbesar Peta"
+                                                >
+                                                    <ZoomIn className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleDetailMapZoomOut}
+                                                    className="h-7 w-7 p-0 rounded-lg cursor-pointer"
+                                                    title="Perkecil Peta"
+                                                >
+                                                    <ZoomOut className="w-3.5 h-3.5" />
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleDetailMapFitBounds}
+                                                    className="h-7 px-2 sm:px-2.5 text-[10px] font-bold rounded-lg gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 cursor-pointer hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                                                    title="Pusatkan Peta ke Seluruh Segmen"
+                                                >
+                                                    <Maximize2 className="w-3 h-3" />
+                                                    <span className="hidden sm:inline">Pusatkan Peta</span>
+                                                    <span className="inline sm:hidden">Pusatkan</span>
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Map Container (Spacious and high-contrast with Floating Basemap Switcher) */}
+                                        <div className="relative w-full h-[380px] sm:h-[460px] lg:h-[500px] rounded-2xl border border-border overflow-hidden bg-slate-100 dark:bg-slate-900 shadow-inner">
+                                            <div
+                                                ref={(node) => {
+                                                    mapDetailContainerRef.current = node;
+                                                    setMapElement(node);
+                                                }}
+                                                className="w-full h-full"
+                                            />
+
+                                            {/* FLOATING: Basemap Switcher (Bottom-Right) */}
+                                            <div className="absolute bottom-3 right-3 z-20">
+                                                <BasemapToggle
+                                                    activeBasemap={detailActiveBasemap}
+                                                    onBasemapChange={setDetailActiveBasemap}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {/* Map Legend Footer */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-muted/20 border border-border text-[11px] shrink-0">
+                                            <div className="flex items-center gap-3 flex-wrap">
+                                                <span className="font-semibold text-muted-foreground">Keterangan:</span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="w-3 h-3 rounded-full bg-blue-600" />
+                                                    <span className="font-medium text-foreground">Sesuai Basis Data ({porosCount})</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="w-3 h-3 rounded-full bg-emerald-600" />
+                                                    <span className="font-medium text-foreground">Diluar Basis Data ({nonPorosCount})</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="w-3 h-1 border-b-2 border-dashed border-slate-400" />
+                                                    <span className="text-muted-foreground">Segmen Sekitar Desa</span>
+                                                </div>
+                                            </div>
+                                            <div className="font-mono text-xs font-bold text-foreground">
+                                                Total Terpetakan: {realisasiPanjangVal.toLocaleString('id-ID')} m
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* TAB CONTENT 2: DAFTAR SEGMEN */}
+                                    <TabsContent
+                                        value="segments"
+                                        className="flex flex-col p-3 sm:p-4 space-y-3 mt-0"
+                                    >
+                                        {/* Search & Filter Toolbar */}
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shrink-0">
+                                            <div className="relative w-full sm:max-w-xs">
+                                                <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                                                <Input
+                                                    placeholder="Cari ruas / kode / material / kondisi..."
+                                                    value={segmentSearch}
+                                                    onChange={(e) => setSegmentSearch(e.target.value)}
+                                                    className="pl-8 h-8 text-xs rounded-xl"
+                                                />
+                                                {segmentSearch && (
+                                                    <button
+                                                        onClick={() => setSegmentSearch("")}
+                                                        className="absolute right-2 top-2 text-muted-foreground hover:text-foreground cursor-pointer"
+                                                    >
+                                                        <X className="w-3.5 h-3.5" />
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {[
+                                                    { value: 'all', label: `Semua (${segmensList.length})` },
+                                                    { value: 'poros', label: `Poros Desa (${porosCount})` },
+                                                    { value: 'non_poros', label: `Non-Poros (${nonPorosCount})` },
+                                                ].map((opt) => (
+                                                    <button
+                                                        key={opt.value}
+                                                        onClick={() => setSegmentFilter(opt.value as any)}
+                                                        className={cn(
+                                                            "px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer border",
+                                                            segmentFilter === opt.value
+                                                                ? "bg-indigo-600 text-white border-indigo-600 shadow-2xs"
+                                                                : "bg-background text-muted-foreground border-border hover:bg-muted"
+                                                        )}
+                                                    >
+                                                        {opt.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Segments Table Container (Horizontal Scroll Enabled) */}
+                                        <div className="w-full border border-border rounded-xl overflow-x-auto bg-background shadow-xs">
+                                            <table className="w-full min-w-[860px] text-xs text-left">
+                                                <thead className="bg-slate-100 dark:bg-slate-900 sticky top-0 z-10 text-[10px] uppercase font-bold text-muted-foreground border-b border-border shadow-2xs">
+                                                    <tr>
+                                                        <th className="p-2.5 text-center w-10 whitespace-nowrap">No</th>
+                                                        <th className="p-2.5 text-center w-28 whitespace-nowrap">Kode Ruas</th>
+                                                        <th className="p-2.5 min-w-[160px] whitespace-nowrap">Nama Objek / Ruas</th>
+                                                        <th className="p-2.5 min-w-[180px] whitespace-nowrap">Koordinat (Awal - Akhir)</th>
+                                                        <th className="p-2.5 text-center whitespace-nowrap">Kategori</th>
+                                                        <th className="p-2.5 text-right whitespace-nowrap">Panjang (m)</th>
+                                                        <th className="p-2.5 text-center whitespace-nowrap">Lebar (m)</th>
+                                                        <th className="p-2.5 text-center whitespace-nowrap">Material</th>
+                                                        <th className="p-2.5 text-center whitespace-nowrap">Kondisi</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border">
+                                                    {filteredSegmens.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                                                                <TableIcon className="w-7 h-7 mx-auto mb-2 opacity-40" />
+                                                                <span className="font-semibold block text-sm">Tidak ada segmen yang sesuai filter.</span>
+                                                                <span className="text-[11px] text-muted-foreground block mt-0.5">Coba sesuaikan kata kunci pencarian atau kategori filter.</span>
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        filteredSegmens.map((s: any, idx: number) => (
+                                                            <tr key={s.id || idx} className="hover:bg-muted/20 transition-colors">
+                                                                <td className="p-2.5 text-center font-mono text-muted-foreground whitespace-nowrap">{idx + 1}</td>
+                                                                <td className="p-2.5 text-center font-mono font-bold text-foreground whitespace-nowrap">{s.kode_ruas || '-'}</td>
+                                                                <td className="p-2.5 font-bold text-foreground whitespace-nowrap">{s.namobj || s.nama_jalan || '-'}</td>
+                                                                <td className="p-2.5 font-mono text-[10px] text-muted-foreground leading-tight whitespace-nowrap">
+                                                                    <div>Awal: {s.start_lat && s.start_lon ? `${parseFloat(s.start_lat).toFixed(5)}, ${parseFloat(s.start_lon).toFixed(5)}` : "-"}</div>
+                                                                    <div>Akhir: {s.end_lat && s.end_lon ? `${parseFloat(s.end_lat).toFixed(5)}, ${parseFloat(s.end_lon).toFixed(5)}` : "-"}</div>
+                                                                </td>
+                                                                <td className="p-2.5 text-center whitespace-nowrap">
+                                                                    <span className={cn(
+                                                                        "px-2 py-0.5 text-[9.5px] rounded-md font-bold",
+                                                                        s.is_jalan_poros
+                                                                            ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20"
+                                                                            : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20"
+                                                                    )}>
+                                                                        {s.is_jalan_poros ? "Poros Desa" : "Non-Poros"}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="p-2.5 text-right font-mono font-bold text-foreground whitespace-nowrap">
+                                                                    {parseFloat(s.panjang_m || 0).toFixed(1)}
+                                                                </td>
+                                                                <td className="p-2.5 text-center font-mono whitespace-nowrap">{s.lebar_m || '-'}</td>
+                                                                <td className="p-2.5 text-center font-medium whitespace-nowrap">
+                                                                    {s.jenis_perkerasan || s.perkerasan || (s.atribut && (s.atribut.jenis_perkerasan || s.atribut.perkerasan)) || "Beton Cor"}
+                                                                </td>
+                                                                <td className="p-2.5 text-center whitespace-nowrap">
+                                                                    <span className={cn(
+                                                                        "px-2 py-0.5 text-[9.5px] rounded-md font-bold capitalize",
+                                                                        (s.kondisi || "").toLowerCase() === 'rusak'
+                                                                            ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                                                                            : (s.kondisi || "").toLowerCase() === 'sedang'
+                                                                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                                                                : "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                                                    )}>
+                                                                        {s.kondisi || 'Baik'}
+                                                                    </span>
+                                                                </td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Segments Footer Summary */}
+                                        <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-muted/20 border border-border text-xs shrink-0">
+                                            <span className="text-muted-foreground">
+                                                Menampilkan <strong>{filteredSegmens.length}</strong> dari <strong>{segmensList.length}</strong> segmen
+                                            </span>
+                                            <div className="flex items-center gap-3">
+                                                <span className="font-semibold text-muted-foreground">
+                                                    Total Panjang: <strong className="font-mono text-foreground">{totalSegmenLength.toFixed(1)} m</strong> <span className="text-[11px] text-muted-foreground">({(totalSegmenLength / 1000).toFixed(2)} km)</span>
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </TabsContent>
+                                </Tabs>
+
+                                </div>{/* end scrollable body */}
+
+                                {/* 4. Executive Dialog Footer (Responsive Layout on Mobile) */}
+                                <DialogFooter className="px-3 py-2 sm:px-6 sm:py-3.5 border-t border-border bg-muted/10 shrink-0 flex flex-row items-center justify-between sm:justify-end gap-1.5 sm:gap-2 w-full">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={() => setIsDetailOpen(false)}
+                                        className="h-8 sm:h-9 px-2.5 sm:px-4 text-xs font-semibold rounded-xl cursor-pointer shrink-0"
+                                    >
+                                        Tutup
+                                    </Button>
+
+                                    <div className="flex items-center gap-1 sm:gap-2 overflow-x-auto no-scrollbar">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setIsDetailOpen(false);
+                                                handleNavigateToPeta(selectedDetailLaporan);
+                                            }}
+                                            className="h-8 sm:h-9 px-2 sm:px-3.5 text-xs font-bold rounded-xl border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 gap-1 sm:gap-1.5 cursor-pointer shrink-0"
+                                            title={`Buka di Peta Realisasi (TA ${selectedDetailLaporan.tahun_anggaran || '2026'})`}
+                                        >
+                                            <MapPin className="w-3.5 h-3.5 shrink-0" />
+                                            <span className="hidden sm:inline">Buka Peta</span>
+                                            <span className="sm:hidden">Peta</span>
+                                        </Button>
+                                        {user?.role === 'operator_kecamatan' && (
+                                            <Button
+                                                type="button"
+                                                onClick={handleDownloadFromDetail}
+                                                className="h-8 sm:h-9 px-2.5 sm:px-4 text-xs bg-emerald-600 hover:bg-emerald-700 text-white gap-1 sm:gap-1.5 font-bold shadow-xs rounded-xl cursor-pointer shrink-0"
+                                                title="Unduh Dokumen Berita Acara"
+                                            >
+                                                <Download className="w-3.5 h-3.5 shrink-0" />
+                                                <span className="hidden sm:inline">Unduh BA</span>
+                                                <span className="sm:hidden">Unduh</span>
+                                            </Button>
+                                        )}
+                                        {(user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin') && (selectedDetailLaporan.status === 'Submitted' || selectedDetailLaporan.status === 'Final') && (
+                                            <Button
+                                                type="button"
+                                                onClick={() => {
+                                                    setIsDetailOpen(false);
+                                                    handleOpenRevert(selectedDetailLaporan);
+                                                }}
+                                                className="h-8 sm:h-9 px-2 sm:px-3.5 text-xs bg-amber-600 hover:bg-amber-700 text-white gap-1 sm:gap-1.5 font-bold shadow-xs rounded-xl cursor-pointer shrink-0"
+                                                title="Kembalikan Dokumen ke Draft untuk Revisi Kecamatan"
+                                            >
+                                                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                                                <span className="hidden sm:inline">Buka Revisi</span>
+                                                <span className="sm:hidden">Revisi</span>
+                                            </Button>
+                                        )}
+                                        {canManagePenugasan(user) && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={() => {
+                                                    handleOpenEdit(selectedDetailLaporan);
+                                                }}
+                                                className="h-8 sm:h-9 px-2 sm:px-3.5 text-xs font-bold rounded-xl border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/30 gap-1 sm:gap-1.5 cursor-pointer shrink-0"
+                                                title="Edit Metadata Dokumen"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5 shrink-0" />
+                                                <span className="hidden sm:inline">Edit Dokumen</span>
+                                                <span className="sm:hidden">Edit</span>
+                                            </Button>
+                                        )}
+                                        {canPrintBeritaAcara(user) && (
+                                            <Button
+                                                type="button"
+                                                onClick={handlePrintFromDetail}
+                                                className="h-8 sm:h-9 px-2.5 sm:px-4 text-xs bg-indigo-600 hover:bg-indigo-700 text-white gap-1 sm:gap-1.5 font-bold shadow-xs rounded-xl cursor-pointer shrink-0"
+                                                title="Cetak Berita Acara & Lampiran Peta Spasial"
+                                            >
+                                                <Printer className="w-3.5 h-3.5 shrink-0" />
+                                                <span className="hidden sm:inline">Cetak Dokumen</span>
+                                                <span className="sm:hidden">Cetak</span>
+                                            </Button>
+                                        )}
+                                    </div>
+                                </DialogFooter>
+                            </>
+                        );
+                    })()}
                 </DialogContent>
             </Dialog>
+
+            {/* Bulk Create & Tabular Plotting Dialog */}
+            <BulkCreateDraftModal
+                isOpen={isCreateOpen}
+                onClose={() => setIsCreateOpen(false)}
+                onSuccess={fetchLaporan}
+                kecamatanList={kecamatanList}
+                existingLaporanList={laporanList}
+                defaultTahun={selectedTahun !== "Semua" ? selectedTahun : "2026"}
+                defaultKecamatan={selectedKec}
+            />
+
+            {/* Edit Metadata Dokumen Modal */}
+            <EditDokumenModal
+                isOpen={editModalOpen}
+                onClose={() => setEditModalOpen(false)}
+                onSuccess={fetchLaporan}
+                laporan={selectedLaporanToEdit}
+            />
 
             {/* REVERT TO DRAFT / BUKA REVISI MODAL */}
             <Dialog open={revertDialogOpen} onOpenChange={setRevertDialogOpen}>
@@ -2490,6 +3027,75 @@ export default function DokumenInfrastrukturPage() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Redesigned Premium Delete Confirmation Dialog */}
+            <ConfirmDeleteDialog
+                open={deleteDialogOpen}
+                onClose={() => {
+                    if (!isDeletingLaporan) {
+                        setDeleteDialogOpen(false);
+                        setSelectedLaporanToDelete(null);
+                        setLoadingDeleteDetail(false);
+                    }
+                }}
+                onConfirm={handleConfirmDeleteLaporan}
+                loading={isDeletingLaporan}
+                title="Konfirmasi Hapus Dokumen Monitoring"
+                description="Apakah Anda yakin ingin menghapus Berita Acara ini beserta seluruh segmen realisasi yang terikat?"
+                itemType="Dokumen Berita Acara"
+                itemName={selectedLaporanToDelete?.nomor_ba || selectedLaporanToDelete?.kegiatan || `Dokumen Monitoring #${selectedLaporanToDelete?.id}`}
+                details={[
+                    { label: "Wilayah Desa", value: `Desa ${selectedLaporanToDelete?.Desa?.nama_desa || selectedLaporanToDelete?.nama_desa || '-'}` },
+                    { label: "Tahun Anggaran", value: `TA ${selectedLaporanToDelete?.tahun_anggaran || '-'}` },
+                    { label: "Status Dokumen", value: selectedLaporanToDelete?.status || 'Draft' },
+                    {
+                        label: "Segmen Terikat",
+                        value: loadingDeleteDetail ? (
+                            <span className="flex items-center gap-1.5 text-muted-foreground">
+                                <Loader2 className="w-3 h-3 animate-spin" /> Memuat data segmen...
+                            </span>
+                        ) : (
+                            `${selectedLaporanToDelete?.SegmensFormatted?.length ?? selectedLaporanToDelete?.LaporanSegmens?.length ?? selectedLaporanToDelete?.segmens?.length ?? selectedLaporanToDelete?.total_segmen ?? 0} Segmen Garis / Area`
+                        )
+                    }
+                ]}
+                warningText="PERINGATAN: Tindakan ini bersifat permanen. Seluruh geometri segmen jalan, titik koordinat, dan riwayat verifikasi yang terikat pada dokumen ini akan dihapus secara permanen dari basis data."
+                confirmText="Hapus Dokumen & Segmen"
+                cancelText="Batal"
+            />
+
+            {/* Alert Dialog: Pencegahan Cetak Dokumen Kosong / Masih Draft */}
+            <AlertDialog open={isPrintDraftAlertOpen} onOpenChange={setIsPrintDraftAlertOpen}>
+                <AlertDialogContent className="rounded-2xl max-w-md">
+                    <AlertDialogHeader className="gap-2">
+                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                            <AlertCircle className="w-5 h-5" />
+                        </div>
+                        <AlertDialogTitle className="text-base font-bold text-foreground">
+                            Dokumen Masih Berstatus Draft
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-xs text-muted-foreground leading-relaxed">
+                            Dokumen ini belum memiliki data ruas jalan yang terpetakan ({selectedDetailLaporan?.Desa?.nama_desa ? `Desa ${selectedDetailLaporan.Desa.nama_desa}` : "desa target"}). Silakan lakukan digitasi segmen terlebih dahulu pada peta sebelum mencetak Berita Acara Final.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter className="flex flex-row items-center justify-end gap-2 pt-2">
+                        <AlertDialogCancel className="h-9 px-4 text-xs rounded-xl cursor-pointer">
+                            Tutup
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                setIsPrintDraftAlertOpen(false);
+                                setIsDetailOpen(false);
+                                handleNavigateToPeta(selectedDetailLaporan);
+                            }}
+                            className="h-9 px-4 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl gap-1.5 cursor-pointer"
+                        >
+                            <MapPin className="w-3.5 h-3.5" />
+                            <span>Buka Peta Digitasi</span>
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

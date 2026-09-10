@@ -1,28 +1,31 @@
-﻿import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { MetaFunction } from "react-router";
 import { useNavigate } from "react-router";
 import { UsulanDesaTable } from "~/features/usulan-desa/components/UsulanDesaTable";
-import { UsulanDesaPagination } from "~/features/usulan-desa/components/UsulanDesaPagination";
 import { usulanDesaService } from "~/features/usulan-desa/services/usulan-desa.service";
 import type { UsulanDesa, UsulanDesaFilters as IFilters } from "~/features/usulan-desa/types/usulan-desa.types";
 import { toast } from "sonner";
 import { Plus } from "lucide-react";
 import { Button } from "~/components/ui/button";
+import { Badge } from "~/components/ui/badge";
+import { useAuth } from "~/contexts/auth-context";
+import { canCreateUsulanDesa } from "~/utils/permissions";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Daftar Usulan - MELAROSA" },
+        { title: "Daftar Usulan Desa - MELAROSA" },
         { name: "description", content: "Daftar semua usulan masyarakat desa." },
     ];
 };
 
 export default function DaftarUsulanPage() {
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [data, setData] = useState<UsulanDesa[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     const [pageIndex, setPageIndex] = useState(0);
-    const [pageSize, setPageSize] = useState(50);
+    const [pageSize, setPageSize] = useState(20);
     const [pageCount, setPageCount] = useState(0);
     const [totalItems, setTotalItems] = useState(0);
 
@@ -155,50 +158,56 @@ export default function DaftarUsulanPage() {
     }, []);
 
     return (
-        <div className="flex flex-1 flex-col h-full min-h-0 gap-4 p-4 bg-background dark:bg-slate-950 overflow-hidden">
-            {/* Page Header */}
-            <div className="flex items-center justify-between gap-4 shrink-0 pb-1 border-b border-slate-100 dark:border-slate-800/50">
-                <div>
-                    <h1 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-                        Daftar Usulan Pembangunan Desa
-                    </h1>
-                    <p className="text-xs text-muted-foreground mt-0.5 hidden sm:block">
-                        Kelola dan pantau seluruh usulan pembangunan tingkat desa.
-                    </p>
+        <div className="relative min-h-full flex-1 flex flex-col bg-background dark:bg-slate-950 overflow-y-auto overflow-x-hidden custom-scrollbar">
+            {/* 1. Header Area with Clean Modern Hierarchy (Scrolls with page) */}
+            <div className="px-4 sm:px-6 pt-3 sm:pt-5 pb-2.5 sm:pb-3 border-b border-border/80 shrink-0">
+                <div className="flex items-center justify-between gap-2.5 sm:gap-3">
+                    <div className="space-y-0.5">
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-base sm:text-xl font-bold text-foreground tracking-tight">
+                                Daftar Usulan Pembangunan Desa
+                            </h1>
+                            <Badge variant="outline" className="text-[9.5px] sm:text-[10px] font-bold uppercase tracking-wider bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border-indigo-500/30">
+                                Usulan Desa
+                            </Badge>
+                        </div>
+                        <p className="hidden sm:block text-xs text-muted-foreground">
+                            Kelola, verifikasi, dan pantau status seluruh usulan pembangunan tingkat desa per Tahun Anggaran.
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        {canCreateUsulanDesa(user) && (
+                            <Button
+                                onClick={() => navigate("/admin/usulan-desa/registrasi")}
+                                className="h-8 sm:h-9 px-2.5 sm:px-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs gap-1.5 shadow-sm rounded-xl cursor-pointer"
+                            >
+                                <Plus className="h-3.5 sm:h-4 w-3.5 sm:w-4" />
+                                <span className="hidden sm:inline">Tambah Usulan Baru</span>
+                                <span className="sm:hidden">Tambah</span>
+                            </Button>
+                        )}
+                    </div>
                 </div>
-                <Button
-                    onClick={() => navigate("/admin/usulan-desa/registrasi")}
-                    className="h-9 bg-blue-600 hover:bg-blue-700 text-white font-semibold gap-1.5 shrink-0"
-                >
-                    <Plus className="h-4 w-4" />
-                    <span>Tambah Usulan</span>
-                </Button>
             </div>
 
-            <div className="flex-1 min-h-0 flex flex-col mb-4">
-                <UsulanDesaTable
-                    data={data}
-                    isLoading={isLoading}
-                    onDetail={handleDetail}
-                    onEdit={handleEdit}
-                    onDelete={handleDelete}
-                    pageIndex={pageIndex}
-                    pageSize={pageSize}
-                    filters={filters}
-                    onFilterChange={handleFilterChange}
-                    onRefresh={fetchData}
-                    onReset={handleResetFilters}
-                    onUpdateItem={handleUpdateItem}
-                />
-            </div>
-
-            <UsulanDesaPagination
-                pageCount={pageCount}
+            {/* 2. Main Data Content Area (Menubar, Table, Mobile Cards & Pagination) */}
+            <UsulanDesaTable
+                data={data}
+                isLoading={isLoading}
+                onDetail={handleDetail}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
                 pageIndex={pageIndex}
                 pageSize={pageSize}
+                pageCount={pageCount}
                 totalItems={totalItems}
                 onPageChange={setPageIndex}
                 onPageSizeChange={setPageSize}
+                filters={filters}
+                onFilterChange={handleFilterChange}
+                onRefresh={fetchData}
+                onReset={handleResetFilters}
+                onUpdateItem={handleUpdateItem}
             />
         </div>
     );

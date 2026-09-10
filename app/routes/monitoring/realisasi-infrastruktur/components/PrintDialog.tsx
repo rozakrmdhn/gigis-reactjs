@@ -1,4 +1,4 @@
-﻿import { Sparkles } from "lucide-react";
+import { Sparkles, Check } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -79,7 +79,7 @@ export function PrintDialog({
                 <DialogHeader>
                     <DialogTitle className="text-sm font-bold flex items-center gap-2">
                         <Sparkles className="size-4 text-violet-600" />
-                        <span>Finalisasi & Snapshot Digitasi Infrastruktur</span>
+                        <span>Snapshot &amp; Finalisasi Berita Acara</span>
                     </DialogTitle>
                 </DialogHeader>
                 <div className="space-y-4 py-3 text-xs">
@@ -262,17 +262,18 @@ export function PrintDialog({
                     )}
                 </div>
 
-                <DialogFooter className="border-t border-border pt-3 flex gap-2 justify-end">
+                <DialogFooter className="border-t border-border pt-3 flex items-center gap-2 justify-end">
                     <Button type="button" variant="outline" onClick={onCancel} className="h-9 text-xs">
                         Batal
                     </Button>
                     <Button
                         type="button"
                         onClick={onConfirm}
-                        className="h-9 text-xs bg-violet-600 hover:bg-violet-700 text-white font-bold gap-1.5"
+                        className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-1.5 cursor-pointer shadow-xs"
+                        title="Sahkan Berita Acara dan simpan snapshot resmi ke modul Dokumen Infrastruktur"
                     >
                         <Sparkles className="size-3.5" />
-                        <span>Finalisasi & Snapshot Berita Acara</span>
+                        <span>Sahkan &amp; Simpan Snapshot</span>
                     </Button>
                 </DialogFooter>
             </DialogContent>

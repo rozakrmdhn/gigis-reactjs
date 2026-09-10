@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useForm, Controller, useFieldArray } from "react-hook-form";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "~/components/ui/dialog";
@@ -13,7 +13,8 @@ import { Textarea } from "~/components/ui/textarea";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "~/components/ui/card";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
 import { Calendar } from "~/components/ui/calendar";
-import { CalendarIcon, ChevronsUpDown, Check, Trash2, Plus } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
+import { CalendarIcon, ChevronsUpDown, Check, Trash2, Plus, FileText, MapPin, Layers, Building2, Coins, CheckCircle2, Info } from "lucide-react";
 import {
     Command,
     CommandEmpty,
@@ -388,43 +389,131 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
 
     return (
         <>
-            <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-6", compactMode ? "w-full flex-1 flex flex-col min-h-full" : "max-w-4xl")} autoComplete="off">
-            <Card className={cn(
-                "bg-white py-0 dark:bg-slate-950",
-                compactMode ? "border-none shadow-none flex-1 flex flex-col" : "border dark:border-slate-800"
-            )}>
-                {!compactMode && (
-                    <CardHeader>
-                        <CardTitle>{initialData ? "Form Edit Usulan" : "Form Usulan Baru"}</CardTitle>
-                    </CardHeader>
-                )}
-                <CardContent className={cn("space-y-4", compactMode ? "p-0 flex-1" : "")}>
-                    <div className="grid gap-4">
-                        {/* Nomor Agenda */}
-                        <div className="space-y-2">
-                            <Label htmlFor="nomor_agenda">Nomor Agenda</Label>
-                            <Input
-                                id="nomor_agenda"
-                                placeholder="Contoh: 1234"
-                                {...register("nomor_agenda")}
-                                className={errors.nomor_agenda ? "border-rose-500" : ""}
-                            />
-                            {errors.nomor_agenda && (
-                                <p className="text-xs text-rose-500">{errors.nomor_agenda.message}</p>
-                            )}
+            <form onSubmit={handleSubmit(onSubmit)} className={cn("space-y-4", compactMode ? "w-full flex-1 flex flex-col min-h-full" : "max-w-4xl")} autoComplete="off">
+                <div className={cn("space-y-3.5 pb-6", compactMode ? "flex-1" : "")}>
+                    {/* Status Saved Banner if Initial Data is Saved */}
+                    {initialData && (
+                        <div className="rounded-xl border border-emerald-500/30 bg-emerald-50/60 dark:bg-emerald-950/20 p-3 flex items-center justify-between gap-2.5 text-xs">
+                            <div className="flex items-center gap-2">
+                                <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                <div>
+                                    <p className="font-bold text-emerald-800 dark:text-emerald-200">Data Usulan Tersimpan</p>
+                                    <p className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">
+                                        Agenda <strong className="font-mono">#{initialData.nomor_agenda}</strong> • Siap dipetakan lokasinya.
+                                    </p>
+                                </div>
+                            </div>
+                            <Badge variant="outline" className="bg-emerald-100/50 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300 border-emerald-300 uppercase text-[9px] font-bold">
+                                {initialData.status}
+                            </Badge>
                         </div>
-                    </div>
-                    <div className="grid gap-4">
+                    )}
+
+                    {/* SECTION 1: Dokumen Administrasi & Surat */}
+                    <div className="rounded-xl border border-border bg-card p-3.5 sm:p-4 space-y-3 shadow-2xs">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/80">
+                            <div className="h-6 w-6 rounded-lg bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold">
+                                <FileText className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-foreground">1. Administrasi & Agenda Surat</h4>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Nomor Agenda */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="nomor_agenda" className="text-xs font-bold">Nomor Agenda <span className="text-rose-500">*</span></Label>
+                                <Input
+                                    id="nomor_agenda"
+                                    placeholder="Contoh: 1234"
+                                    {...register("nomor_agenda")}
+                                    className={cn("h-9 text-xs rounded-xl bg-background", errors.nomor_agenda && "border-rose-500")}
+                                />
+                                {errors.nomor_agenda && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.nomor_agenda.message}</p>
+                                )}
+                            </div>
+
+                            {/* Tanggal Surat */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="tanggal_surat" className="text-xs font-bold">Tanggal Surat <span className="text-rose-500">*</span></Label>
+                                <Controller
+                                    name="tanggal_surat"
+                                    control={control}
+                                    render={({ field }) => {
+                                        const selectedDate = field.value ? new Date(field.value + "T00:00:00") : undefined;
+                                        return (
+                                            <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        id="tanggal_surat"
+                                                        type="button"
+                                                        variant="outline"
+                                                        className={cn(
+                                                            "w-full justify-start text-left font-normal gap-2 h-9 text-xs rounded-xl bg-background",
+                                                            !field.value && "text-muted-foreground",
+                                                            errors.tanggal_surat && "border-rose-500"
+                                                        )}
+                                                    >
+                                                        <CalendarIcon className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                        {selectedDate
+                                                            ? selectedDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
+                                                            : "Pilih tanggal surat"}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-auto p-0" align="start">
+                                                    <Calendar
+                                                        mode="single"
+                                                        selected={selectedDate}
+                                                        onSelect={(date) => {
+                                                            if (date) {
+                                                                const yyyy = date.getFullYear();
+                                                                const mm = String(date.getMonth() + 1).padStart(2, "0");
+                                                                const dd = String(date.getDate()).padStart(2, "0");
+                                                                field.onChange(`${yyyy}-${mm}-${dd}`);
+                                                            } else {
+                                                                field.onChange("");
+                                                            }
+                                                            setIsCalendarOpen(false);
+                                                        }}
+                                                        initialFocus
+                                                    />
+                                                </PopoverContent>
+                                            </Popover>
+                                        );
+                                    }}
+                                />
+                                {errors.tanggal_surat && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.tanggal_surat.message}</p>
+                                )}
+                            </div>
+                        </div>
+
                         {/* Nomor Surat (Multiple) */}
-                        <div className="space-y-2">
-                            <Label>Nomor Surat</Label>
+                        <div className="space-y-1.5 pt-1">
+                            <div className="flex items-center justify-between">
+                                <Label className="text-xs font-bold">Nomor Surat Usulan <span className="text-rose-500">*</span></Label>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => append({ value: "" })}
+                                    className="h-7 px-2 text-[11px] text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 font-bold gap-1 cursor-pointer"
+                                >
+                                    <Plus className="h-3 w-3" /> Tambah Nomor
+                                </Button>
+                            </div>
                             <div className="space-y-2">
                                 {fields.map((field, index) => (
                                     <div key={field.id} className="flex items-center gap-2">
+                                        <span className="text-[10px] font-mono font-bold text-muted-foreground w-4 text-center">
+                                            {index + 1}.
+                                        </span>
                                         <Input
-                                            placeholder={`Contoh: 050/123/412.302/2026`}
+                                            placeholder="Contoh: 050/123/412.302/2026"
                                             {...register(`nomor_surat.${index}.value` as const)}
-                                            className={errors.nomor_surat?.[index]?.value ? "border-rose-500 flex-1" : "flex-1"}
+                                            className={cn("h-9 text-xs rounded-xl bg-background flex-1", errors.nomor_surat?.[index]?.value && "border-rose-500")}
                                         />
                                         {fields.length > 1 && (
                                             <Button
@@ -432,88 +521,211 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                                                 variant="ghost"
                                                 size="icon"
                                                 onClick={() => remove(index)}
-                                                className="h-9 w-9 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 shrink-0"
+                                                className="h-8 w-8 text-rose-500 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg shrink-0 cursor-pointer"
+                                                title="Hapus baris nomor surat"
                                             >
-                                                <Trash2 className="h-4 w-4" />
+                                                <Trash2 className="h-3.5 w-3.5" />
                                             </Button>
                                         )}
                                     </div>
                                 ))}
                             </div>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => append({ value: "" })}
-                                className="mt-1.5 h-8 text-[11px] font-bold"
-                            >
-                                + Tambah Nomor Surat
-                            </Button>
                             {errors.nomor_surat && !Array.isArray(errors.nomor_surat) && (
-                                <p className="text-xs text-rose-500">{(errors.nomor_surat as any).message}</p>
+                                <p className="text-[11px] text-rose-500 font-medium">{(errors.nomor_surat as any).message}</p>
                             )}
                         </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {/* Tanggal Surat */}
-                        <div className="space-y-2">
-                            <Label htmlFor="tanggal_surat">Tanggal Surat</Label>
-                            <Controller
-                                name="tanggal_surat"
-                                control={control}
-                                render={({ field }) => {
-                                    const selectedDate = field.value ? new Date(field.value + "T00:00:00") : undefined;
-                                    return (
-                                        <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    id="tanggal_surat"
-                                                    type="button"
-                                                    variant="outline"
-                                                    className={cn(
-                                                        "w-full justify-start text-left font-normal gap-2",
-                                                        !field.value && "text-slate-400",
-                                                        errors.tanggal_surat && "border-rose-500"
-                                                    )}
-                                                >
-                                                    <CalendarIcon className="h-4 w-4 text-slate-400 shrink-0" />
-                                                    {selectedDate
-                                                        ? selectedDate.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
-                                                        : "Pilih tanggal surat"}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0" align="start">
-                                                <Calendar
-                                                    mode="single"
-                                                    selected={selectedDate}
-                                                    onSelect={(date) => {
-                                                        if (date) {
-                                                            // Store as YYYY-MM-DD
-                                                            const yyyy = date.getFullYear();
-                                                            const mm = String(date.getMonth() + 1).padStart(2, "0");
-                                                            const dd = String(date.getDate()).padStart(2, "0");
-                                                            field.onChange(`${yyyy}-${mm}-${dd}`);
-                                                        } else {
-                                                            field.onChange("");
-                                                        }
-                                                        setIsCalendarOpen(false);
-                                                    }}
-                                                    initialFocus
-                                                />
-                                            </PopoverContent>
-                                        </Popover>
-                                    );
-                                }}
+                    {/* SECTION 2: Wilayah Administrasi & Lokasi */}
+                    <div className="rounded-xl border border-border bg-card p-3.5 sm:p-4 space-y-3 shadow-2xs">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/80">
+                            <div className="h-6 w-6 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
+                                <MapPin className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-foreground">2. Wilayah & Lokasi Usulan</h4>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Kecamatan — Combobox */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="id_kecamatan" className="text-xs font-bold">Kecamatan <span className="text-rose-500">*</span></Label>
+                                <Controller
+                                    name="id_kecamatan"
+                                    control={control}
+                                    render={({ field }) => {
+                                        const selected = kecamatanList.find(k => Number(k.id) === field.value);
+                                        return (
+                                            <Popover open={kecamatanOpen} onOpenChange={setKecamatanOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        id="id_kecamatan"
+                                                        type="button"
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={kecamatanOpen}
+                                                        className={cn(
+                                                            "w-full justify-between font-normal h-9 text-xs rounded-xl bg-background",
+                                                            !selected && "text-muted-foreground",
+                                                            errors.id_kecamatan && "border-rose-500"
+                                                        )}
+                                                    >
+                                                        <span className="truncate">
+                                                            {selected ? selected.nama_kecamatan : "Pilih Kecamatan"}
+                                                        </span>
+                                                        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[240px] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Cari kecamatan..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>Kecamatan tidak ditemukan.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {kecamatanList.map((k) => (
+                                                                    <CommandItem
+                                                                        key={k.id}
+                                                                        value={k.nama_kecamatan}
+                                                                        onSelect={() => {
+                                                                            field.onChange(Number(k.id));
+                                                                            setValue("id_desa", 0);
+                                                                            setKecamatanOpen(false);
+                                                                        }}
+                                                                        className="text-xs cursor-pointer"
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-3.5 w-3.5 shrink-0",
+                                                                                Number(k.id) === field.value ? "opacity-100 text-indigo-600" : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        {k.nama_kecamatan}
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        );
+                                    }}
+                                />
+                                {errors.id_kecamatan && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.id_kecamatan.message}</p>
+                                )}
+                            </div>
+
+                            {/* Desa / Kelurahan — Combobox */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="id_desa" className="text-xs font-bold">Desa / Kelurahan <span className="text-rose-500">*</span></Label>
+                                <Controller
+                                    name="id_desa"
+                                    control={control}
+                                    render={({ field }) => {
+                                        const selected = desaList.find(d => Number(d.id) === field.value);
+                                        const isDisabled = !selectedKecamatanId || selectedKecamatanId === 0;
+                                        return (
+                                            <Popover open={desaOpen} onOpenChange={setDesaOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        id="id_desa"
+                                                        type="button"
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={desaOpen}
+                                                        disabled={isDisabled}
+                                                        className={cn(
+                                                            "w-full justify-between font-normal h-9 text-xs rounded-xl bg-background",
+                                                            !selected && "text-muted-foreground",
+                                                            errors.id_desa && "border-rose-500"
+                                                        )}
+                                                    >
+                                                        <span className="truncate">
+                                                            {selected ? selected.nama_desa : (isDisabled ? "Pilih kecamatan dulu" : "Pilih Desa")}
+                                                        </span>
+                                                        <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-[240px] p-0" align="start">
+                                                    <Command>
+                                                        <CommandInput placeholder="Cari desa..." />
+                                                        <CommandList>
+                                                            <CommandEmpty>Desa tidak ditemukan.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {desaList.map((d) => (
+                                                                    <CommandItem
+                                                                        key={d.id}
+                                                                        value={d.nama_desa}
+                                                                        onSelect={() => {
+                                                                            field.onChange(Number(d.id));
+                                                                            setDesaOpen(false);
+                                                                        }}
+                                                                        className="text-xs cursor-pointer"
+                                                                    >
+                                                                        <Check
+                                                                            className={cn(
+                                                                                "mr-2 h-3.5 w-3.5 shrink-0",
+                                                                                Number(d.id) === field.value ? "opacity-100 text-indigo-600" : "opacity-0"
+                                                                            )}
+                                                                        />
+                                                                        {d.nama_desa}
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
+                                        );
+                                    }}
+                                />
+                                {errors.id_desa && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.id_desa.message}</p>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* Alamat Usulan */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="alamat_usulan" className="text-xs font-bold">Alamat Lengkap / Dusun <span className="text-rose-500">*</span></Label>
+                            <Input
+                                id="alamat_usulan"
+                                placeholder="Contoh: Dusun Krajan RT 02 RW 01"
+                                {...register("alamat_usulan")}
+                                className={cn("h-9 text-xs rounded-xl bg-background", errors.alamat_usulan && "border-rose-500")}
                             />
-                            {errors.tanggal_surat && (
-                                <p className="text-xs text-rose-500">{errors.tanggal_surat.message}</p>
+                            {errors.alamat_usulan && (
+                                <p className="text-[11px] text-rose-500 font-medium">{errors.alamat_usulan.message}</p>
                             )}
+                        </div>
+                    </div>
+
+                    {/* SECTION 3: Kategori Usulan & Rincian Teknis */}
+                    <div className="rounded-xl border border-border bg-card p-3.5 sm:p-4 space-y-3 shadow-2xs">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/80">
+                            <div className="h-6 w-6 rounded-lg bg-sky-50 dark:bg-sky-950/50 text-sky-600 dark:text-sky-400 flex items-center justify-center font-bold">
+                                <Layers className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-foreground">3. Kategori & Rincian Teknis</h4>
+                            </div>
                         </div>
 
                         {/* Kategori Pembangunan Usulan */}
-                        <div className="space-y-2">
-                            <Label htmlFor="id_kategori" className="text-xs font-semibold">Kategori</Label>
+                        <div className="space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <Label htmlFor="id_kategori" className="text-xs font-bold">Kategori Usulan <span className="text-rose-500">*</span></Label>
+                                {canCreateKategori && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setIsOpenKategoriDialog(true)}
+                                        className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 flex items-center gap-1 cursor-pointer"
+                                    >
+                                        <Plus className="h-3 w-3" /> Tambah Kategori
+                                    </button>
+                                )}
+                            </div>
                             <Controller
                                 name="id_kategori"
                                 control={control}
@@ -530,47 +742,32 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                                                     role="combobox"
                                                     aria-expanded={kategoriOpen}
                                                     className={cn(
-                                                        "w-full justify-between font-normal text-xs h-9",
-                                                        !selected && !watch("jenis_usulan") && "text-slate-400",
+                                                        "w-full justify-between font-normal text-xs h-9 rounded-xl bg-background",
+                                                        !selected && !watch("jenis_usulan") && "text-muted-foreground",
                                                         errors.id_kategori && "border-rose-500"
                                                     )}
                                                 >
-                                                    <span className="truncate">
+                                                    <span className="truncate font-medium">
                                                         {selectedLabel}
                                                     </span>
-                                                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
+                                                    <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" />
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-[250px] sm:w-[280px] p-0" align="start">
+                                            <PopoverContent className="w-[300px] sm:w-[340px] p-0" align="start">
                                                 <Command shouldFilter={false}>
                                                     <CommandInput
                                                         placeholder="Cari kategori usulan..."
                                                         value={kategoriSearch}
                                                         onValueChange={setKategoriSearch}
                                                     />
-                                                    <CommandList className="max-h-56">
+                                                    <CommandList className="max-h-56 custom-scrollbar">
                                                         {isFetchingKategori ? (
-                                                            <div className="py-4 text-center text-xs text-slate-500">
+                                                            <div className="py-4 text-center text-xs text-muted-foreground">
                                                                 Mencari kategori...
                                                             </div>
                                                         ) : kategoriList.length === 0 ? (
-                                                            <CommandEmpty className="py-2 text-center text-xs">
-                                                                <p className="text-slate-500 mb-2">Kategori tidak ditemukan.</p>
-                                                                {canCreateKategori && (
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        onClick={() => {
-                                                                            setKategoriOpen(false);
-                                                                            setIsOpenKategoriDialog(true);
-                                                                        }}
-                                                                        className="h-7 w-full gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 justify-center"
-                                                                    >
-                                                                        <Plus className="w-3 h-3" />
-                                                                        <span>Buat Kategori Baru</span>
-                                                                    </Button>
-                                                                )}
+                                                            <CommandEmpty className="py-3 text-center text-xs">
+                                                                <p className="text-muted-foreground mb-2">Kategori tidak ditemukan.</p>
                                                             </CommandEmpty>
                                                         ) : (
                                                             <CommandGroup>
@@ -588,18 +785,18 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                                                                                 setSelectedKategoriItem(item);
                                                                                 setKategoriOpen(false);
                                                                             }}
-                                                                            className="text-xs cursor-pointer py-1.5"
+                                                                            className="text-xs cursor-pointer py-2 px-2.5"
                                                                         >
                                                                             <Check
                                                                                 className={cn(
-                                                                                    "mr-2 h-4 w-4 shrink-0",
-                                                                                    item.id === field.value ? "opacity-100" : "opacity-0"
+                                                                                    "mr-2 h-3.5 w-3.5 shrink-0",
+                                                                                    item.id === field.value ? "opacity-100 text-indigo-600" : "opacity-0"
                                                                                 )}
                                                                             />
                                                                             <div className="flex flex-col min-w-0">
-                                                                                <span className="font-medium text-slate-900 dark:text-slate-100 truncate">{item.nama}</span>
+                                                                                <span className="font-semibold text-foreground truncate">{item.nama}</span>
                                                                                 {(opdKode || opdNama) && (
-                                                                                    <span className="text-[11px] font-medium text-slate-600 dark:text-slate-300 font-mono truncate">
+                                                                                    <span className="text-[10px] font-mono text-muted-foreground truncate">
                                                                                         {opdKode ? `[${opdKode}]` : ""} {opdNama || ""}
                                                                                     </span>
                                                                                 )}
@@ -609,26 +806,6 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                                                                 })}
                                                             </CommandGroup>
                                                         )}
-                                                        {canCreateKategori && (
-                                                            <>
-                                                                <div className="border-t border-slate-100 dark:border-slate-800 my-1" />
-                                                                <div className="p-1">
-                                                                    <Button
-                                                                        type="button"
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        onClick={() => {
-                                                                            setKategoriOpen(false);
-                                                                            setIsOpenKategoriDialog(true);
-                                                                        }}
-                                                                        className="h-8 w-full gap-1 text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/20 justify-start px-2"
-                                                                    >
-                                                                        <Plus className="w-3.5 h-3.5" />
-                                                                        <span>Buat Kategori Baru</span>
-                                                                    </Button>
-                                                                </div>
-                                                            </>
-                                                        )}
                                                     </CommandList>
                                                 </Command>
                                             </PopoverContent>
@@ -637,312 +814,164 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                                 }}
                             />
                             {errors.id_kategori && (
-                                <p className="text-xs text-rose-500">{errors.id_kategori.message}</p>
+                                <p className="text-[11px] text-rose-500 font-medium">{errors.id_kategori.message}</p>
                             )}
                         </div>
-                    </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {/* Kecamatan — Searchable Combobox */}
-                        <div className="space-y-2">
-                            <Label htmlFor="id_kecamatan">Kecamatan</Label>
-                            <Controller
-                                name="id_kecamatan"
-                                control={control}
-                                render={({ field }) => {
-                                    const selected = kecamatanList.find(k => Number(k.id) === field.value);
-                                    return (
-                                        <Popover open={kecamatanOpen} onOpenChange={setKecamatanOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    id="id_kecamatan"
-                                                    type="button"
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    aria-expanded={kecamatanOpen}
-                                                    className={cn(
-                                                        "w-full justify-between font-normal",
-                                                        !selected && "text-slate-400",
-                                                        errors.id_kecamatan && "border-rose-500"
-                                                    )}
-                                                >
-                                                    <span className="truncate">
-                                                        {selected ? selected.nama_kecamatan : "Pilih Kecamatan"}
-                                                    </span>
-                                                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[200px] p-0" align="start">
-                                                <Command>
-                                                    <CommandInput placeholder="Cari kecamatan..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>Kecamatan tidak ditemukan.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            {kecamatanList.map((k) => (
-                                                                <CommandItem
-                                                                    key={k.id}
-                                                                    value={k.nama_kecamatan}
-                                                                    onSelect={() => {
-                                                                        field.onChange(Number(k.id));
-                                                                        setValue("id_desa", 0);
-                                                                        setKecamatanOpen(false);
-                                                                    }}
-                                                                >
-                                                                    <Check
-                                                                        className={cn(
-                                                                            "mr-2 h-4 w-4 shrink-0",
-                                                                            Number(k.id) === field.value ? "opacity-100" : "opacity-0"
-                                                                        )}
-                                                                    />
-                                                                    {k.nama_kecamatan}
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                    );
-                                }}
+                        {/* Uraian Usulan */}
+                        <div className="space-y-1.5">
+                            <Label htmlFor="uraian_usulan" className="text-xs font-bold">Uraian Detail Usulan <span className="text-rose-500">*</span></Label>
+                            <Textarea
+                                id="uraian_usulan"
+                                placeholder="Jelaskan kebutuhan, spesifikasi, atau urgensi usulan pembangunan ini..."
+                                rows={3}
+                                {...register("uraian_usulan")}
+                                className={cn("text-xs rounded-xl bg-background leading-relaxed", errors.uraian_usulan && "border-rose-500")}
                             />
-                            {errors.id_kecamatan && (
-                                <p className="text-xs text-rose-500">{errors.id_kecamatan.message}</p>
+                            {errors.uraian_usulan && (
+                                <p className="text-[11px] text-rose-500 font-medium">{errors.uraian_usulan.message}</p>
                             )}
                         </div>
 
-                        {/* Desa — Searchable Combobox */}
-                        <div className="space-y-2">
-                            <Label htmlFor="id_desa">Desa / Kelurahan</Label>
-                            <Controller
-                                name="id_desa"
-                                control={control}
-                                render={({ field }) => {
-                                    const selected = desaList.find(d => Number(d.id) === field.value);
-                                    const isDisabled = !selectedKecamatanId || selectedKecamatanId === 0;
-                                    return (
-                                        <Popover open={desaOpen} onOpenChange={setDesaOpen}>
-                                            <PopoverTrigger asChild>
-                                                <Button
-                                                    id="id_desa"
-                                                    type="button"
-                                                    variant="outline"
-                                                    role="combobox"
-                                                    aria-expanded={desaOpen}
-                                                    disabled={isDisabled}
-                                                    className={cn(
-                                                        "w-full justify-between font-normal",
-                                                        !selected && "text-slate-400",
-                                                        errors.id_desa && "border-rose-500"
-                                                    )}
-                                                >
-                                                    <span className="truncate">
-                                                        {selected ? selected.nama_desa : "Pilih Desa"}
-                                                    </span>
-                                                    <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[200px] p-0" align="start">
-                                                <Command>
-                                                    <CommandInput placeholder="Cari desa..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>Desa tidak ditemukan.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            {desaList.map((d) => (
-                                                                <CommandItem
-                                                                    key={d.id}
-                                                                    value={d.nama_desa}
-                                                                    onSelect={() => {
-                                                                        field.onChange(Number(d.id));
-                                                                        setDesaOpen(false);
-                                                                    }}
-                                                                >
-                                                                    <Check
-                                                                        className={cn(
-                                                                            "mr-2 h-4 w-4 shrink-0",
-                                                                            Number(d.id) === field.value ? "opacity-100" : "opacity-0"
-                                                                        )}
-                                                                    />
-                                                                    {d.nama_desa}
-                                                                </CommandItem>
-                                                            ))}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                    );
-                                }}
-                            />
-                            {errors.id_desa && (
-                                <p className="text-xs text-rose-500">{errors.id_desa.message}</p>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* Uraian Usulan */}
-                    <div className="space-y-2">
-                        <Label htmlFor="uraian_usulan">Uraian Usulan</Label>
-                        <Textarea
-                            id="uraian_usulan"
-                            placeholder="Jelaskan detail usulan disini..."
-                            rows={4}
-                            {...register("uraian_usulan")}
-                            className={errors.uraian_usulan ? "border-rose-500" : ""}
-                        />
-                        {errors.uraian_usulan && (
-                            <p className="text-xs text-rose-500">{errors.uraian_usulan.message}</p>
-                        )}
-                    </div>
-
-                    {/* Alamat Usulan */}
-                    <div className="space-y-2">
-                        <Label htmlFor="alamat_usulan">Alamat Lengkap Usulan</Label>
-                        <Input
-                            id="alamat_usulan"
-                            placeholder="Contoh: Dusun Utara RT 01 RW 02"
-                            {...register("alamat_usulan")}
-                            className={errors.alamat_usulan ? "border-rose-500" : ""}
-                        />
-                        {errors.alamat_usulan && (
-                            <p className="text-xs text-rose-500">{errors.alamat_usulan.message}</p>
-                        )}
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {/* Tahun Anggaran */}
-                        <div className="space-y-2">
-                            <Label htmlFor="tahun_anggaran">Tahun Anggaran</Label>
-                            <Input
-                                id="tahun_anggaran"
-                                type="number"
-                                {...register("tahun_anggaran", { valueAsNumber: true })}
-                                className={errors.tahun_anggaran ? "border-rose-500" : ""}
-                            />
-                            {errors.tahun_anggaran && (
-                                <p className="text-xs text-rose-500">{errors.tahun_anggaran.message}</p>
-                            )}
-                        </div>
-
-                        {/* Status */}
-                        <div className="space-y-2">
-                            <Label htmlFor="status">Status Usulan</Label>
-                            <Controller
-                                name="status"
-                                control={control}
-                                render={({ field }) => (
-                                    <div className="relative">
-                                        <select
-                                            id="status"
-                                            disabled={true}
-                                            value={field.value || "pending"}
-                                            onChange={(e) => field.onChange(e.target.value)}
-                                            className={cn(
-                                                "flex h-9 w-full rounded-md border border-input bg-slate-50 dark:bg-slate-900/50 px-3 pr-10 py-2 text-sm shadow-xs transition-colors appearance-none outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-80 dark:border-slate-800",
-                                                errors.status && "border-rose-500"
-                                            )}
-                                        >
-                                            <option value="pending" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Pending</option>
-                                            <option value="verifikasi_bappeda" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Verifikasi Bappeda</option>
-                                            <option value="verifikasi_opd" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Verifikasi OPD</option>
-                                            <option value="selesai" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Selesai</option>
-                                            <option value="ditolak" className="bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100">Ditolak</option>
-                                        </select>
-                                        <ChevronsUpDown className="absolute right-3 top-2.5 h-4 w-4 shrink-0 opacity-50 pointer-events-none text-muted-foreground" />
-                                    </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Volume */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="volume" className="text-xs font-bold">Volume / Target</Label>
+                                <Input
+                                    id="volume"
+                                    placeholder="Contoh: 500 Meter / 2 Unit"
+                                    {...register("volume")}
+                                    className={cn("h-9 text-xs rounded-xl bg-background", errors.volume && "border-rose-500")}
+                                />
+                                {errors.volume && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.volume.message}</p>
                                 )}
-                            />
-                            {errors.status && (
-                                <p className="text-xs text-rose-500">{errors.status.message}</p>
-                            )}
+                            </div>
+
+                            {/* Anggaran Usulan */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="anggaran_usulan" className="text-xs font-bold">Estimasi Anggaran (Rp)</Label>
+                                <Input
+                                    id="anggaran_usulan"
+                                    type="number"
+                                    placeholder="Contoh: 150000000"
+                                    {...register("anggaran_usulan", { valueAsNumber: true })}
+                                    className={cn("h-9 text-xs rounded-xl bg-background font-mono", errors.anggaran_usulan && "border-rose-500")}
+                                />
+                                {errors.anggaran_usulan && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.anggaran_usulan.message}</p>
+                                )}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="grid md:grid-cols-2 gap-4">
-                        {/* Volume */}
-                        <div className="space-y-2">
-                            <Label htmlFor="volume">Volume</Label>
-                            <Input
-                                id="volume"
-                                placeholder="Contoh: 500 Meter / 3 Unit"
-                                {...register("volume")}
-                                className={errors.volume ? "border-rose-500" : ""}
-                            />
-                            {errors.volume && (
-                                <p className="text-xs text-rose-500">{errors.volume.message}</p>
-                            )}
+                    {/* SECTION 4: Catatan & Dokumen Pendukung */}
+                    <div className="rounded-xl border border-border bg-card p-3.5 sm:p-4 space-y-3 shadow-2xs">
+                        <div className="flex items-center gap-2 pb-2 border-b border-border/80">
+                            <div className="h-6 w-6 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center font-bold">
+                                <Building2 className="h-3.5 w-3.5" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="text-xs font-bold text-foreground">4. Dokumen, Catatan & Status</h4>
+                            </div>
                         </div>
 
-                        {/* Anggaran Usulan */}
-                        <div className="space-y-2">
-                            <Label htmlFor="anggaran_usulan">Anggaran Usulan (Rp)</Label>
-                            <Input
-                                id="anggaran_usulan"
-                                type="number"
-                                placeholder="Contoh: 150000000"
-                                {...register("anggaran_usulan", { valueAsNumber: true })}
-                                className={errors.anggaran_usulan ? "border-rose-500" : ""}
-                            />
-                            {errors.anggaran_usulan && (
-                                <p className="text-xs text-rose-500">{errors.anggaran_usulan.message}</p>
-                            )}
-                        </div>
-                    </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            {/* Tahun Anggaran */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="tahun_anggaran" className="text-xs font-bold">Tahun Anggaran <span className="text-rose-500">*</span></Label>
+                                <Input
+                                    id="tahun_anggaran"
+                                    type="number"
+                                    {...register("tahun_anggaran", { valueAsNumber: true })}
+                                    className={cn("h-9 text-xs rounded-xl bg-background font-mono", errors.tahun_anggaran && "border-rose-500")}
+                                />
+                                {errors.tahun_anggaran && (
+                                    <p className="text-[11px] text-rose-500 font-medium">{errors.tahun_anggaran.message}</p>
+                                )}
+                            </div>
 
-                    <div className="grid gap-4">
+                            {/* Status */}
+                            <div className="space-y-1.5">
+                                <Label htmlFor="status" className="text-xs font-bold">Status Usulan</Label>
+                                <Controller
+                                    name="status"
+                                    control={control}
+                                    render={({ field }) => (
+                                        <div className="relative">
+                                            <select
+                                                id="status"
+                                                disabled={true}
+                                                value={field.value || "pending"}
+                                                onChange={(e) => field.onChange(e.target.value)}
+                                                className="flex h-9 w-full rounded-xl border border-input bg-muted/30 px-3 pr-10 py-2 text-xs font-semibold shadow-2xs appearance-none outline-none disabled:cursor-not-allowed disabled:opacity-80"
+                                            >
+                                                <option value="pending">Pending</option>
+                                                <option value="verifikasi_bappeda">Verifikasi Bappeda</option>
+                                                <option value="verifikasi_opd">Verifikasi OPD</option>
+                                                <option value="selesai">Selesai</option>
+                                                <option value="ditolak">Ditolak</option>
+                                            </select>
+                                            <ChevronsUpDown className="absolute right-3 top-2.5 h-4 w-4 shrink-0 opacity-50 pointer-events-none text-muted-foreground" />
+                                        </div>
+                                    )}
+                                />
+                            </div>
+                        </div>
+
                         {/* URL Dokumen Usulan */}
-                        <div className="space-y-2">
-                            <Label htmlFor="url_dokumen_usulan">URL Dokumen Usulan (PDF / Drive)</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="url_dokumen_usulan" className="text-xs font-bold">URL Dokumen Usulan (PDF / Drive)</Label>
                             <Input
                                 id="url_dokumen_usulan"
                                 type="text"
-                                placeholder="https://example.com/dokumen.pdf"
+                                placeholder="https://drive.google.com/..."
                                 {...register("url_dokumen_usulan")}
-                                className={errors.url_dokumen_usulan ? "border-rose-500" : ""}
+                                className={cn("h-9 text-xs rounded-xl bg-background", errors.url_dokumen_usulan && "border-rose-500")}
                             />
                             {errors.url_dokumen_usulan && (
-                                <p className="text-xs text-rose-500">{errors.url_dokumen_usulan.message}</p>
+                                <p className="text-[11px] text-rose-500 font-medium">{errors.url_dokumen_usulan.message}</p>
                             )}
                         </div>
 
                         {/* Catatan Bappeda */}
-                        <div className="space-y-2">
-                            <Label htmlFor="catatan_bappeda">Catatan Bappeda</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="catatan_bappeda" className="text-xs font-bold">Catatan Bappeda</Label>
                             <Textarea
                                 id="catatan_bappeda"
-                                placeholder="Catatan hasil verifikasi..."
-                                rows={3}
+                                placeholder="Catatan atau telaah teknis Bappeda..."
+                                rows={2}
                                 {...register("catatan_bappeda")}
+                                className="text-xs rounded-xl bg-background"
                             />
                         </div>
 
                         {/* Catatan Bupati */}
-                        <div className="space-y-2">
-                            <Label htmlFor="catatan_bupati">Catatan Bupati</Label>
+                        <div className="space-y-1.5">
+                            <Label htmlFor="catatan_bupati" className="text-xs font-bold">Catatan / Arahan Bupati</Label>
                             <Textarea
                                 id="catatan_bupati"
-                                placeholder="Catatan khusus dari Bupati..."
-                                rows={3}
+                                placeholder="Disposisi atau arahan khusus Bupati..."
+                                rows={2}
                                 {...register("catatan_bupati")}
+                                className="text-xs rounded-xl bg-background"
                             />
                         </div>
                     </div>
+                </div>
 
-                </CardContent>
-                <CardFooter 
-                    className={cn(
-                        "flex gap-2", 
-                        compactMode 
-                            ? "sticky bottom-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-md border-t py-4 z-10 -mx-4 px-4 dark:border-slate-800 w-auto justify-stretch" 
-                            : "justify-end border-t p-6 dark:border-slate-800 mt-6"
-                    )}
-                >
+                {/* Sticky Form Footer Actions */}
+                <div className={cn(
+                    "sticky bottom-0 bg-background/95 backdrop-blur-md border-t border-border py-3 z-20 flex gap-2",
+                    compactMode ? "-mx-4 px-4 w-auto justify-stretch shadow-md" : "justify-end"
+                )}>
                     {!disableButtons && (
                         <Button
                             type="button"
                             variant="outline"
                             onClick={onCancel || (() => navigate(initialData ? `/admin/usulan-desa/detail/${initialData.id}` : "/admin/usulan-desa/daftar-usulan"))}
                             disabled={isSubmitting}
-                            className={cn(compactMode && "flex-1")}
+                            className={cn("h-9 text-xs rounded-xl font-semibold cursor-pointer", compactMode && "flex-1")}
                         >
                             Batal
                         </Button>
@@ -953,14 +982,14 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                                 <Button
                                     type="button"
                                     onClick={() => navigate(initialData ? `/admin/usulan-desa/detail/${initialData.id}` : "/admin/usulan-desa/daftar-usulan")}
-                                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 font-medium"
+                                    className="flex-1 h-9 text-xs rounded-xl bg-muted hover:bg-muted/80 text-foreground font-semibold cursor-pointer"
                                 >
                                     Selesai
                                 </Button>
                                 <Button
                                     type="button"
                                     onClick={onRegisterNew}
-                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium"
+                                    className="flex-1 h-9 text-xs rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer"
                                 >
                                     Daftar Usulan Baru
                                 </Button>
@@ -969,7 +998,7 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                             <Button
                                 type="button"
                                 onClick={() => navigate(initialData ? `/admin/usulan-desa/detail/${initialData.id}` : "/admin/usulan-desa/daftar-usulan")}
-                                className={cn("bg-blue-600 hover:bg-blue-700 text-white font-medium", compactMode && "flex-1")}
+                                className={cn("h-9 text-xs rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold cursor-pointer", compactMode && "flex-1")}
                             >
                                 Selesai
                             </Button>
@@ -978,14 +1007,13 @@ export function UsulanDesaForm({ initialData, onSuccess, onCancel, compactMode =
                         <Button 
                             type="submit" 
                             disabled={isSubmitting}
-                            className={cn(compactMode && "flex-1")}
+                            className={cn("h-9 text-xs rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-sm cursor-pointer", compactMode && "flex-1")}
                         >
-                            {isSubmitting ? "Menyimpan..." : "Simpan Usulan"}
+                            {isSubmitting ? "Menyimpan Data..." : (initialData ? "Simpan Perubahan" : "Simpan & Lanjut Pemetaan")}
                         </Button>
                     )}
-                </CardFooter>
-            </Card>
-        </form>
+                </div>
+            </form>
 
         {/* Create Category Dialog */}
         <Dialog open={isOpenKategoriDialog} onOpenChange={setIsOpenKategoriDialog}>

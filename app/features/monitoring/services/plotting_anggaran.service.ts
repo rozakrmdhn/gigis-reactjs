@@ -1,4 +1,4 @@
-﻿import { apiClient } from "~/lib/api-client";
+import { apiClient } from "~/lib/api-client";
 
 export interface PlottingAnggaran {
     id: string;
@@ -14,7 +14,7 @@ export interface PlottingAnggaran {
     user_id?: string;
     created_at?: string;
     updated_at?: string;
-    Desa?: { id: number | string; nama_desa: string };
+    Desa?: { id: number | string; nama_desa: string; id_kecamatan?: number | string; nama_kecamatan?: string };
     Kecamatan?: { id: number | string; nama_kecamatan: string };
 }
 

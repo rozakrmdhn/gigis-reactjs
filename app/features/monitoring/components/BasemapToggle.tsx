@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { cn } from "~/lib/utils";
 import { useIsMobile } from "~/hooks/use-mobile";
 import type { Basemap } from "~/features/master/services/basemap.service";
@@ -13,9 +13,9 @@ export interface BasemapItem {
 }
 
 export const BASEMAP_LIST: BasemapItem[] = [
-    { id: 'osm', name: 'OpenStreetMap', thumbnail: 'https://tile.openstreetmap.org/14/13283/8518.png' },
+    { id: 'google-sat', name: 'Google Earth', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
     { id: 'google-road', name: 'Google Maps', thumbnail: 'https://mt1.google.com/vt/lyrs=m&x=13283&y=8518&z=14' },
-    { id: 'google-sat', name: 'Google Satellite', thumbnail: 'https://mt1.google.com/vt/lyrs=y&x=13283&y=8518&z=14' },
+    { id: 'osm', name: 'OpenStreetMap', thumbnail: 'https://tile.openstreetmap.org/14/13283/8518.png' },
     { id: 'carto-light', name: 'Positron Light', thumbnail: 'https://a.basemaps.cartocdn.com/light_all/14/13283/8518.png' },
     { id: 'carto-dark', name: 'Dark Matter', thumbnail: 'https://a.basemaps.cartocdn.com/dark_all/14/13283/8518.png' },
     { id: 'satellite', name: 'Esri Satellite', thumbnail: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/14/8518/13283' },
@@ -26,9 +26,10 @@ interface BasemapToggleProps {
     activeBasemap: string;
     onBasemapChange: (id: string) => void;
     className?: string;
+    style?: React.CSSProperties;
 }
 
-export function BasemapToggle({ basemaps, activeBasemap, onBasemapChange, className }: BasemapToggleProps) {
+export function BasemapToggle({ basemaps, activeBasemap, onBasemapChange, className, style }: BasemapToggleProps) {
     const isMobile = useIsMobile();
     const [isOpen, setIsOpen] = useState(false);
     
@@ -36,7 +37,7 @@ export function BasemapToggle({ basemaps, activeBasemap, onBasemapChange, classN
     const activeItem = list.find(b => b.id === activeBasemap) || list[0];
 
     return (
-        <div className={cn("relative inline-flex items-center pointer-events-auto", className)}>
+        <div style={style} className={cn("relative inline-flex items-center pointer-events-auto", className)}>
             {/* Main Trigger Button */}
             <button
                 type="button"

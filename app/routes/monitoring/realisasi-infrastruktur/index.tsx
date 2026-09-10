@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import {
     Plus,
@@ -47,7 +47,20 @@ import {
     Moon,
     Move,
     PanelLeftOpen,
-    PanelLeftClose
+    PanelLeftClose,
+    PanelBottomOpen,
+    PanelBottomClose,
+    Table2,
+    MapPin,
+    ChevronsUpDown,
+    Calendar,
+    Clock,
+    Printer,
+    MoreHorizontal,
+    FileText,
+    Palette,
+    Pencil,
+    ExternalLink
 } from "lucide-react";
 import { cn, getProxiedLayerUrl } from "~/lib/utils";
 import DigitizingToolMenubar from "~/features/monitoring/components/DigitizingToolMenubar";
@@ -76,6 +89,22 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "~/components/ui/popover";
+import {
+    Drawer,
+    DrawerContent,
+    DrawerDescription,
+    DrawerHeader,
+    DrawerTitle,
+    DrawerTrigger,
+} from "~/components/ui/drawer";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "~/components/ui/command";
 import {
     Tooltip,
     TooltipContent,
@@ -107,6 +136,7 @@ import { monitoringLaporanService } from "~/features/monitoring/services/monitor
 import { basemapService, type Basemap } from "~/features/master/services/basemap.service";
 import { desaService } from "~/services/desa";
 import { InfrastrukturPanel } from "~/features/monitoring/components/InfrastrukturPanel";
+import { BottomSegmentPanel } from "~/features/monitoring/components/BottomSegmentPanel";
 import { SegmenVisualisasi, type SegmenData } from "~/features/monitoring/components/SegmenVisualisasi";
 import { realisasiService, type RealisasiEntry } from "~/features/monitoring/services/realisasi.service";
 import { BasemapToggle } from "~/features/monitoring/components/BasemapToggle";
@@ -116,16 +146,18 @@ import type { Jalan } from "~/features/peta/types";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "~/components/ui/accordion";
 import { LayerManagementPanel } from "~/features/monitoring/components/LayerManagementPanel";
+import { ThematicSymbologyPanel } from "~/features/monitoring/components/ThematicSymbologyPanel";
 import { DetailSegmenPanel } from "~/features/monitoring/components/DetailSegmenPanel";
 import { MeasurementPanel } from "~/features/monitoring/components/MeasurementPanel";
 import { useInfrastrukturTipe } from "~/features/monitoring/hooks/useInfrastrukturTipe";
 import { TipeSwitcher } from "~/features/monitoring/components/TipeSwitcher";
-import { infrastrukturService } from "~/services/infrastruktur.service";
+import { infrastrukturService, type InfrastrukturTipe } from "~/services/infrastruktur.service";
 import TileWMS from "ol/source/TileWMS";
 import { useAuth } from "~/contexts/auth-context";
 import { plottingAnggaranService } from "~/features/monitoring/services/plotting_anggaran.service";
 import { Combobox } from "~/components/ui/combobox";
 import { useTheme } from "next-themes";
+import { canDigitize, hasGlobalRegionalScope, isReadOnlyRole, canPrintBeritaAcara } from "~/utils/permissions";
 // Extracted components & hooks
 import { useSnapshotLock } from "./hooks/useSnapshotLock";
 import { useDeleteFeature } from "./hooks/useDeleteFeature";
@@ -136,56 +168,93 @@ import { MapContextMenu } from "./components/MapContextMenu";
 import { IntersectionPanel } from "./components/IntersectionPanel";
 import { GarisVisualPanel } from "./components/GarisVisualPanel";
 import { PrintDialog } from "./components/PrintDialog";
+import { TipeInfrastrukturDialog } from "./components/TipeInfrastrukturDialog";
 import { KirimDigitasiDialog } from "./components/KirimDigitasiDialog";
-const getStoredStyle = (key: string, defaultStyle: { color: string; width: number; lineDash?: number[]; scale?: number }) => {
+let _cachedCustomStyles: Record<string, any> | null = null;
+let _lastCustomStylesReadTime = 0;
+
+export const isUUID = (str: any): boolean => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
+export const invalidateCustomStylesCache = () => {
+    _cachedCustomStyles = null;
+};
+
+const getStoredStyle = (key: string, defaultStyle: { color: string; width: number; lineDash?: number[]; scale?: number; visible?: boolean }) => {
     try {
         if (typeof window !== 'undefined') {
-            const stored = localStorage.getItem('gigis_custom_vector_styles');
-            if (stored) {
-                const parsed = JSON.parse(stored);
-                if (parsed[key]) {
-                    const item = parsed[key];
-                    let lineDashVal: number[] | undefined = undefined;
-                    if (item.lineDash === 'dashed') {
-                        lineDashVal = [6, 6];
-                    } else if (item.lineDash === 'solid') {
-                        lineDashVal = undefined;
-                    } else if (Array.isArray(item.lineDash)) {
-                        lineDashVal = item.lineDash;
-                    }
-                    return {
-                        color: item.color || defaultStyle.color,
-                        width: item.width !== undefined ? Number(item.width) : defaultStyle.width,
-                        lineDash: lineDashVal,
-                        scale: item.scale !== undefined ? Number(item.scale) : defaultStyle.scale,
-                        fillColor: item.fillColor || `${item.color || defaultStyle.color}0d`
-                    };
+            const now = Date.now();
+            // Cache for 3 seconds to avoid synchronous localStorage hits on every vector feature frame
+            if (!_cachedCustomStyles || now - _lastCustomStylesReadTime > 3000) {
+                const stored = localStorage.getItem('gigis_custom_vector_styles');
+                _cachedCustomStyles = stored ? JSON.parse(stored) : {};
+                _lastCustomStylesReadTime = now;
+            }
+            if (_cachedCustomStyles && _cachedCustomStyles[key]) {
+                const item = _cachedCustomStyles[key];
+                let lineDashVal: number[] | undefined = undefined;
+                if (item.lineDash === 'dashed') {
+                    lineDashVal = [6, 6];
+                } else if (item.lineDash === 'dotted') {
+                    lineDashVal = [2, 4];
+                } else if (item.lineDash === 'solid') {
+                    lineDashVal = undefined;
+                } else if (Array.isArray(item.lineDash)) {
+                    lineDashVal = item.lineDash;
                 }
+                return {
+                    color: item.color || defaultStyle.color,
+                    width: item.width !== undefined ? Number(item.width) : defaultStyle.width,
+                    lineDash: lineDashVal,
+                    scale: item.scale !== undefined ? Number(item.scale) : defaultStyle.scale,
+                    fillColor: item.fillColor || `${item.color || defaultStyle.color}0d`,
+                    visible: item.visible !== undefined ? Boolean(item.visible) : true
+                };
             }
         }
     } catch (e) {
         console.error("Error loading custom styles from localStorage:", e);
     }
-    return defaultStyle;
+    return { ...defaultStyle, visible: defaultStyle.visible !== false };
 };
 
 function createBasemapSource(id: string, basemaps: Basemap[], isDark: boolean = false) {
-    if (isDark && (id === 'osm' || !id || id === 'carto-dark')) {
+    if (id === 'carto-dark' || (isDark && (id === 'carto-dark' || id === 'dark'))) {
         return new XYZ({
             url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
             crossOrigin: 'anonymous',
             attributions: '&copy; CARTO'
         });
     }
-    if (id === 'carto-dark') {
+
+    if (id === 'google-sat' || id === 'google-earth' || id === 'google-satellite' || id === 'google-hybrid') {
         return new XYZ({
-            url: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-            crossOrigin: 'anonymous'
+            url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+            crossOrigin: 'anonymous',
+            attributions: '&copy; Google Earth'
         });
     }
-    if (id === 'osm' || !basemaps || basemaps.length === 0) return new OSM({ crossOrigin: 'anonymous' });
+
+    if (id === 'google-road' || id === 'google-maps') {
+        return new XYZ({
+            url: "https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}",
+            crossOrigin: 'anonymous',
+            attributions: '&copy; Google Maps'
+        });
+    }
+
+    if (id === 'osm') {
+        return new OSM({ crossOrigin: 'anonymous' });
+    }
+
     const meta = basemaps.find(b => b.id === id);
-    if (!meta) return new OSM({ crossOrigin: 'anonymous' });
+    if (!meta) {
+        // Default to Google Earth (Satellite with labels)
+        return new XYZ({
+            url: "https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}",
+            crossOrigin: 'anonymous',
+            attributions: '&copy; Google Earth'
+        });
+    }
 
     if (meta.url.includes("openstreetmap.org")) {
         return new OSM({ crossOrigin: 'anonymous' });
@@ -288,23 +357,60 @@ const findClosestProjectionOnFeature = (geom: any, p: number[]) => {
 };
 
 export default function RoadRealizationInfrastrukturPage() {
+    const navigate = useNavigate();
     const routeParams = useParams();
     const { tipes, activeTipe, setActiveTipe } = useInfrastrukturTipe();
 
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const params = useParams();
     const activeDesaIdParam = params.desaId;
 
+    const [isSelectTipeDialogOpen, setIsSelectTipeDialogOpen] = useState(false);
+
     // Auto-select active infrastructure type from URL parameter /admin/monitoring/:kode OR query param ?tipe=...
+    // If no type is specified in the URL upon opening the page, prompt the user with the TipeInfrastrukturDialog
     useEffect(() => {
+        if (tipes.length === 0) return;
+
         const targetKode = routeParams.kode || searchParams.get("tipe") || searchParams.get("tipe_kode") || (searchParams.get("mode") ? "jalan" : undefined);
-        if (targetKode && tipes.length > 0) {
+        if (targetKode) {
             const found = tipes.find(t => t.kode === targetKode);
-            if (found && found.kode !== activeTipe?.kode) {
-                setActiveTipe(found);
+            if (found) {
+                if (found.kode !== activeTipe?.kode) {
+                    setActiveTipe(found);
+                }
+                return;
             }
         }
+
+        // If no tipe parameter in URL and activeTipe is not yet set, open the selection dialog
+        if (!activeTipe) {
+            setIsSelectTipeDialogOpen(true);
+        }
     }, [routeParams.kode, searchParams, tipes, activeTipe, setActiveTipe]);
+
+    const handleSelectTipe = (tipe: InfrastrukturTipe) => {
+        setActiveTipe(tipe);
+        setSearchParams((prev) => {
+            const next = new URLSearchParams(prev);
+            next.set("tipe", tipe.kode);
+            return next;
+        }, { replace: true });
+        setIsSelectTipeDialogOpen(false);
+    };
+
+    const [headerTipeOpen, setHeaderTipeOpen] = useState(false);
+    const [headerMobileTipeOpen, setHeaderMobileTipeOpen] = useState(false);
+    const [headerKecOpen, setHeaderKecOpen] = useState(false);
+    const [headerDesaOpen, setHeaderDesaOpen] = useState(false);
+    const [headerTahunOpen, setHeaderTahunOpen] = useState(false);
+    const [headerMobileRegionOpen, setHeaderMobileRegionOpen] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return window.innerWidth < 768; // Auto-open guidance drawer on mobile initial load
+        }
+        return false;
+    });
+    const [mobileDesaSearch, setMobileDesaSearch] = useState("");
 
     const [kecamatanList, setKecamatanList] = useState<{ id: string; nama_kecamatan: string }[]>([]);
     const [desaList, setDesaList] = useState<{ id: string; nama_desa: string }[]>([]);
@@ -317,7 +423,7 @@ export default function RoadRealizationInfrastrukturPage() {
                 const stored = localStorage.getItem('gigis_custom_vector_styles');
                 if (stored) return JSON.parse(stored);
             }
-        } catch (e) {}
+        } catch (e) { }
         return {
             jalan_desa_baik: { color: '#22c55e', width: 5, lineDash: 'solid' },
             jalan_desa_sedang: { color: '#f59e0b', width: 5, lineDash: 'solid' },
@@ -373,7 +479,7 @@ export default function RoadRealizationInfrastrukturPage() {
             localStorage.setItem('gigis_custom_vector_styles', JSON.stringify(defaults));
             window.dispatchEvent(new Event('MELAROSA-vector-styles-changed'));
             toast.success("Gaya peta berhasil dikembalikan ke standar");
-        } catch (e) {}
+        } catch (e) { }
     };
 
     useEffect(() => {
@@ -381,7 +487,7 @@ export default function RoadRealizationInfrastrukturPage() {
             try {
                 const stored = localStorage.getItem('gigis_custom_vector_styles');
                 if (stored) setCustomStyles(JSON.parse(stored));
-            } catch (e) {}
+            } catch (e) { }
             // Force redraw of layers
             if (boundaryLayerRef.current) boundaryLayerRef.current.changed();
             if (referenceLayerRef.current) referenceLayerRef.current.changed();
@@ -397,7 +503,7 @@ export default function RoadRealizationInfrastrukturPage() {
     const [isDarkMode, setIsDarkMode] = useState<boolean>(false);
     useEffect(() => { setIsDarkMode(resolvedTheme === "dark"); }, [resolvedTheme]);
 
-    const [mouseCoords, setMouseCoords] = useState<{ lng: number; lat: number } | null>(null);
+    const mouseCoordsRef = useRef<{ lng: number; lat: number }>({ lng: 0, lat: 0 });
     const [mapZoom, setMapZoom] = useState<number>(13);
     const [leftPanelTab, setLeftPanelTab] = useState<"layers" | "filters" | "tools" | null>("layers");
 
@@ -500,7 +606,7 @@ export default function RoadRealizationInfrastrukturPage() {
     const [isLoading, setIsLoading] = useState(false);
     const [editingSegmentId, setEditingSegmentId] = useState<string | null>(null);
     const [editingSegmentData, setEditingSegmentData] = useState<RealisasiSegmen | null>(null);
-    
+
     // Split Segmen State
     const [isSplitMode, setIsSplitMode] = useState<boolean>(false);
     const [splittingSegment, setSplittingSegment] = useState<RealisasiSegmen | null>(null);
@@ -513,6 +619,34 @@ export default function RoadRealizationInfrastrukturPage() {
     const splitClickListenerRef = useRef<((evt: any) => void) | null>(null);
 
     const [isAttributeDialogOpen, setIsAttributeDialogOpen] = useState(false);
+    const [dialogKec, setDialogKec] = useState<string>("");
+    const [dialogDesa, setDialogDesa] = useState<string>("");
+    const [dialogDesaList, setDialogDesaList] = useState<{ id: string; nama_desa: string }[]>([]);
+    const [isLoadingDialogDesa, setIsLoadingDialogDesa] = useState(false);
+
+    const handleDialogKecChange = async (newKecId: string) => {
+        setDialogKec(newKecId);
+        setDialogDesa("");
+        if (!newKecId) {
+            setDialogDesaList([]);
+            return;
+        }
+        setIsLoadingDialogDesa(true);
+        try {
+            const resp = await monitoringService.getDesa(newKecId);
+            if (resp.status === "success" && resp.result) {
+                setDialogDesaList(resp.result);
+            } else {
+                setDialogDesaList([]);
+            }
+        } catch (err) {
+            console.error("Gagal memuat desa untuk dialog:", err);
+            toast.error("Gagal memuat daftar desa");
+            setDialogDesaList([]);
+        } finally {
+            setIsLoadingDialogDesa(false);
+        }
+    };
     const [isPrintDialogOpen, setIsPrintDialogOpen] = useState(false);
     const [isHelpOpen, setIsHelpOpen] = useState(false);
     const [rencanaPanjangInput, setRencanaPanjangInput] = useState("");
@@ -528,6 +662,16 @@ export default function RoadRealizationInfrastrukturPage() {
     // deleteConfirmId managed by useDeleteFeature hook (see below)
     const [selectedTahunFilter, setSelectedTahunFilter] = useState<string>("Semua");
     const selectedTahunFilterRef = useRef<string>("Semua");
+
+    const uniqueYears = useMemo(() => {
+        const set = new Set<string>();
+        realisasiList.forEach(r => {
+            if (r.tahun_anggaran) set.add(r.tahun_anggaran.toString());
+        });
+        const currentYear = new Date().getFullYear().toString();
+        set.add(currentYear);
+        return Array.from(set).sort((a, b) => b.localeCompare(a));
+    }, [realisasiList]);
 
     // ── Year-Lock & Snapshot State (extracted to hook) ──────────────────────
     const {
@@ -668,9 +812,34 @@ export default function RoadRealizationInfrastrukturPage() {
                 if (targetStatusAset) {
                     setStatusAset(targetStatusAset);
                 }
+
+                // Inisialisasi Wilayah untuk Edit Segmen
+                const segKecId = editingSegmentData.id_kecamatan?.toString() || (editingSegmentData as any).kecamatan_id?.toString() || (kecamatanList.find(k => k.nama_kecamatan?.toLowerCase() === editingSegmentData.nama_kecamatan?.toLowerCase())?.id?.toString()) || selectedKec;
+                const segDesaId = editingSegmentData.id_desa?.toString() || (editingSegmentData as any).desa_id?.toString() || selectedDesa;
+                setDialogKec(segKecId || "");
+                setDialogDesa(segDesaId || "");
+                if (segKecId && segKecId !== selectedKec) {
+                    setIsLoadingDialogDesa(true);
+                    monitoringService.getDesa(segKecId).then(resp => {
+                        if (resp.status === "success" && resp.result) {
+                            setDialogDesaList(resp.result);
+                        } else {
+                            setDialogDesaList([]);
+                        }
+                    }).catch(() => setDialogDesaList([])).finally(() => setIsLoadingDialogDesa(false));
+                } else {
+                    setDialogDesaList(desaList);
+                }
+            } else {
+                // Inisialisasi Wilayah untuk Tambah Segmen Baru (Create)
+                const defKec = selectedKec || (user?.id_kecamatan ? String(user.id_kecamatan) : "");
+                const defDesa = selectedDesa || (user?.id_desa ? String(user.id_desa) : "");
+                setDialogKec(defKec);
+                setDialogDesa(defDesa);
+                setDialogDesaList(desaList);
             }
         }
-    }, [isAttributeDialogOpen, currentUserName, editingSegmentData]);
+    }, [isAttributeDialogOpen, currentUserName, editingSegmentData, selectedKec, selectedDesa, desaList, kecamatanList, user]);
 
     const extractPlottingId = (seg: any): string => {
         if (!seg) return "";
@@ -679,7 +848,7 @@ export default function RoadRealizationInfrastrukturPage() {
 
         let attr = seg.atribut;
         if (typeof attr === "string") {
-            try { attr = JSON.parse(attr); } catch (e) {}
+            try { attr = JSON.parse(attr); } catch (e) { }
         }
         if (attr) {
             let attrVal = attr.plotting_id ?? attr.id_plotting;
@@ -759,11 +928,111 @@ export default function RoadRealizationInfrastrukturPage() {
 
     // Map configuration states
     const [basemapsList, setBasemapsList] = useState<Basemap[]>([]);
-    const [activeBasemap, setActiveBasemap] = useState<string>("osm");
+    const [activeBasemap, setActiveBasemap] = useState<string>("google-sat");
     const [showOfficialOverlay, setShowOfficialOverlay] = useState(true);
     const [showRealisasiRefOverlay, setShowRealisasiRefOverlay] = useState(true);
     const [showExistingOverlay, setShowExistingOverlay] = useState(true);
-    const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+        if (typeof window !== "undefined") {
+            return window.innerWidth >= 768; // Open on desktop, closed on mobile by default
+        }
+        return true;
+    });
+    const [isBottomSegmentPanelOpen, setIsBottomSegmentPanelOpen] = useState(false);
+
+    // Responsive sidebar resizing state (Desktop horizontal width & Mobile vertical height)
+    const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+        if (typeof window !== "undefined") {
+            try {
+                const saved = localStorage.getItem("gigis_sidebar_width");
+                if (saved) {
+                    const parsed = parseInt(saved, 10);
+                    if (!isNaN(parsed) && parsed >= 280 && parsed <= 720) return parsed;
+                }
+            } catch (e) {
+                // Ignore localStorage error
+            }
+        }
+        return 384; // Default 384px (w-96)
+    });
+    const [isSidebarDragging, setIsSidebarDragging] = useState(false);
+    const sidebarContainerRef = useRef<HTMLDivElement | null>(null);
+    const [mobileSheetHeight, setMobileSheetHeight] = useState<number>(70); // 70vh default
+    const [isMobileSheetDragging, setIsMobileSheetDragging] = useState(false);
+    const [bottomPanelHeight, setBottomPanelHeight] = useState<number>(() => {
+        if (typeof window !== "undefined") {
+            return Math.min(360, Math.max(220, Math.round(window.innerHeight * 0.38)));
+        }
+        return 320;
+    });
+
+    // Desktop Horizontal Drag-to-Resize Listener
+    useEffect(() => {
+        if (!isSidebarDragging) return;
+
+        // Set global drag cursor and disable text selection
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const containerLeft = sidebarContainerRef.current
+                ? sidebarContainerRef.current.getBoundingClientRect().left
+                : 0;
+            const calculatedWidth = e.clientX - containerLeft;
+            const minWidth = 280;
+            const maxWidth = Math.min(window.innerWidth * 0.6, 750);
+            const newWidth = Math.max(minWidth, Math.min(maxWidth, calculatedWidth));
+            setSidebarWidth(newWidth);
+        };
+
+        const handleMouseUp = () => {
+            setIsSidebarDragging(false);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            try {
+                localStorage.setItem("gigis_sidebar_width", sidebarWidth.toString());
+            } catch (e) { }
+            if (mapRef.current) {
+                setTimeout(() => {
+                    mapRef.current?.updateSize();
+                }, 50);
+            }
+        };
+
+        window.addEventListener("mousemove", handleMouseMove);
+        window.addEventListener("mouseup", handleMouseUp);
+        return () => {
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+            window.removeEventListener("mousemove", handleMouseMove);
+            window.removeEventListener("mouseup", handleMouseUp);
+        };
+    }, [isSidebarDragging, sidebarWidth]);
+
+    // Mobile Vertical Drag-to-Resize Listener
+    useEffect(() => {
+        if (!isMobileSheetDragging) return;
+
+        const handleTouchMove = (e: TouchEvent) => {
+            if (!e.touches[0]) return;
+            const touchY = e.touches[0].clientY;
+            const windowHeight = window.innerHeight;
+            const newHeightVh = Math.max(30, Math.min(92, ((windowHeight - touchY) / windowHeight) * 100));
+            setMobileSheetHeight(Math.round(newHeightVh));
+        };
+
+        const handleTouchEnd = () => {
+            setIsMobileSheetDragging(false);
+        };
+
+        window.addEventListener("touchmove", handleTouchMove);
+        window.addEventListener("touchend", handleTouchEnd);
+        return () => {
+            window.removeEventListener("touchmove", handleTouchMove);
+            window.removeEventListener("touchend", handleTouchEnd);
+        };
+    }, [isMobileSheetDragging]);
+
     const [errorMsg, setErrorMsg] = useState("");
     const [geomHistory, setGeomHistory] = useState<number[][][]>([]);
     const [geomRedoStack, setGeomRedoStack] = useState<number[][][]>([]);
@@ -985,6 +1254,21 @@ export default function RoadRealizationInfrastrukturPage() {
         realisasiListRef.current = realisasiList;
     }, [realisasiList]);
 
+    const isBottomSegmentPanelOpenRef = useRef(isBottomSegmentPanelOpen);
+    useEffect(() => {
+        isBottomSegmentPanelOpenRef.current = isBottomSegmentPanelOpen;
+    }, [isBottomSegmentPanelOpen]);
+
+    const bottomPanelHeightRef = useRef(bottomPanelHeight);
+    useEffect(() => {
+        bottomPanelHeightRef.current = bottomPanelHeight;
+    }, [bottomPanelHeight]);
+
+    const isRightPanelOpenRef = useRef(isRightPanelOpen);
+    useEffect(() => {
+        isRightPanelOpenRef.current = isRightPanelOpen;
+    }, [isRightPanelOpen]);
+
     // Sync filter ref and trigger OpenLayers rerender when selectedTahunFilter changes
     useEffect(() => {
         selectedTahunFilterRef.current = selectedTahunFilter;
@@ -998,20 +1282,30 @@ export default function RoadRealizationInfrastrukturPage() {
         basemapService.getAll(true).then(data => {
             if (data && data.length > 0) {
                 setBasemapsList(data);
-                // Find matching OpenStreetMap basemap to set as default active
-                const osmExists = data.find(b => b.id === 'osm' || b.name.toLowerCase().includes('osm'));
-                if (osmExists) {
-                    setActiveBasemap(osmExists.id);
-                } else {
-                    setActiveBasemap(data[0].id);
+                // Find matching Google Earth / Google Satellite basemap to set as default active
+                const googleEarthExists = data.find(b =>
+                    b.id === 'google-sat' ||
+                    b.id === 'google-earth' ||
+                    b.id === 'google-satellite' ||
+                    b.id === 'google-hybrid' ||
+                    b.name.toLowerCase().includes('google earth') ||
+                    b.name.toLowerCase().includes('google satellite') ||
+                    b.name.toLowerCase().includes('satellite') ||
+                    b.name.toLowerCase().includes('satelit')
+                );
+                if (googleEarthExists) {
+                    setActiveBasemap(googleEarthExists.id);
                 }
             }
         }).catch(err => console.error("Basemap load error:", err));
     }, []);
 
-    // Sync map tile source when activeBasemap or theme changes
+    // Sync map tile source only when activeBasemap or theme actually changes
+    const lastAppliedBasemapKeyRef = useRef<string>("");
     useEffect(() => {
-        if (tileLayerRef.current && basemapsList.length > 0) {
+        const key = `${activeBasemap}_${isDark ? 'dark' : 'light'}`;
+        if (tileLayerRef.current && basemapsList.length > 0 && lastAppliedBasemapKeyRef.current !== key) {
+            lastAppliedBasemapKeyRef.current = key;
             tileLayerRef.current.setSource(
                 createBasemapSource(activeBasemap, basemapsList, isDark)
             );
@@ -1054,7 +1348,7 @@ export default function RoadRealizationInfrastrukturPage() {
             const next = prev.includes(entryId)
                 ? prev.filter((id) => id !== entryId)
                 : [...prev, entryId];
-            
+
             const selectedEntries = realisasiEntries.filter((e) => next.includes(e.id));
             updateRealisasiReferencesOnMap(selectedEntries);
             return next;
@@ -1075,8 +1369,8 @@ export default function RoadRealizationInfrastrukturPage() {
 
             // Create start & end marker features for all points
             titikList.forEach((pt) => {
-                const label = pt.tipe === "start" 
-                    ? `Mulai #${pt.urutan}` 
+                const label = pt.tipe === "start"
+                    ? `Mulai #${pt.urutan}`
                     : `Akhir #${pt.urutan}`;
                 const feat = new Feature({
                     geometry: new Point(fromLonLat([pt.longitude, pt.latitude])),
@@ -1249,10 +1543,14 @@ export default function RoadRealizationInfrastrukturPage() {
     const boundaryLayerRef = useRef<VectorLayer | null>(null);
     const tileLayerRef = useRef<TileLayer<any> | null>(null);
 
+    const lastHoveredSegmentIdRef = useRef<string | null>(null);
     useEffect(() => {
-        hoveredSegmentIdRef.current = hoveredSegmentId;
-        if (existingLayerRef.current) {
-            existingLayerRef.current.changed();
+        if (lastHoveredSegmentIdRef.current !== hoveredSegmentId) {
+            lastHoveredSegmentIdRef.current = hoveredSegmentId;
+            hoveredSegmentIdRef.current = hoveredSegmentId;
+            if (existingLayerRef.current) {
+                existingLayerRef.current.changed();
+            }
         }
     }, [hoveredSegmentId]);
 
@@ -1302,7 +1600,7 @@ export default function RoadRealizationInfrastrukturPage() {
     const searchMarkerSourceRef = useRef<VectorSource | null>(null);
     const searchMarkerLayerRef = useRef<VectorLayer | null>(null);
     const staSourceRef = useRef<VectorSource | null>(null);
-    const staLayerRef  = useRef<VectorLayer | null>(null);
+    const staLayerRef = useRef<VectorLayer | null>(null);
 
     // Auto-trace state refs for OpenLayers click handler closure resolution
     const startCoordRef = useRef<number[] | null>(null);
@@ -1440,24 +1738,29 @@ export default function RoadRealizationInfrastrukturPage() {
     }, []);
 
     // Fetch and load GeoJSON features for reference and existing segments
-    const loadDesaData = async (desaId: string, currentTipeKode?: string | null, options?: { skipFitBounds?: boolean }) => {
+    const loadDesaData = async (desaId: string, currentTipeKode?: string | null, options?: { skipFitBounds?: boolean; silent?: boolean }) => {
         const tipeToFetch = currentTipeKode !== undefined ? currentTipeKode : activeTipe?.kode;
         if (!desaId) return;
-        setIsLoading(true);
-        try {
-            // Clear current map layers
-            refSourceRef.current?.clear();
-            existingSourceRef.current?.clear();
-            drawSourceRef.current?.clear();
-            markerSourceRef.current?.clear();
-            boundarySourceRef.current?.clear();
-            setStartCoord(null);
-            setEndCoord(null);
-            setDrawnLength(0);
-            setCoordsCount(0);
-            setDrawnCoords([]);
-            setSnappedRoad(null);
+        const isSilent = Boolean(options?.silent);
+        if (!isSilent) {
+            setIsLoading(true);
             setRealisasiList([]);
+        }
+        try {
+            if (!isSilent) {
+                // Clear current map layers only when NOT silent
+                refSourceRef.current?.clear();
+                existingSourceRef.current?.clear();
+                drawSourceRef.current?.clear();
+                markerSourceRef.current?.clear();
+                boundarySourceRef.current?.clear();
+                setStartCoord(null);
+                setEndCoord(null);
+                setDrawnLength(0);
+                setCoordsCount(0);
+                setDrawnCoords([]);
+                setSnappedRoad(null);
+            }
 
             // Load and render village boundary
             const boundaryResp = await monitoringService.getDesaById(desaId);
@@ -1468,6 +1771,9 @@ export default function RoadRealizationInfrastrukturPage() {
                     dataProjection: "EPSG:4326",
                     featureProjection: "EPSG:3857"
                 });
+                if (isSilent) {
+                    boundarySourceRef.current?.clear();
+                }
                 boundarySourceRef.current?.addFeatures(boundaryFeatures);
             }
 
@@ -1480,6 +1786,9 @@ export default function RoadRealizationInfrastrukturPage() {
                         dataProjection: "EPSG:4326",
                         featureProjection: "EPSG:3857"
                     });
+                    if (isSilent) {
+                        refSourceRef.current?.clear();
+                    }
                     refSourceRef.current?.addFeatures(features);
                 }
 
@@ -1496,6 +1805,15 @@ export default function RoadRealizationInfrastrukturPage() {
                         dataProjection: "EPSG:4326",
                         featureProjection: "EPSG:3857"
                     });
+                    segFeatures.forEach(f => {
+                        if (!f.get('tipe_kode')) {
+                            f.set('tipe_kode', tipeToFetch);
+                        }
+                        if (!f.get('tahun_pembangunan')) {
+                            const resolvedThn = f.get('tahun_anggaran') || f.get('tahun') || f.get('thn_anggaran') || f.get('atribut')?.tahun_anggaran || 2025;
+                            f.set('tahun_pembangunan', resolvedThn);
+                        }
+                    });
                     combinedFeatures.push(...segFeatures);
                 }
 
@@ -1504,9 +1822,19 @@ export default function RoadRealizationInfrastrukturPage() {
                         dataProjection: "EPSG:4326",
                         featureProjection: "EPSG:3857"
                     });
+                    areaFeatures.forEach(f => {
+                        if (!f.get('tipe_kode')) {
+                            f.set('tipe_kode', tipeToFetch);
+                        }
+                        if (!f.get('tahun_pembangunan')) {
+                            const resolvedThn = f.get('tahun_anggaran') || f.get('tahun') || f.get('thn_anggaran') || f.get('atribut')?.tahun_anggaran || 2025;
+                            f.set('tahun_pembangunan', resolvedThn);
+                        }
+                    });
                     combinedFeatures.push(...areaFeatures);
                 }
 
+                existingSourceRef.current?.clear();
                 if (combinedFeatures.length > 0) {
                     existingSourceRef.current?.addFeatures(combinedFeatures);
 
@@ -1539,8 +1867,10 @@ export default function RoadRealizationInfrastrukturPage() {
                             id: props.id?.toString() || feat.getId()?.toString() || Math.random().toString(),
                             namobj: resolvedObjName,
                             nama_jalan: resolvedObjName,
-                            id_desa: desaId,
-                            nama_desa: props.desa || "",
+                            id_desa: props.id_desa?.toString() || props.desa_id?.toString() || desaId,
+                            nama_desa: props.desa || props.nama_desa || "",
+                            id_kecamatan: props.id_kecamatan?.toString() || props.kecamatan_id?.toString() || selectedKec,
+                            nama_kecamatan: props.kecamatan || props.nama_kecamatan || "",
                             status_parent: isStatusParent,
                             check_melarosa: isStatusParent,
                             panjang_m: props.panjang || len,
@@ -1549,8 +1879,9 @@ export default function RoadRealizationInfrastrukturPage() {
                             kondisi: props.kondisi || "baik",
                             tahun_anggaran: props.tahun_pembangunan || 2025,
                             coordinates_count: coordCount,
-                            snapped_road_id: props.kode_ruas?.toString() || props.parent_id?.toString(),
-                            parent_id: props.parent_id?.toString() || props.kode_ruas?.toString(),
+                            kode_ruas: (props.kode_ruas != null && !isUUID(String(props.kode_ruas)) && String(props.kode_ruas) !== "0") ? String(props.kode_ruas) : (isUUID(String(props.parent_id)) ? "" : String(props.parent_id || "0")),
+                            snapped_road_id: props.parent_id?.toString() || props.kode_ruas?.toString() || "",
+                            parent_id: props.parent_id?.toString() || null,
                             status_verifikasi: props.status_verifikasi || props.atribut?.status_verifikasi || "verifikasi_kecamatan",
                             status_jalan: props.status_jalan || props.atribut?.status_jalan || "",
                             sumber_data: resolvedSumberData,
@@ -1821,7 +2152,7 @@ export default function RoadRealizationInfrastrukturPage() {
         const refSource = new VectorSource();
         refSourceRef.current = refSource;
 
-                const referenceStyle = (feature: Feature) => {
+        const referenceStyle = (feature: Feature) => {
             const id = feature.get("kode_ruas")?.toString() || feature.get("id")?.toString();
             const isSnapped = snappedRoad?.id === id;
             const isHovered = hoveredRoadRef.current?.id === id;
@@ -1834,27 +2165,27 @@ export default function RoadRealizationInfrastrukturPage() {
             const strokeColor = isSnapped
                 ? "rgba(16, 185, 129, 0.9)"
                 : isHovered
-                ? "rgba(245, 158, 11, 0.85)"
-                : custom.color;
+                    ? "rgba(245, 158, 11, 0.85)"
+                    : custom.color;
             const strokeWidth = isSnapped || isHovered ? Math.max(7, custom.width + 2) : custom.width;
 
             const textColor = isSnapped
                 ? "#047857"
                 : isHovered
-                ? "#b45309"
-                : "#c2410c";
+                    ? "#b45309"
+                    : "#c2410c";
 
             const bgFill = isSnapped
                 ? "rgba(236, 253, 245, 0.95)"
                 : isHovered
-                ? "rgba(254, 243, 199, 0.95)"
-                : "rgba(255, 255, 255, 0.92)";
+                    ? "rgba(254, 243, 199, 0.95)"
+                    : "rgba(255, 255, 255, 0.92)";
 
             const bgBorder = isSnapped
                 ? "#10b981"
                 : isHovered
-                ? "#f59e0b"
-                : "#ea580c";
+                    ? "#f59e0b"
+                    : "#ea580c";
 
             return [
                 // Base line geometry stroke
@@ -1901,8 +2232,19 @@ export default function RoadRealizationInfrastrukturPage() {
             source: existingSource,
             zIndex: 110,
             style: (feature) => {
-                const featureTahun = feature.get("tahun_pembangunan") || feature.get("tahun_anggaran") || feature.get("tahun");
-                if (selectedTahunFilterRef.current !== "Semua" && featureTahun?.toString() !== selectedTahunFilterRef.current) {
+                const featureTahun =
+                    feature.get("tahun_pembangunan") ||
+                    feature.get("tahun_anggaran") ||
+                    feature.get("tahun") ||
+                    feature.get("thn_anggaran") ||
+                    feature.get("atribut")?.tahun_anggaran ||
+                    feature.get("atribut")?.tahun_pembangunan;
+
+                if (
+                    selectedTahunFilterRef.current !== "Semua" &&
+                    featureTahun &&
+                    featureTahun.toString() !== selectedTahunFilterRef.current
+                ) {
                     return [];
                 }
                 const checkMelarosa = feature.get("check_melarosa");
@@ -1915,51 +2257,109 @@ export default function RoadRealizationInfrastrukturPage() {
                     editingSegmentIdRef.current &&
                     (editingSegmentIdRef.current === fId || editingSegmentIdRef.current === cleanId);
 
-                const statusJalan = feature.get("status_jalan") || "Jalan Desa";
+                let symbologyMode = 'kondisi';
+                try {
+                    if (typeof window !== 'undefined') {
+                        symbologyMode = localStorage.getItem('gigis_symbology_mode') || 'kondisi';
+                    }
+                } catch (e) { }
 
                 let styleKey = 'jalan_desa_baik';
                 let defaultColor = '#22c55e';
                 let defaultWidth = 5;
                 let defaultLineDash: number[] | undefined = undefined;
 
-                if (statusJalan === 'Jalan Desa') {
-                    if (checkMelarosa === 'Tidak' || checkMelarosa === false) {
-                        // Tipe Lingkungan
-                        if (kondisi === 'baik') {
-                            styleKey = 'jalan_lingkungan_baik';
-                            defaultColor = '#22c55e';
-                        } else if (kondisi === 'sedang') {
-                            styleKey = 'jalan_lingkungan_sedang';
-                            defaultColor = '#f59e0b';
-                        } else {
-                            styleKey = 'jalan_lingkungan_rusak';
-                            defaultColor = '#ef4444';
-                        }
-                        defaultLineDash = [6, 6];
+                if (symbologyMode === 'status_verifikasi') {
+                    const rawStatus = (feature.get("status_verifikasi") || feature.get("status") || feature.get("status_kondisi") || '').toString().toLowerCase();
+                    const verifikator = feature.get("verifikator");
+                    if (rawStatus.includes('setuju') || rawStatus.includes('approved') || rawStatus.includes('terverifikasi') || Boolean(verifikator)) {
+                        styleKey = 'verif_approved';
+                        defaultColor = '#10b981';
+                    } else if (rawStatus.includes('ajuk') || rawStatus.includes('submit') || rawStatus.includes('proses') || rawStatus.includes('evaluasi')) {
+                        styleKey = 'verif_submitted';
+                        defaultColor = '#3b82f6';
+                    } else if (rawStatus.includes('revisi') || rawStatus.includes('tolak') || rawStatus.includes('catatan')) {
+                        styleKey = 'verif_revision';
+                        defaultColor = '#f43f5e';
                     } else {
-                        // Tipe Poros
-                        if (kondisi === 'baik') {
-                            styleKey = 'jalan_desa_baik';
-                            defaultColor = '#22c55e';
-                        } else if (kondisi === 'sedang') {
-                            styleKey = 'jalan_desa_sedang';
-                            defaultColor = '#f59e0b';
-                        } else {
-                            styleKey = 'jalan_desa_rusak';
-                            defaultColor = '#ef4444';
-                        }
+                        styleKey = 'verif_draft';
+                        defaultColor = '#94a3b8';
+                        defaultLineDash = [6, 6];
                     }
-                } else if (statusJalan === 'Jalan Kabupaten') {
-                    if (kondisi === 'baik') {
-                        styleKey = 'jalan_kabupaten_baik';
-                        defaultColor = '#2563eb';
-                    } else if (kondisi === 'sedang') {
-                        styleKey = 'jalan_kabupaten_sedang';
-                        defaultColor = '#60a5fa';
+                } else if (symbologyMode === 'jenis_perkerasan') {
+                    const rawPerkerasan = (feature.get("perkerasan") || feature.get("jenis_perkerasan") || feature.get("tipe_perkerasan") || '').toString().toLowerCase();
+                    if (rawPerkerasan.includes('aspal') || rawPerkerasan.includes('hotmix') || rawPerkerasan.includes('lapen')) {
+                        styleKey = 'perkerasan_aspal';
+                        defaultColor = '#0f172a';
+                    } else if (rawPerkerasan.includes('beton') || rawPerkerasan.includes('rigid') || rawPerkerasan.includes('cor')) {
+                        styleKey = 'perkerasan_beton';
+                        defaultColor = '#0284c7';
+                    } else if (rawPerkerasan.includes('paving') || rawPerkerasan.includes('conblock')) {
+                        styleKey = 'perkerasan_paving';
+                        defaultColor = '#d97706';
                     } else {
-                        styleKey = 'jalan_kabupaten_rusak';
-                        defaultColor = '#60a5fa';
+                        styleKey = 'perkerasan_tanah';
+                        defaultColor = '#854d0e';
                         defaultLineDash = [6, 6];
+                    }
+                } else if (symbologyMode === 'status_jalan') {
+                    const statusJalan = feature.get("status_jalan") || "Jalan Desa";
+                    if (statusJalan === 'Jalan Kabupaten') {
+                        styleKey = 'hirarki_kabupaten';
+                        defaultColor = '#9333ea';
+                        defaultWidth = 6;
+                    } else if (checkMelarosa === 'Tidak' || checkMelarosa === false) {
+                        styleKey = 'hirarki_lingkungan';
+                        defaultColor = '#06b6d4';
+                        defaultWidth = 4;
+                    } else {
+                        styleKey = 'hirarki_poros';
+                        defaultColor = '#4f46e5';
+                        defaultWidth = 6;
+                    }
+                } else {
+                    // Default Mode: 'kondisi'
+                    const statusJalan = feature.get("status_jalan") || "Jalan Desa";
+
+                    if (statusJalan === 'Jalan Desa') {
+                        if (checkMelarosa === 'Tidak' || checkMelarosa === false) {
+                            // Tipe Lingkungan
+                            if (kondisi === 'baik') {
+                                styleKey = 'jalan_lingkungan_baik';
+                                defaultColor = '#22c55e';
+                            } else if (kondisi === 'sedang') {
+                                styleKey = 'jalan_lingkungan_sedang';
+                                defaultColor = '#f59e0b';
+                            } else {
+                                styleKey = 'jalan_lingkungan_rusak';
+                                defaultColor = '#ef4444';
+                            }
+                            defaultLineDash = [6, 6];
+                        } else {
+                            // Tipe Poros
+                            if (kondisi === 'baik') {
+                                styleKey = 'jalan_desa_baik';
+                                defaultColor = '#22c55e';
+                            } else if (kondisi === 'sedang') {
+                                styleKey = 'jalan_desa_sedang';
+                                defaultColor = '#f59e0b';
+                            } else {
+                                styleKey = 'jalan_desa_rusak';
+                                defaultColor = '#ef4444';
+                            }
+                        }
+                    } else if (statusJalan === 'Jalan Kabupaten') {
+                        if (kondisi === 'baik') {
+                            styleKey = 'jalan_kabupaten_baik';
+                            defaultColor = '#2563eb';
+                        } else if (kondisi === 'sedang') {
+                            styleKey = 'jalan_kabupaten_sedang';
+                            defaultColor = '#60a5fa';
+                        } else {
+                            styleKey = 'jalan_kabupaten_rusak';
+                            defaultColor = '#60a5fa';
+                            defaultLineDash = [6, 6];
+                        }
                     }
                 }
 
@@ -1969,6 +2369,10 @@ export default function RoadRealizationInfrastrukturPage() {
                     (editingSegmentIdRef.current.toString() === fId || editingSegmentIdRef.current.toString() === cleanId);
 
                 const custom = getStoredStyle(styleKey, { color: defaultColor, width: defaultWidth, lineDash: defaultLineDash });
+                if (custom.visible === false) {
+                    return []; // Layer category isolated/hidden by user
+                }
+
                 const finalColor = isActiveInDialog ? "#eab308" : (isHovered ? "#3b82f6" : custom.color);
                 const finalWidth = isHovered ? custom.width + 3.5 : custom.width;
                 const finalLineDash = isNonBase ? (custom.lineDash || [6, 6]) : custom.lineDash;
@@ -2631,7 +3035,7 @@ export default function RoadRealizationInfrastrukturPage() {
         map.on("pointermove", (evt) => {
             if (evt.coordinate) {
                 const lonLat = toLonLat(evt.coordinate);
-                setMouseCoords({ lng: lonLat[0], lat: lonLat[1] });
+                mouseCoordsRef.current = { lng: lonLat[0], lat: lonLat[1] };
             }
             if (evt.dragging) return;
 
@@ -2811,7 +3215,7 @@ export default function RoadRealizationInfrastrukturPage() {
         if (activeTipe) {
             const geomUp = activeTipe.geom_type?.toUpperCase() || '';
             const isPolygon = geomUp === 'POLYGON' || geomUp === 'MULTIPOLYGON';
-            const isPoint   = geomUp === 'POINT'   || geomUp === 'MULTIPOINT';
+            const isPoint = geomUp === 'POINT' || geomUp === 'MULTIPOINT';
 
             if (isPolygon || isPoint) {
                 // Polygon / Point: selalu freehand manual, tidak ada master snapping
@@ -2931,15 +3335,18 @@ export default function RoadRealizationInfrastrukturPage() {
                     if (baseFeature) {
                         const bProps = baseFeature.getProperties();
                         const roadName = bProps.nama_ruas || bProps.NM_RUAS || bProps.NAME || 'Nama tidak tersedia';
+                        const masterDbId = bProps.id ? String(bProps.id) : returnedKodeRuas.toString();
                         setSnappedRoad({
-                            id: returnedKodeRuas.toString(),
-                            nama: roadName
+                            id: masterDbId,
+                            nama: roadName,
+                            kode_ruas: returnedKodeRuas.toString()
                         });
                         setCheckMelarosa(true);
                     } else {
                         setSnappedRoad({
                             id: returnedKodeRuas.toString(),
-                            nama: `Ruas Poros Desa (${returnedKodeRuas})`
+                            nama: `Ruas Poros Desa (${returnedKodeRuas})`,
+                            kode_ruas: returnedKodeRuas.toString()
                         });
                         setCheckMelarosa(true);
                     }
@@ -3348,11 +3755,12 @@ export default function RoadRealizationInfrastrukturPage() {
                 if (dist < minDistance) {
                     minDistance = dist;
                     const masterDbId = feat.get("id") || feat.get("ID") || feat.getId();
-                    const kodeRuasVal = feat.get("kode_ruas") || feat.get("KODE_RUAS") || feat.get("kode") || feat.get("KODE") || masterDbId;
+                    const rawKode = feat.get("kode_ruas") ?? feat.get("KODE_RUAS") ?? feat.get("kode") ?? feat.get("KODE");
+                    const kodeRuasVal = (rawKode != null && !isUUID(String(rawKode))) ? String(rawKode) : "";
                     const name = feat.get("nama_ruas") || feat.get("nama") || feat.get("NM_RUAS") || feat.get("NAME") || feat.get("nama_jalan") || feat.get("namobj") || feat.get("label") || "Ruas Master";
                     closestRoad = {
-                        id: masterDbId != null && masterDbId !== "" ? String(masterDbId) : (kodeRuasVal ? String(kodeRuasVal) : ""),
-                        kode_ruas: kodeRuasVal ? String(kodeRuasVal) : "",
+                        id: masterDbId != null && masterDbId !== "" ? String(masterDbId) : "",
+                        kode_ruas: kodeRuasVal,
                         nama: name || "Master Infrastruktur"
                     };
                 }
@@ -3375,19 +3783,17 @@ export default function RoadRealizationInfrastrukturPage() {
     const [isBatchRelinking, setIsBatchRelinking] = useState(false);
 
     // Interactive Single Relink: Manual trigger to check & snap active segment to nearest master
-    const handleInteractiveRelinkToMaster = () => {
-        if (!refSourceRef.current) {
-            toast.warning("Layer master rujukan belum dimuat.");
+    const handleInteractiveRelinkToMaster = async () => {
+        if (!activeTipe?.kode) {
+            toast.warning("Tipe infrastruktur belum dipilih.");
             return;
         }
 
-        let coords: number[][] = [];
+        let geomObj: any = null;
         if (isFormOpen && drawSourceRef.current) {
             const features = drawSourceRef.current.getFeatures();
             if (features.length > 0) {
-                const g = features[0].getGeometry();
-                if (g instanceof LineString) coords = g.getCoordinates();
-                else if (g instanceof MultiLineString) coords = g.getLineStrings().flatMap(ls => ls.getCoordinates());
+                geomObj = features[0].getGeometry();
             }
         } else if (editingSegmentId) {
             const targetId = editingSegmentId.toString();
@@ -3397,19 +3803,15 @@ export default function RoadRealizationInfrastrukturPage() {
                 return fId === targetId || fId === `jalan_segmen.${targetId}` || featId === targetId || featId === `jalan_segmen.${targetId}`;
             });
             if (feat && feat.getGeometry()) {
-                const g = feat.getGeometry();
-                if (g instanceof LineString) coords = g.getCoordinates();
-                else if (g instanceof MultiLineString) coords = g.getLineStrings().flatMap(ls => ls.getCoordinates());
+                geomObj = feat.getGeometry();
             } else if (editingSegmentData?.geom) {
                 try {
                     const parsedGeom = typeof editingSegmentData.geom === 'string' ? JSON.parse(editingSegmentData.geom) : editingSegmentData.geom;
                     if (parsedGeom) {
-                        const geomObj = geojsonFormat.readGeometry(parsedGeom, {
+                        geomObj = geojsonFormat.readGeometry(parsedGeom, {
                             dataProjection: "EPSG:4326",
                             featureProjection: "EPSG:3857"
                         });
-                        if (geomObj instanceof LineString) coords = geomObj.getCoordinates();
-                        else if (geomObj instanceof MultiLineString) coords = geomObj.getLineStrings().flatMap(ls => ls.getCoordinates());
                     }
                 } catch (e) {
                     console.error("Geom parse error in relink:", e);
@@ -3417,67 +3819,53 @@ export default function RoadRealizationInfrastrukturPage() {
             }
         }
 
-        if (coords.length < 2) {
+        if (!geomObj) {
             toast.warning("Geometri segmen tidak ditemukan untuk penambatan spasial.");
             return;
         }
 
-        const candidateMap = new Map<string, { id: string; nama: string; kode_ruas?: string; dist: number }>();
-        const maxDistanceThreshold = 75; // 75 meters threshold in EPSG:3857
-
-        const refFeatures = refSourceRef.current.getFeatures();
-        for (const pt of coords) {
-            for (const feat of refFeatures) {
-                const featureGeom = feat.getGeometry();
-                if (!featureGeom || typeof (featureGeom as any).getClosestPoint !== 'function') continue;
-                const closestPt = (featureGeom as any).getClosestPoint(pt);
-
-                if (!closestPt || closestPt.length < 2) continue;
-                const dist = Math.sqrt(Math.pow(pt[0] - closestPt[0], 2) + Math.pow(pt[1] - closestPt[1], 2));
-                if (dist < maxDistanceThreshold) {
-                    const masterDbId = feat.get("id") || feat.get("ID") || feat.getId();
-                    const kodeRuasVal = feat.get("kode_ruas") ||
-                                     feat.get("KODE_RUAS") ||
-                                     feat.get("id_ruas") ||
-                                     feat.get("ruas_id") ||
-                                     feat.get("kode") ||
-                                     feat.get("KODE") ||
-                                     masterDbId;
-
-                    const resolvedParentId = masterDbId != null && masterDbId !== "" ? String(masterDbId) : (kodeRuasVal ? String(kodeRuasVal) : "");
-                    const resolvedKodeRuas = kodeRuasVal != null && kodeRuasVal !== "" ? String(kodeRuasVal) : resolvedParentId;
-                    const name = feat.get("nama_ruas") || feat.get("nama") || feat.get("NM_RUAS") || feat.get("NAME") || feat.get("nama_jalan") || feat.get("namobj") || feat.get("label") || "Ruas Master";
-
-                    if (resolvedParentId) {
-                        const existing = candidateMap.get(resolvedParentId);
-                        if (!existing || dist < existing.dist) {
-                            candidateMap.set(resolvedParentId, {
-                                id: resolvedParentId,
-                                kode_ruas: resolvedKodeRuas,
-                                nama: name || "Master Infrastruktur",
-                                dist: Math.round(dist)
-                            });
-                        }
-                    }
-                }
-            }
+        // Convert the EPSG:3857 geometry back to GeoJSON Feature (EPSG:4326) to send to backend
+        let geojsonFeatureStr = "";
+        try {
+            // @ts-ignore
+            geojsonFeatureStr = geojsonFormat.writeFeature(
+                new Feature(geomObj),
+                { dataProjection: "EPSG:4326", featureProjection: "EPSG:3857" }
+            );
+        } catch (e) {
+            console.error("Error writing GeoJSON feature:", e);
+            toast.warning("Gagal memformat geometri.");
+            return;
         }
+        
+        const geojsonFeature = JSON.parse(geojsonFeatureStr);
 
-        const candidatesList = Array.from(candidateMap.values()).sort((a, b) => a.dist - b.dist);
-        setSnappedCandidates(candidatesList);
+        try {
+            toast.info("Mendeteksi ruas master dominan...");
+            const res = await monitoringService.detectDominantParent(activeTipe.kode, geojsonFeature);
+            
+            if (res && res.status === 'success' && res.result) {
+                const dominant = res.result;
+                const closestRoad = {
+                    id: dominant.id?.toString() || dominant.kode_ruas?.toString(),
+                    kode_ruas: dominant.kode_ruas?.toString(),
+                    nama: dominant.nama || "Master Infrastruktur",
+                    dist: 0 // Jarak tidak relevan lagi, berbasis intersection length
+                };
 
-        if (candidatesList.length > 0) {
-            const closestRoad = candidatesList[0];
-            setSnappedRoad(closestRoad);
-            setCheckMelarosa(true);
-            if (candidatesList.length > 1) {
-                toast.success(`Terhubung ke Master: ${closestRoad.nama}. Ditemukan ${candidatesList.length} alternatif persimpangan!`);
+                setSnappedCandidates([closestRoad]);
+                setSnappedRoad(closestRoad);
+                setCheckMelarosa(true);
+                toast.success(`Berhasil terhubung ke Master ${activeTipe.nama}: ${closestRoad.nama}`);
             } else {
-                toast.success(`Berhasil terhubung ke Master ${activeTipe?.nama || 'Infrastruktur'}: ${closestRoad.nama} (Kode: ${closestRoad.kode_ruas || closestRoad.id})`);
+                setSnappedCandidates([]);
+                setSnappedRoad(null);
+                setCheckMelarosa(false);
+                toast.warning(res?.message || `Tidak ditemukan master ${activeTipe.nama} terdekat yang saling beririsan.`);
             }
-        } else {
-            setSnappedCandidates([]);
-            toast.warning(`Tidak ditemukan master ${activeTipe?.nama || 'infrastruktur'} terdekat (jarak > 75m). Segmen tetap sebagai Non-Master.`);
+        } catch (error) {
+            console.error("Error detectDominantParent:", error);
+            toast.error("Gagal mendeteksi parent dominan. Terjadi kesalahan pada server.");
         }
     };
 
@@ -3503,7 +3891,7 @@ export default function RoadRealizationInfrastrukturPage() {
                 const count = backendRes.relinked_count || backendRes.summary?.relinked_count || 0;
                 setIsBatchRelinking(false);
                 toast.success(`Sinkronisasi spasial server (PostGIS) berhasil! ${count} segmen terhubung ke data master baru.`, { id: toastId });
-                loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+                loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
                 return;
             }
         } catch (err) {
@@ -3592,7 +3980,7 @@ export default function RoadRealizationInfrastrukturPage() {
         setIsBatchRelinking(false);
         if (matchedCount > 0) {
             toast.success(`Berhasil menyinkronkan ${matchedCount} segmen non-master ke data master baru!`, { id: toastId });
-            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
         } else {
             toast.info("Tidak ada segmen non-master baru yang menyentuh jangkauan data master.", { id: toastId });
         }
@@ -3630,6 +4018,10 @@ export default function RoadRealizationInfrastrukturPage() {
 
     // Activate Draw Interaction
     const startDraw = () => {
+        if (!canDigitize(user)) {
+            toast.warning("Akun Operator OPD berstatus Read-Only dan tidak diizinkan mendigitasi peta.");
+            return;
+        }
         if (isSplitMode) {
             toast.warning("Batalkan mode Split terlebih dahulu.");
             return;
@@ -4314,7 +4706,7 @@ export default function RoadRealizationInfrastrukturPage() {
         modifyDrawInteractionRef.current = modify;
     };
 
-    const handleGenerateDimensionAreaRef = useRef<(panjangM: number, lebarM: number, customCenter?: number[]) => void>(() => {});
+    const handleGenerateDimensionAreaRef = useRef<(panjangM: number, lebarM: number, customCenter?: number[]) => void>(() => { });
 
     const handleGenerateDimensionArea = (panjangM: number, lebarM: number, customCenter?: number[]) => {
         if (!mapRef.current) return;
@@ -4688,6 +5080,10 @@ export default function RoadRealizationInfrastrukturPage() {
         setStatusKondisi("Eksisting");
         setTahun("2026");
         setEditingSegmentId(null);
+        setEditingSegmentData(null);
+        setDialogKec("");
+        setDialogDesa("");
+        setDialogDesaList([]);
         setStatusJalan("");
         setSumberData("Survey Desa");
         setSumberDana("");
@@ -4702,31 +5098,73 @@ export default function RoadRealizationInfrastrukturPage() {
     const [selectedPlottingId, setSelectedPlottingId] = useState<string>("none");
     const [plottingOptionsList, setPlottingOptionsList] = useState<any[]>([]);
 
-    // Zoom map view to show a specific segment feature
-    const zoomToSegment = (segmentId: string) => {
-        if (!mapRef.current || !existingSourceRef.current) return;
+    // Zoom map view to show a specific segment feature centered in visible viewport
+    const zoomToSegment = (segmentTarget: string | any) => {
+        if (!mapRef.current) return;
 
-        const features = existingSourceRef.current.getFeatures();
-        const feat = features.find(f => {
-            const fId = f.get("id")?.toString();
-            return fId === segmentId || fId === `jalan_segmen.${segmentId}` || f.getId()?.toString() === segmentId || f.getId()?.toString() === `jalan_segmen.${segmentId}`;
-        });
+        const segmentId = (typeof segmentTarget === 'object' && segmentTarget !== null)
+            ? (segmentTarget.id || segmentTarget.properties?.id)?.toString()
+            : segmentTarget?.toString();
 
-        if (feat) {
-            const geom = feat.getGeometry();
-            if (geom) {
-                const extent = geom.getExtent();
-                mapRef.current.getView().fit(extent, {
-                    padding: [50, 50, 50, 50],
-                    duration: 1000,
-                    maxZoom: 18
-                });
-                toast.info(`Zoom ke segmen jalan: ${feat.get("nama_jalan") || "Segmen"}`);
+        if (!segmentId) return;
+
+        let targetGeom: any = null;
+
+        if (existingSourceRef.current) {
+            const features = existingSourceRef.current.getFeatures();
+            const feat = features.find(f => {
+                const fId = f.get("id")?.toString();
+                return fId === segmentId || fId === `jalan_segmen.${segmentId}` || f.getId()?.toString() === segmentId || f.getId()?.toString() === `jalan_segmen.${segmentId}`;
+            });
+            if (feat) {
+                targetGeom = feat.getGeometry();
             }
-        } else {
-            toast.error("Segmen tidak ditemukan di peta");
+        }
+
+        if (!targetGeom && realisasiListRef.current) {
+            const seg = realisasiListRef.current.find(s => s.id?.toString() === segmentId?.toString());
+            if (seg?.geom) {
+                try {
+                    const parsedFeature = geojsonFormat.readFeature(
+                        typeof seg.geom === 'string' ? JSON.parse(seg.geom) : seg.geom,
+                        { featureProjection: 'EPSG:3857', dataProjection: 'EPSG:4326' }
+                    );
+                    if (parsedFeature) {
+                        targetGeom = Array.isArray(parsedFeature)
+                            ? parsedFeature[0]?.getGeometry()
+                            : parsedFeature.getGeometry();
+                    }
+                } catch (e) {
+                    // Ignore parse error
+                }
+            }
+        }
+
+        if (targetGeom) {
+            const extent = targetGeom.getExtent();
+            // Calculate dynamic padding so the segment is positioned centrally in the visible map region above BottomSegmentPanel
+            const isBottomOpen = isBottomSegmentPanelOpenRef.current;
+            const bHeight = bottomPanelHeightRef.current || 320;
+            const bottomPad = isBottomOpen ? (bHeight + 40) : 60;
+            const rightPad = isRightPanelOpenRef.current ? 420 : 60;
+            const topPad = 60;
+            const leftPad = 60;
+
+            mapRef.current.getView().fit(extent, {
+                padding: [topPad, rightPad, bottomPad, leftPad],
+                duration: 800,
+                maxZoom: 18
+            });
         }
     };
+
+    // Attach zoomToSegment to window for external sub-panels
+    useEffect(() => {
+        (window as any).zoomToSegment = zoomToSegment;
+        return () => {
+            delete (window as any).zoomToSegment;
+        };
+    }, []);
 
     // Zoom map view to fit all segments visible under a specific year filter
     const zoomToYearSegments = (targetTahun: string) => {
@@ -4749,8 +5187,12 @@ export default function RoadRealizationInfrastrukturPage() {
         });
 
         if (!isEmptyExtent(extent)) {
+            const isBottomOpen = isBottomSegmentPanelOpenRef.current;
+            const bHeight = bottomPanelHeightRef.current || 320;
+            const bottomPad = isBottomOpen ? (bHeight + 40) : 60;
+            const rightPad = isRightPanelOpenRef.current ? 420 : 60;
             mapRef.current.getView().fit(extent, {
-                padding: [60, 60, 60, 60],
+                padding: [60, rightPad, bottomPad, 60],
                 duration: 1000
             });
         }
@@ -4962,7 +5404,7 @@ export default function RoadRealizationInfrastrukturPage() {
                     let endCoord: [number, number] | undefined;
                     let geomObj = s.geometry || s.geom;
                     if (typeof geomObj === "string") {
-                        try { geomObj = JSON.parse(geomObj); } catch (e) {}
+                        try { geomObj = JSON.parse(geomObj); } catch (e) { }
                     }
                     if (geomObj && geomObj.coordinates && Array.isArray(geomObj.coordinates)) {
                         const coords = geomObj.type === "MultiLineString" ? (geomObj.coordinates[0] || []) : geomObj.coordinates;
@@ -5142,7 +5584,7 @@ export default function RoadRealizationInfrastrukturPage() {
                     let endCoord: [number, number] | undefined;
                     let geomObj = s.geometry || s.geom;
                     if (typeof geomObj === "string") {
-                        try { geomObj = JSON.parse(geomObj); } catch (e) {}
+                        try { geomObj = JSON.parse(geomObj); } catch (e) { }
                     }
                     if (geomObj && geomObj.coordinates && Array.isArray(geomObj.coordinates)) {
                         const coords = geomObj.type === "MultiLineString" ? (geomObj.coordinates[0] || []) : geomObj.coordinates;
@@ -5279,6 +5721,10 @@ export default function RoadRealizationInfrastrukturPage() {
 
     // Load segment details into dialog for editing attributes only
     const handleEditAttributesOnly = (segment: RealisasiSegmen) => {
+        if (!canDigitize(user)) {
+            toast.warning("Akun Operator OPD berstatus Read-Only dan tidak diizinkan mengubah atribut segmen.");
+            return;
+        }
         const isLocked = lockedSegmenIds.has(segment.id.toString());
         setDrawnLength(segment.panjang_m);
         setLebar(segment.lebar_m.toString());
@@ -5300,25 +5746,45 @@ export default function RoadRealizationInfrastrukturPage() {
         setKeterangan(segment.keterangan !== undefined && segment.keterangan !== null ? segment.keterangan : (segment.atribut?.keterangan || ""));
         setDynamicAtribut(initDynamicAtribut(segment.atribut || {}));
 
-        const parentIdVal = (segment as any).parent_id || segment.snapped_road_id;
-        const kodeRuasVal = (segment as any).kode_ruas || (segment as any).parent_id || segment.snapped_road_id;
-        const isMaster = Boolean(segment.check_melarosa || (parentIdVal && parentIdVal !== "0"));
+        const segKecId = segment.id_kecamatan?.toString() || (segment as any).kecamatan_id?.toString() || (kecamatanList.find(k => k.nama_kecamatan?.toLowerCase() === segment.nama_kecamatan?.toLowerCase())?.id?.toString()) || selectedKec;
+        const segDesaId = segment.id_desa?.toString() || (segment as any).desa_id?.toString() || selectedDesa;
+        setDialogKec(segKecId || "");
+        setDialogDesa(segDesaId || "");
+        if (segKecId && segKecId !== selectedKec) {
+            setIsLoadingDialogDesa(true);
+            monitoringService.getDesa(segKecId).then(resp => {
+                if (resp.status === "success" && resp.result) {
+                    setDialogDesaList(resp.result);
+                } else {
+                    setDialogDesaList([]);
+                }
+            }).catch(() => setDialogDesaList([])).finally(() => setIsLoadingDialogDesa(false));
+        } else {
+            setDialogDesaList(desaList);
+        }
+
+        const parentIdVal = (segment as any).parent_id || (isUUID(segment.snapped_road_id) ? segment.snapped_road_id : null);
+        const rawSegKode = (segment as any).kode_ruas || (!isUUID(segment.snapped_road_id) ? segment.snapped_road_id : null);
+        const kodeRuasVal = (rawSegKode != null && !isUUID(String(rawSegKode)) && String(rawSegKode) !== "0") ? String(rawSegKode) : "";
+        const isMaster = Boolean(segment.check_melarosa || (parentIdVal && parentIdVal !== "0") || (kodeRuasVal && kodeRuasVal !== "0"));
         setCheckMelarosa(isMaster);
         setTipeJalanDigitasi(isMaster ? "poros" : "lingkungan");
 
         if (isMaster) {
-            const roadFeat = parentIdVal || kodeRuasVal ? refSourceRef.current?.getFeatures().find(rf => {
-                const rfId = rf.get("id")?.toString() || rf.getId()?.toString() || rf.get("kode_ruas")?.toString() || rf.get("KODE_RUAS")?.toString();
-                return rfId === parentIdVal?.toString() || rfId === kodeRuasVal?.toString();
+            const roadFeat = (parentIdVal || kodeRuasVal) ? refSourceRef.current?.getFeatures().find(rf => {
+                const rfId = rf.get("id")?.toString() || rf.getId()?.toString();
+                const rfKode = rf.get("kode_ruas")?.toString() || rf.get("KODE_RUAS")?.toString();
+                return (parentIdVal && rfId === parentIdVal.toString()) || (kodeRuasVal && rfKode === kodeRuasVal.toString());
             }) : null;
 
             const roadName = segment.namobj || segment.nama_jalan || (roadFeat ? (roadFeat.get("nama_ruas") || roadFeat.get("nama") || "Ruas Master") : "Ruas Master Rujukan");
-            const masterDbId = roadFeat ? (roadFeat.get("id") || roadFeat.getId()) : parentIdVal;
-            const masterKodeRuas = roadFeat ? (roadFeat.get("kode_ruas") || roadFeat.get("KODE_RUAS") || roadFeat.get("kode")) : kodeRuasVal;
+            const masterDbId = roadFeat ? (roadFeat.get("id") || roadFeat.getId()) : (isUUID(parentIdVal) ? parentIdVal : null);
+            const rawFeatKode = roadFeat ? (roadFeat.get("kode_ruas") ?? roadFeat.get("KODE_RUAS") ?? roadFeat.get("kode")) : null;
+            const masterKodeRuas = (rawFeatKode != null && !isUUID(String(rawFeatKode))) ? String(rawFeatKode) : (kodeRuasVal || "0");
 
             setSnappedRoad({
                 id: masterDbId ? String(masterDbId) : (parentIdVal ? String(parentIdVal) : ""),
-                kode_ruas: masterKodeRuas ? String(masterKodeRuas) : (kodeRuasVal ? String(kodeRuasVal) : ""),
+                kode_ruas: masterKodeRuas,
                 nama: roadName
             });
             setCustomRoadName(roadName);
@@ -5352,9 +5818,9 @@ export default function RoadRealizationInfrastrukturPage() {
                                 const dist = Math.sqrt(Math.pow(pt[0] - closestPt[0], 2) + Math.pow(pt[1] - closestPt[1], 2));
                                 if (dist < 75) {
                                     const masterDbId = feat.get("id") || feat.get("ID") || feat.getId();
-                                    const kodeRuasVal = feat.get("kode_ruas") || feat.get("KODE_RUAS") || feat.get("kode") || masterDbId;
-                                    const resolvedParentId = masterDbId != null && masterDbId !== "" ? String(masterDbId) : (kodeRuasVal ? String(kodeRuasVal) : "");
-                                    const resolvedKodeRuas = kodeRuasVal != null && kodeRuasVal !== "" ? String(kodeRuasVal) : resolvedParentId;
+                                    const rawKode = feat.get("kode_ruas") ?? feat.get("KODE_RUAS") ?? feat.get("kode") ?? feat.get("KODE");
+                                    const resolvedParentId = masterDbId != null && masterDbId !== "" ? String(masterDbId) : "";
+                                    const resolvedKodeRuas = (rawKode != null && !isUUID(String(rawKode))) ? String(rawKode) : "0";
                                     const name = feat.get("nama_ruas") || feat.get("nama") || feat.get("NM_RUAS") || feat.get("NAME") || feat.get("nama_jalan") || "Ruas Master";
 
                                     if (resolvedParentId) {
@@ -5389,6 +5855,10 @@ export default function RoadRealizationInfrastrukturPage() {
 
     // Load segment details and geometry into drawing workspace for editing
     const handleEditGeometryAndAttributes = (segment: RealisasiSegmen, shouldFitBound: boolean = true) => {
+        if (!canDigitize(user)) {
+            toast.warning("Akun Operator OPD berstatus Read-Only dan tidak diizinkan mendigitasi atau mengedit geometri.");
+            return;
+        }
         if (isSplitMode) {
             toast.warning("Batalkan mode Split terlebih dahulu.");
             return;
@@ -5443,6 +5913,23 @@ export default function RoadRealizationInfrastrukturPage() {
         setKeterangan(segment.keterangan !== undefined && segment.keterangan !== null ? segment.keterangan : (segment.atribut?.keterangan || ""));
         setDynamicAtribut(initDynamicAtribut(segment.atribut || {}));
 
+        const segKecId = segment.id_kecamatan?.toString() || (segment as any).kecamatan_id?.toString() || (kecamatanList.find(k => k.nama_kecamatan?.toLowerCase() === segment.nama_kecamatan?.toLowerCase())?.id?.toString()) || selectedKec;
+        const segDesaId = segment.id_desa?.toString() || (segment as any).desa_id?.toString() || selectedDesa;
+        setDialogKec(segKecId || "");
+        setDialogDesa(segDesaId || "");
+        if (segKecId && segKecId !== selectedKec) {
+            setIsLoadingDialogDesa(true);
+            monitoringService.getDesa(segKecId).then(resp => {
+                if (resp.status === "success" && resp.result) {
+                    setDialogDesaList(resp.result);
+                } else {
+                    setDialogDesaList([]);
+                }
+            }).catch(() => setDialogDesaList([])).finally(() => setIsLoadingDialogDesa(false));
+        } else {
+            setDialogDesaList(desaList);
+        }
+
         if (geom instanceof LineString) {
             const coords = geom.getCoordinates();
             setCoordsCount(coords.length);
@@ -5451,19 +5938,27 @@ export default function RoadRealizationInfrastrukturPage() {
             setGeomRedoStack([]);
         }
 
-        const masterId = segment.snapped_road_id || (segment as any).parent_id || (segment as any).kode_ruas;
-        const isMaster = Boolean(segment.check_melarosa || (masterId && masterId !== "0"));
+        const parentIdVal = (segment as any).parent_id || (isUUID(segment.snapped_road_id) ? segment.snapped_road_id : null);
+        const rawSegKode = (segment as any).kode_ruas || (!isUUID(segment.snapped_road_id) ? segment.snapped_road_id : null);
+        const isMaster = Boolean(segment.check_melarosa || (parentIdVal && parentIdVal !== "0") || (rawSegKode && rawSegKode !== "0"));
         setCheckMelarosa(isMaster);
         setTipeJalanDigitasi(isMaster ? "poros" : "lingkungan");
 
         if (isMaster) {
-            const roadFeat = masterId ? refSourceRef.current?.getFeatures().find(rf => {
-                const rfId = rf.get("kode_ruas")?.toString() || rf.get("KODE_RUAS")?.toString() || rf.get("id")?.toString() || rf.getId()?.toString();
-                return rfId === masterId.toString();
+            const roadFeat = (parentIdVal || rawSegKode) ? refSourceRef.current?.getFeatures().find(rf => {
+                const rfId = rf.get("id")?.toString() || rf.getId()?.toString();
+                const rfKode = rf.get("kode_ruas")?.toString() || rf.get("KODE_RUAS")?.toString();
+                return (parentIdVal && rfId === parentIdVal.toString()) || (rawSegKode && rfKode === rawSegKode.toString());
             }) : null;
             const roadName = segment.namobj || segment.nama_jalan || (roadFeat ? (roadFeat.get("nama_ruas") || roadFeat.get("nama") || "Ruas Master") : "Ruas Master Rujukan");
+            const rawFeatKode = roadFeat ? (roadFeat.get("kode_ruas") ?? roadFeat.get("KODE_RUAS") ?? roadFeat.get("kode")) : null;
+            const finalKodeRuas = (rawFeatKode != null && !isUUID(String(rawFeatKode)))
+                ? String(rawFeatKode)
+                : (rawSegKode && !isUUID(String(rawSegKode)) ? String(rawSegKode) : "0");
+
             setSnappedRoad({
-                id: masterId ? masterId.toString() : "Master",
+                id: parentIdVal ? parentIdVal.toString() : (roadFeat ? (roadFeat.get("id") || roadFeat.getId() || "Master") : "Master"),
+                kode_ruas: finalKodeRuas,
                 nama: roadName
             });
             setCustomRoadName(roadName);
@@ -5488,6 +5983,66 @@ export default function RoadRealizationInfrastrukturPage() {
         }
 
         toast.info(`Mengedit segmen jalan: ${segment.nama_jalan}`);
+    };
+
+    /**
+     * Memulai alur digitasi segmen realisasi baru:
+     * Menutup bottom panel, membuka form sidebar kiri, dan mengaktifkan tool digitasi di peta.
+     */
+    const handleStartDigitasiNew = () => {
+        if (!selectedDesa) {
+            toast.warning("Silakan pilih wilayah desa terlebih dahulu.");
+            return;
+        }
+        if (!activeTipe) {
+            toast.warning("Silakan pilih tipe infrastruktur terlebih dahulu.");
+            return;
+        }
+        if (isYearLocked || (activeSnapshotLaporan && activeSnapshotLaporan.status === 'Final')) {
+            toast.warning("Tahun anggaran ini telah terkunci (Berita Acara Final). Digitasi dinonaktifkan.");
+            return;
+        }
+        if (activeSnapshotLaporan && activeSnapshotLaporan.status === 'Submitted') {
+            toast.warning("Laporan realisasi sedang dalam proses verifikasi Bappeda. Digitasi dikunci sementara.");
+            return;
+        }
+
+        // Guardrail: Operator Kecamatan wajib memiliki Draft Penugasan aktif dari Bappeda
+        if (!isBappedaOrAdmin) {
+            const hasActiveDraft = activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi');
+            if (!hasActiveDraft) {
+                toast.error(
+                    selectedTahunFilter !== "Semua"
+                        ? `Akses digitasi ditutup. Bappeda belum menerbitkan Draft Penugasan untuk TA ${selectedTahunFilter}.`
+                        : "Akses digitasi ditutup. Silakan pilih tahun anggaran yang memiliki Draft Penugasan aktif dari Bappeda."
+                );
+                return;
+            }
+        }
+
+        if (activeTipe.kode === 'jalan_lingkungan') {
+            setTipeJalanDigitasi('lingkungan');
+        } else {
+            setTipeJalanDigitasi('poros');
+        }
+
+        // Minimize bottom panel so operator gets full canvas view
+        setIsBottomSegmentPanelOpen(false);
+        // Open sidebar form & reset editing state
+        setIsSidebarOpen(true);
+        setIsFormOpen(true);
+        setEditingSegmentId(null);
+        setEditingSegmentData(null);
+
+        const currentGeomType = (activeTipe?.geom_type || "").toUpperCase();
+        const isPolygon = currentGeomType === "POLYGON" || currentGeomType === "MULTIPOLYGON";
+        const isPoint = currentGeomType === "POINT" || currentGeomType === "MULTIPOINT";
+
+        if (digitizeMode === "otomatis" && activeTipe.kode !== 'jalan_lingkungan' && !isPolygon && !isPoint) {
+            startAutoTraceMode(true);
+        } else {
+            startDraw();
+        }
     };
 
     /**
@@ -5535,6 +6090,10 @@ export default function RoadRealizationInfrastrukturPage() {
 
     // Aktivasi mode split: operator akan klik titik di atas segmen untuk membelahnya
     const handleStartSplitMode = (segment: RealisasiSegmen) => {
+        if (!canDigitize(user)) {
+            toast.warning("Akun Operator OPD berstatus Read-Only dan tidak diizinkan memotong segmen.");
+            return;
+        }
         if (lockedSegmenIds.has(segment.id.toString())) {
             toast.warning("Segmen ini terkunci (read-only) karena terikat dalam Berita Acara Resmi.");
             return;
@@ -5702,7 +6261,7 @@ export default function RoadRealizationInfrastrukturPage() {
             );
 
             // 4. Reload data peta tanpa reset zoom
-            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
 
         } catch (err) {
             console.error("Split segmen error:", err);
@@ -5715,6 +6274,17 @@ export default function RoadRealizationInfrastrukturPage() {
     // Submit segment save to database (handles create or update)
     const handleSave = async (e?: React.FormEvent | any) => {
         if (e && e.preventDefault) e.preventDefault();
+
+        // Guardrail: Non-Bappeda/Admin users require active draft assignment to save
+        if (!isBappedaOrAdmin) {
+            const hasActiveDraft = activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi');
+            if (!hasActiveDraft) {
+                const msg = `Gagal menyimpan segmen: Operator Kecamatan wajib memiliki Draft Penugasan aktif dari Bappeda untuk TA ${tahun || selectedTahunFilter}.`;
+                setErrorMsg(msg);
+                toast.error(msg);
+                return;
+            }
+        }
 
         const isMasterSnapped = Boolean(checkMelarosa && snappedRoad);
         const roadName = isMasterSnapped ? (snappedRoad?.nama || customRoadName) : customRoadName;
@@ -5775,8 +6345,17 @@ export default function RoadRealizationInfrastrukturPage() {
             return;
         }
 
-        const activeKecObj = kecamatanList.find(k => k.id.toString() === selectedKec);
-        const activeDesaObj = desaList.find(d => d.id.toString() === selectedDesa);
+        const targetKecId = dialogKec || selectedKec;
+        const targetDesaId = dialogDesa || selectedDesa;
+
+        if (!targetKecId || !targetDesaId) {
+            setErrorMsg("Kecamatan dan Desa wajib dipilih");
+            toast.error("Kecamatan dan Desa wajib dipilih");
+            return;
+        }
+
+        const activeKecObj = kecamatanList.find(k => k.id.toString() === targetKecId);
+        const activeDesaObj = dialogDesaList.find(d => d.id.toString() === targetDesaId) || desaList.find(d => d.id.toString() === targetDesaId);
 
         const isUUID = (str: any) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
@@ -5788,17 +6367,34 @@ export default function RoadRealizationInfrastrukturPage() {
         const validSnappedParentId = isValidId(snappedRoad?.id) ? String(snappedRoad?.id) : null;
         const validExistingParentId = isValidId(existingParentId) ? String(existingParentId) : null;
 
-        const validSnappedKodeRuas = isValidId(snappedRoad?.kode_ruas) ? String(snappedRoad?.kode_ruas) : null;
-        const validExistingKodeRuas = isValidId(existingKodeRuas) ? String(existingKodeRuas) : null;
+        const validSnappedKodeRuas = isValidId(snappedRoad?.kode_ruas) && !isUUID(snappedRoad?.kode_ruas) ? String(snappedRoad?.kode_ruas) : null;
+        const validExistingKodeRuas = isValidId(existingKodeRuas) && !isUUID(existingKodeRuas) ? String(existingKodeRuas) : null;
 
         const isMasterRoad = Boolean(checkMelarosa) && !isPolygonGeom && !isPointGeom;
         const resolvedParentId = isMasterRoad
             ? (validSnappedParentId || validExistingParentId || (snappedRoad?.id && snappedRoad.id !== "Master" ? String(snappedRoad.id) : null))
             : null;
 
-        const resolvedKodeRuas = isMasterRoad
-            ? (validSnappedKodeRuas || validExistingKodeRuas || (snappedRoad?.kode_ruas || "0"))
+        let resolvedKodeRuas = isMasterRoad
+            ? (validSnappedKodeRuas || validExistingKodeRuas || (snappedRoad?.kode_ruas && !isUUID(snappedRoad?.kode_ruas) ? String(snappedRoad?.kode_ruas) : null))
             : "0";
+
+        // If kode_ruas is missing or UUID, attempt to resolve integer kode_ruas from refSource layer using parent_id
+        if (isMasterRoad && (!resolvedKodeRuas || resolvedKodeRuas === "0") && resolvedParentId && refSourceRef.current) {
+            const masterFeats = refSourceRef.current.getFeatures();
+            const matched = masterFeats.find(f => {
+                const p = f.getProperties();
+                return String(p.id) === String(resolvedParentId) || String(f.getId()) === String(resolvedParentId);
+            });
+            if (matched) {
+                const mp = matched.getProperties();
+                const k = mp.kode_ruas || mp.KODE_RUAS || mp.no_ruas;
+                if (k && !isUUID(k)) {
+                    resolvedKodeRuas = String(k);
+                }
+            }
+        }
+        if (!resolvedKodeRuas) resolvedKodeRuas = "0";
 
         if (isMasterRoad && !resolvedParentId) {
             setErrorMsg(`Hubungan ke data master wajib diisi jika status_parent bernilai true. Silakan hubungkan ke master terdekat terlebih dahulu.`);
@@ -5808,6 +6404,8 @@ export default function RoadRealizationInfrastrukturPage() {
         const resolvedPlottingId = plottingId && isUUID(plottingId) ? plottingId : (plottingId && plottingId !== "none" ? plottingId : null);
         const resolvedUserId = currentUserId && isUUID(currentUserId) ? currentUserId : null;
 
+        const resolvedStatusVerifikasi = (editingSegmentData as any)?.status_verifikasi || (isBappedaOrAdmin ? "terverifikasi" : "verifikasi_kecamatan");
+
         const mergedAtribut = {
             ...dynamicAtribut,
             status_jalan: statusJalan,
@@ -5815,6 +6413,7 @@ export default function RoadRealizationInfrastrukturPage() {
             status_aset: statusAset || "Pemerintah Desa",
             plotting_id: resolvedPlottingId,
             sumber_data: sumberData || "Survey Desa",
+            status_verifikasi: resolvedStatusVerifikasi,
             verifikator: verifikator || currentUserName
         };
 
@@ -5829,6 +6428,7 @@ export default function RoadRealizationInfrastrukturPage() {
             status_jalan: statusJalan,
             sumber_data: sumberData || "Survey Desa",
             tahun_pembangunan: parseInt(tahun, 10) || new Date().getFullYear(),
+            status_verifikasi: resolvedStatusVerifikasi,
             verifikator: verifikator || currentUserName,
             user_id: resolvedUserId,
             id_user: resolvedUserId,
@@ -5840,8 +6440,10 @@ export default function RoadRealizationInfrastrukturPage() {
             tahun_renovasi_terakhir: null,
             kondisi: kondisi,
             nama_jalan: roadName,
-            kecamatan_id: parseInt(selectedKec) || null,
-            desa_id: parseInt(selectedDesa) || null,
+            kecamatan_id: parseInt(targetKecId, 10) || null,
+            id_kecamatan: parseInt(targetKecId, 10) || null,
+            desa_id: parseInt(targetDesaId, 10) || null,
+            id_desa: parseInt(targetDesaId, 10) || null,
             keterangan: keterangan,
             foto_url: "",
             status_kondisi: statusKondisi,
@@ -5872,12 +6474,18 @@ export default function RoadRealizationInfrastrukturPage() {
                     toast.success("Segmen realisasi berhasil disimpan ke database!", { id: toastId });
                 }
             }
+
+            const movedDesa = Boolean(editingSegmentId && targetDesaId !== selectedDesa);
+            if (movedDesa) {
+                toast.info(`Segmen disimpan dan dialihkan ke wilayah Desa ${activeDesaObj?.nama_desa || targetDesaId}`);
+            }
+
             closeForm();
             setErrorMsg("");
             setCustomRoadName("");
 
             // Refresh layers without resetting zoom/extent
-            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
         } catch (err) {
             console.error("Save segment/area error:", err);
             toast.error(editingSegmentId ? "Gagal memperbarui data realisasi" : "Gagal menyimpan data realisasi ke database", { id: toastId });
@@ -5895,20 +6503,41 @@ export default function RoadRealizationInfrastrukturPage() {
         realisasiList,
         lockedSegmenIds,
         selectedDesa,
-        onRefresh: () => loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true }),
+        onRefresh: () => loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true }),
     });
 
     // ── Kirim Digitasi Segmen ke Bappeda Dialog State & Handler ──────────────
     const [segmentToKirim, setSegmentToKirim] = useState<RealisasiSegmen | null>(null);
+    const [batchSegmentsToKirim, setBatchSegmentsToKirim] = useState<RealisasiSegmen[]>([]);
     const [isKirimDialogOpen, setIsKirimDialogOpen] = useState(false);
     const [isSubmittingKirim, setIsSubmittingKirim] = useState(false);
 
     const handleConfirmKirimDigitasi = async () => {
-        if (!segmentToKirim) return;
+        const listToSend = batchSegmentsToKirim.length > 0 ? batchSegmentsToKirim : segmentToKirim ? [segmentToKirim] : [];
+        if (listToSend.length === 0) return;
+
         setIsSubmittingKirim(true);
-        const toastId = toast.loading("Mengirimkan hasil digitasi ke Operator Bappeda...");
+        const isBatch = listToSend.length > 1;
+        const toastId = toast.loading(isBatch ? `Mengirimkan ${listToSend.length} segmen ke Operator Bappeda...` : "Mengirimkan hasil digitasi ke Operator Bappeda...");
+        const tipeKode = activeTipe?.kode || 'jalan';
+
         try {
-            await infrastrukturService.submitSegmenToBappeda(activeTipe?.kode || 'jalan', segmentToKirim.id);
+            if (isBatch) {
+                const results = await Promise.allSettled(
+                    listToSend.map(s => infrastrukturService.submitSegmenToBappeda(tipeKode, s.id))
+                );
+                const succeeded = results.filter(r => r.status === "fulfilled").length;
+                const failed = results.filter(r => r.status === "rejected").length;
+
+                if (failed === 0) {
+                    toast.success(`Berhasil mengajukan ${succeeded} segmen ke Operator Bappeda!`, { id: toastId });
+                } else {
+                    toast.warning(`${succeeded} segmen berhasil dikirim, ${failed} segmen gagal.`, { id: toastId });
+                }
+            } else {
+                await infrastrukturService.submitSegmenToBappeda(tipeKode, listToSend[0].id);
+                toast.success("Hasil digitasi segmen berhasil dikirimkan ke Operator Bappeda!", { id: toastId });
+            }
 
             // Auto-submit parent report if currently in Draft/Revisi
             if (activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi')) {
@@ -5920,10 +6549,10 @@ export default function RoadRealizationInfrastrukturPage() {
                 }
             }
 
-            toast.success("Hasil digitasi segmen berhasil dikirimkan ke Operator Bappeda!", { id: toastId });
-            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
             setIsKirimDialogOpen(false);
             setSegmentToKirim(null);
+            setBatchSegmentsToKirim([]);
         } catch (err: any) {
             console.error("Gagal mengirim digitasi ke Bappeda:", err);
             toast.error(err?.message || "Gagal mengirim digitasi ke Bappeda", { id: toastId });
@@ -5933,16 +6562,23 @@ export default function RoadRealizationInfrastrukturPage() {
     };
 
     const handleSubmitLaporanRevisi = async () => {
-        if (!activeSnapshotLaporan?.id) return;
-        const toastId = toast.loading("Mengirimkan seluruh hasil revisi ke Bappeda...");
+        if (!activeSnapshotLaporan?.id) {
+            toast.warning("Draft penugasan tidak ditemukan untuk tahun anggaran ini.");
+            return;
+        }
+        if (activeSnapshotLaporan.status === 'Submitted' || activeSnapshotLaporan.status === 'Final') {
+            toast.warning("Dokumen hasil digitasi untuk tahun anggaran ini sudah dikirimkan atau telah difinalisasi.");
+            return;
+        }
+        const toastId = toast.loading("Mengirimkan seluruh hasil digitasi ke Bappeda...");
         try {
             await monitoringLaporanService.submitLaporan(activeSnapshotLaporan.id);
             toast.success("Laporan Berita Acara & seluruh segmen berhasil dikirimkan ke Bappeda untuk diverifikasi!", { id: toastId });
             checkSnapshotLock(selectedDesa, selectedTahunFilter);
-            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
+            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
         } catch (err: any) {
             console.error("Gagal submit laporan revisi:", err);
-            toast.error(err?.message || "Gagal mengirimkan laporan revisi ke Bappeda", { id: toastId });
+            toast.error(err?.message || "Gagal mengirimkan laporan ke Bappeda", { id: toastId });
         }
     };
 
@@ -5952,8 +6588,11 @@ export default function RoadRealizationInfrastrukturPage() {
         if (!existingSourceRef.current) return;
         const features = existingSourceRef.current.getFeatures();
         features.forEach(feat => {
-            const featTipe = feat.get('tipe_kode');
-            const isSelected = tipeKodes.length === 0 || tipeKodes.includes('semua') || tipeKodes.includes(featTipe);
+            const featTipe = feat.get('tipe_kode') || feat.get('tipe') || feat.get('tipe_infrastruktur') || activeTipe?.kode;
+            const isSelected =
+                tipeKodes.length === 0 ||
+                tipeKodes.includes('semua') ||
+                (featTipe ? tipeKodes.includes(featTipe) : true);
             if (isSelected) {
                 feat.setStyle(undefined);
             } else {
@@ -5971,7 +6610,7 @@ export default function RoadRealizationInfrastrukturPage() {
         existingLayerRef.current?.changed();
     };
 
-    // Save formal Berita Acara snapshot to DB (pure snapshot without browser print)
+    // Save formal Berita Acara snapshot to DB (pure snapshot and lock)
     const handleConfirmPrintAndSave = async () => {
         if (!printParams || !printData) return;
         const toastId = toast.loading("Menyimpan & melakukan snapshot finalisasi digitasi...");
@@ -6025,7 +6664,7 @@ export default function RoadRealizationInfrastrukturPage() {
                 generatedNomorBA = createRes?.result?.nomor_ba;
             }
 
-            toast.success(`Snapshot Berita Acara (${generatedNomorBA || 'Resmi'}) berhasil disimpan & disahkan!`, { id: toastId });
+            toast.success(`Snapshot Berita Acara (${generatedNomorBA || 'Resmi'}) berhasil disimpan & disahkan! Dokumen dapat dilihat dan dicetak di menu Dokumen Infrastruktur.`, { id: toastId });
 
             // Refresh lock status immediately
             checkSnapshotLock(printParams.desaId, printParams.tahun);
@@ -6039,26 +6678,31 @@ export default function RoadRealizationInfrastrukturPage() {
     };
 
     const triggerPrintBeritaAcaraDialog = async (desaId: string, tahun: string) => {
-        if (user?.role !== 'operator_bappeda' && user?.role !== 'super_admin' && user?.role !== 'admin') {
-            toast.error("Fitur Snapshot / Cetak Berita Acara hanya dapat diakses oleh Operator Bappeda dan Super Admin.");
-            return;
-        }
-        if (isYearLocked && activeSnapshotLaporan?.status === 'Final') {
-            const nomorBA = activeSnapshotLaporan?.nomor_ba ? ` (No. BA: ${activeSnapshotLaporan.nomor_ba})` : "";
-            toast.warning(`Berita Acara TA ${tahun} untuk Desa ini sudah FINAL${nomorBA}. Jika ingin merevisi atau snapshot ulang, silakan kembalikan ke status Draft terlebih dahulu.`);
+        const isAlreadyFinal = isYearLocked && activeSnapshotLaporan?.status === 'Final';
+        const isOpd = user?.role === 'operator_opd';
+
+        if (isOpd) {
+            toast.warning("Akun Operator OPD berstatus Read-Only. Untuk melihat atau mencetak Berita Acara, silakan akses menu Dokumen Infrastruktur.");
             return;
         }
 
-        // Guard: Validasi bahwa seluruh segmen pada tahun ini telah diverifikasi & disetujui oleh Bappeda
-        const targetSegments = realisasiList.filter(r => (tahun === "Semua" || String(r.tahun_anggaran) === String(tahun)));
-        if (targetSegments.length === 0) {
-            toast.warning(`Tidak ada segmen realisasi yang terdata untuk TA ${tahun}.`);
+        if (user?.role !== 'operator_bappeda' && user?.role !== 'super_admin' && user?.role !== 'admin') {
+            toast.error("Fitur Snapshot / Finalisasi Berita Acara hanya dapat diakses oleh Operator Bappeda dan Super Admin.");
             return;
         }
-        const unverifiedSegmens = targetSegments.filter(r => r.status_verifikasi !== 'terverifikasi');
-        if (unverifiedSegmens.length > 0) {
-            toast.warning(`Snapshot Berita Acara hanya dapat dilakukan jika seluruh segmen realisasi TA ${tahun} telah disetujui (Status: Terverifikasi). Masih terdapat ${unverifiedSegmens.length} segmen yang belum disetujui.`);
-            return;
+
+        // Guard: Jika belum final, validasi bahwa seluruh segmen pada tahun ini telah diverifikasi & disetujui oleh Bappeda
+        if (!isAlreadyFinal) {
+            const targetSegments = realisasiList.filter(r => (tahun === "Semua" || String(r.tahun_anggaran) === String(tahun)));
+            if (targetSegments.length === 0) {
+                toast.warning(`Tidak ada segmen realisasi yang terdata untuk TA ${tahun}.`);
+                return;
+            }
+            const unverifiedSegmens = targetSegments.filter(r => r.status_verifikasi !== 'terverifikasi');
+            if (unverifiedSegmens.length > 0) {
+                toast.warning(`Snapshot Berita Acara hanya dapat disahkan jika seluruh segmen realisasi TA ${tahun} telah disetujui (Status: Terverifikasi). Masih terdapat ${unverifiedSegmens.length} segmen yang belum disetujui.`);
+                return;
+            }
         }
 
         // Sync map filter and boundaries with selected print year
@@ -6129,6 +6773,29 @@ export default function RoadRealizationInfrastrukturPage() {
                 if (activeSnapshotLaporan?.rencana_panjang) {
                     setRencanaPanjangInput(activeSnapshotLaporan.rencana_panjang.toString());
                 }
+
+                // Initialize selectedPrintTipeKodes properly so map segments remain visible
+                let initialTipeKodes: string[] = [];
+                if (activeSnapshotLaporan?.tipe_kode) {
+                    if (Array.isArray(activeSnapshotLaporan.tipe_kode)) {
+                        initialTipeKodes = activeSnapshotLaporan.tipe_kode;
+                    } else if (typeof activeSnapshotLaporan.tipe_kode === 'string') {
+                        if (activeSnapshotLaporan.tipe_kode === 'semua' || activeSnapshotLaporan.tipe_kode === '') {
+                            initialTipeKodes = ['semua'];
+                        } else if (activeSnapshotLaporan.tipe_kode.includes(',')) {
+                            initialTipeKodes = activeSnapshotLaporan.tipe_kode.split(',').map((s: string) => s.trim());
+                        } else {
+                            initialTipeKodes = [activeSnapshotLaporan.tipe_kode];
+                        }
+                    }
+                } else if (activeTipe?.kode) {
+                    initialTipeKodes = [activeTipe.kode];
+                } else {
+                    initialTipeKodes = ['semua'];
+                }
+                setSelectedPrintTipeKodes(initialTipeKodes);
+                updatePrintMapStyles(initialTipeKodes);
+
                 setIsPrintDialogOpen(true);
                 toast.dismiss(toastId);
             } else {
@@ -6137,6 +6804,36 @@ export default function RoadRealizationInfrastrukturPage() {
         } catch (err) {
             console.error("Fetch BA error:", err);
             toast.error("Gagal memuat data berita acara", { id: toastId });
+        }
+    };
+
+    // State for Bappeda Revert Berita Acara to Draft Dialog
+    const [revertLaporanOpen, setRevertLaporanOpen] = useState(false);
+    const [revertCatatanInput, setRevertCatatanInput] = useState("");
+    const [isRevertingLaporan, setIsRevertingLaporan] = useState(false);
+
+    const handleRevertToDraft = async () => {
+        if (!activeSnapshotLaporan?.id) return;
+        setIsRevertingLaporan(true);
+        const toastId = toast.loading("Membuka kunci & mengembalikan Berita Acara ke status Draft...");
+        try {
+            await monitoringLaporanService.revertToDraft(activeSnapshotLaporan.id, {
+                catatan: revertCatatanInput.trim() || "Dikembalikan ke Draft untuk perbaikan oleh Bappeda",
+                unlock_segments: true,
+                target_segment_status: "verifikasi_kecamatan"
+            });
+            toast.success("Berita Acara berhasil dikembalikan ke status Draft / Revisi.", { id: toastId });
+            setRevertLaporanOpen(false);
+            setRevertCatatanInput("");
+            await checkSnapshotLock(selectedDesa, selectedTahunFilter);
+            if (selectedDesa) {
+                loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
+            }
+        } catch (err: any) {
+            console.error("Revert laporan error:", err);
+            toast.error(err?.message || "Gagal mengembalikan Berita Acara ke draft", { id: toastId });
+        } finally {
+            setIsRevertingLaporan(false);
         }
     };
 
@@ -6237,252 +6934,6 @@ export default function RoadRealizationInfrastrukturPage() {
         });
     };
 
-    // Print Berita Acara handler
-    const handlePrintBeritaAcara = (
-        data: any[],
-        totalLength: number,
-        rencanaPanjang: string,
-        sumberDana: string,
-        mapImageSrc: string,
-        desaId: string,
-        tahun: string,
-        nomorBA?: string
-    ) => {
-        const toastId = toast.loading("Mempersiapkan dokumen Berita Acara...");
-        try {
-            const targetDesa = desaList.find(d => d.id.toString() === desaId.toString());
-            const targetKec = kecamatanList.find(k => k.id.toString() === selectedKec.toString());
-            const targetDesaName = targetDesa ? targetDesa.nama_desa : (data[0]?.desa || "Desa");
-            const targetKecName = targetKec ? targetKec.nama_kecamatan : (data[0]?.kecamatan || "Kecamatan");
-
-            // Indonesian date helper
-            const indonesianDays = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
-            const indonesianMonths = [
-                "Januari", "Februari", "Maret", "April", "Mei", "Juni",
-                "Juli", "Agustus", "September", "Oktober", "November", "Desember"
-            ];
-            const today = new Date();
-            const currentDayName = indonesianDays[today.getDay()];
-            const currentDayNum = today.getDate();
-            const currentMonthName = indonesianMonths[today.getMonth()];
-            const currentYear = today.getFullYear();
-            const formattedPrintDate = today.toLocaleDateString("id-ID", { day: 'numeric', month: 'long', year: 'numeric' });
-            const formattedPrintTime = today.toLocaleTimeString("id-ID", { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-            const rowsHtml = data.map((row: any, idx: number) => {
-                const objectName = row.namobj || row.nama_jalan || row.nama_ruas || "Segmen Infrastruktur";
-                const hasValidParent = !!(row.parent_id && row.parent_id !== 0 && row.parent_id !== "0" && row.parent_id !== "null");
-                const isSesuaiBasisData = !!(row.is_jalan_poros) || (hasValidParent && row.kode_ruas && row.kode_ruas !== "0" && row.kode_ruas !== 0 && row.kode_ruas !== "-");
-                const statusLabel = isSesuaiBasisData ? "Sesuai Basis Data" : "Diluar Basis Data";
-                const kodeRuasLabel = isSesuaiBasisData ? row.kode_ruas : "-";
-
-                return `
-                <tr>
-                    <td style="border: 1px solid black; padding: 6px; text-align: center;">${idx + 1}</td>
-                    <td style="border: 1px solid black; padding: 6px; text-align: center;">${kodeRuasLabel}</td>
-                    <td style="border: 1px solid black; padding: 6px; font-weight: bold;">${objectName}</td>
-                    <td style="border: 1px solid black; padding: 6px; line-height: 1.4; font-family: monospace; font-size: 8px;">
-                        <div>Awal: ${row.start_lat && row.start_lon ? parseFloat(row.start_lat).toFixed(6) + ', ' + parseFloat(row.start_lon).toFixed(6) : "-"}</div>
-                        <div style="margin-top: 2px;">Akhir: ${row.end_lat && row.end_lon ? parseFloat(row.end_lat).toFixed(6) + ', ' + parseFloat(row.end_lon).toFixed(6) : "-"}</div>
-                    </td>
-                    <td style="border: 1px solid black; padding: 6px; text-align: center; font-size: 10px;">
-                        ${statusLabel}
-                    </td>
-                    <td style="border: 1px solid black; padding: 6px; text-align: right;">${parseFloat(row.panjang_m || row.panjang || 0).toFixed(2)}</td>
-                    <td style="border: 1px solid black; padding: 6px; text-align: center;">${row.lebar_m || row.lebar || "-"}</td>
-                    <td style="border: 1px solid black; padding: 6px; text-align: center;">${row.jenis_perkerasan || row.perkerasan || "-"}</td>
-                    <td style="border: 1px solid black; padding: 6px; text-align: center; text-transform: capitalize;">${row.kondisi || "Baik"}</td>
-                </tr>
-            `;
-            }).join("");
-
-            const printWindow = window.open("", "_blank");
-            if (printWindow) {
-                printWindow.document.write(`
-                    <html>
-                        <head>
-                            <title>Cetak Berita Acara Realisasi</title>
-                            <style>
-                                body { font-family: 'Bookman Old Style', 'Bookman', 'URW Bookman L', 'Georgia', serif; padding: 40px; line-height: 1.6; font-size: 12px; color: black; }
-                                table { font-size: 12px; }
-                                .text-center { text-align: center; }
-                                .font-bold { font-weight: bold; }
-                                .font-extrabold { font-weight: 800; }
-                                .uppercase { text-transform: uppercase; }
-                                .mb-6 { margin-bottom: 24px; }
-                                .mb-4 { margin-bottom: 16px; }
-                                .mb-8 { margin-bottom: 32px; }
-                                .mt-12 { margin-top: 48px; }
-                                .mt-6 { margin-top: 24px; }
-                                .space-y-1 > * + * { margin-top: 4px; }
-                                .space-y-4 > * + * { margin-top: 16px; }
-                                .space-y-16 > * + * { margin-top: 64px; }
-                                .text-justify { text-align: justify; }
-                                .indent-8 { text-indent: 32px; }
-                                .w-full { width: 100%; }
-                                .border-collapse { border-collapse: collapse; }
-                                .bg-gray-100 { background-color: #f3f4f6; }
-                                .bg-gray-50 { background-color: #f9fafb; }
-                                .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
-                                .text-gray-500 { color: #6b7280; }
-                                .underline { text-decoration: underline; }
-                                .print-footer {
-                                    position: fixed;
-                                    bottom: 0;
-                                    left: 0;
-                                    right: 0;
-                                    font-size: 9px;
-                                    color: #4b5563;
-                                    border-top: 1px dashed #ccc;
-                                    padding-top: 6px;
-                                    background-color: white;
-                                }
-                                @media print {
-                                    body { padding: 0; margin: 0 0 10mm 0; }
-                                    @page {
-                                        size: 210mm 330mm;
-                                        margin: 15mm 15mm 20mm 15mm;
-                                    }
-                                }
-                            </style>
-                        </head>
-                        <body>
-                            <div class="text-center space-y-1 mb-6">
-                                <h3 class="font-extrabold uppercase" style="margin: 0; font-size: 19px;">BERITA ACARA</h3>
-                                <h3 class="font-extrabold uppercase" style="margin: 0 0 8px 0; font-size: 14px;">MONITORING DAN EVALUASI REALISASI ${(activeTipe?.nama || "INFRASTRUKTUR DESA").toUpperCase()}</h3>
-                                <p style="margin: 0; font-size: 14px;">Nomor: ${nomorBA || `050/&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;/412.302/${currentYear}`}</p>
-                            </div>
-
-                            <p class="text-justify indent-8 mb-4" style="font-size: 14px;">
-                                Pada hari ini ${currentDayName}, tanggal ${currentDayNum} bulan ${currentMonthName} tahun ${currentYear} dari Desa ${targetDesaName} Kecamatan ${targetKecName} telah dilaksanakan Evaluasi Realisasi ${activeTipe?.nama || "Infrastruktur Desa"} oleh Badan Perencanaan Pembangunan Daerah Kabupaten Bojonegoro dengan pelaksanaan Tahun Anggaran ${tahun || '2026'} dengan mekanisme Sumber Dana ${sumberDana} dengan rincian sebagai berikut:
-                            </p>
-
-                            <div class="mb-6">
-                                <p class="mb-4" style="font-size: 14px;">Daftar rincian segmen ${activeTipe?.nama || "infrastruktur"} desa yang telah terealisasi dan terdigitasi:</p>
-                                <table class="w-full border-collapse" style="border: 1px solid black; text-align: left;">
-                                    <thead>
-                                        <tr class="bg-gray-100 font-bold">
-                                            <th style="border: 1px solid black; padding: 6px; text-align: center; width: 30px;">No</th>
-                                            <th style="border: 1px solid black; padding: 6px; text-align: center; width: 45px;">Kode Master</th>
-                                            <th style="border: 1px solid black; padding: 6px; width: 140px;">Nama Objek / Ruas (${activeTipe?.nama || "Infrastruktur"})</th>
-                                            <th style="border: 1px solid black; padding: 6px; width: 140px;">Koordinat (Awal - Akhir)</th>
-                                            <th style="border: 1px solid black; padding: 6px; text-align: center; width: 80px;">Kategori Spasial</th>
-                                            <th style="border: 1px solid black; padding: 6px; text-align: right; width: 60px;">Panjang (m)</th>
-                                            <th style="border: 1px solid black; padding: 6px; text-align: center; width: 40px;">Lebar (m)</th>
-                                            <th style="border: 1px solid black; padding: 6px; text-align: center; width: 50px;">Material / Perkerasan</th>
-                                            <th style="border: 1px solid black; padding: 6px; text-align: center; width: 50px;">Kondisi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        ${rowsHtml}
-                                    </tbody>
-                                    <tfoot>
-                                        ${rencanaPanjang ? `
-                                        <tr class="bg-gray-50 font-bold">
-                                            <td colspan="5" style="border: 1px solid black; padding: 6px; text-align: right;">Total Panjang Perencanaan:</td>
-                                            <td style="border: 1px solid black; padding: 6px; text-align: right;">
-                                                ${parseFloat(rencanaPanjang).toFixed(2)}
-                                            </td>
-                                            <td colspan="3" style="border: 1px solid black; padding: 6px; background-color: #f3f4f6;"></td>
-                                        </tr>
-                                        ` : ''}
-                                        <tr class="bg-gray-50 font-bold">
-                                            <td colspan="5" style="border: 1px solid black; padding: 6px; text-align: right;">Total Panjang Segmen Terdigitasi:</td>
-                                            <td style="border: 1px solid black; padding: 6px; text-align: right;">
-                                                ${totalLength.toFixed(1)}
-                                            </td>
-                                            <td colspan="3" style="border: 1px solid black; padding: 6px; background-color: #f3f4f6;"></td>
-                                        </tr>
-                                        ${rencanaPanjang ? `
-                                        <tr class="bg-gray-50 font-bold">
-                                            <td colspan="5" style="border: 1px solid black; padding: 6px; text-align: right;">Persentase Realisasi:</td>
-                                            <td style="border: 1px solid black; padding: 6px; text-align: right;">
-                                                ${((totalLength / parseFloat(rencanaPanjang)) * 100).toFixed(1)}%
-                                            </td>
-                                            <td colspan="3" style="border: 1px solid black; padding: 6px; background-color: #f3f4f6;"></td>
-                                        </tr>
-                                        ` : ''}
-                                    </tfoot>
-                                </table>
-                            </div>
-
-                            <p class="text-justify indent-8 mb-4" style="font-size: 14px;">
-                                Demikian berita acara ini dibuat dengan sebenar-benarnya dan dapat dipergunakan sebagaimana mestinya.
-                            </p>
-
-                            <div class="grid mt-6">
-                                <div class="text-center">
-                                    <p style="margin: 0;">&nbsp;</p>
-                                    <p style="margin: 0;">&nbsp;</p>
-                                    <p class="font-bold" style="margin: 0; font-size: 14px;">Kepala Desa ${targetDesaName}</p>
-                                    <p style="margin: 0 0 64px 0;">&nbsp;</p>
-                                    <p class="font-bold underline" style="margin: 0; font-size: 14px;">_________________________</p>
-                                </div>
-                                <div class="text-center">
-                                    <p style="margin: 0;">&nbsp;</p>
-                                    <p style="margin: 0;">&nbsp;</p>
-                                    <p class="font-bold" style="margin: 0; font-size: 14px;">Camat ${targetKecName}</p>
-                                    <p style="margin: 0 0 64px 0;">&nbsp;</p>
-                                    <p class="font-bold underline" style="margin: 0; font-size: 14px;">_________________________</p>
-                                </div>
-                                <div class="text-center">
-                                    <p style="margin: 0; font-size: 14px;">Bojonegoro, ${formattedPrintDate}</p>
-                                    <p style="margin: 0;">&nbsp;</p>
-                                    <p class="font-bold" style="margin: 0; font-size: 14px;">Verifikator BAPPEDA</p>
-                                    <p style="margin: 0 0 64px 0;">&nbsp;</p>
-                                    <p class="font-bold underline" style="margin: 0; font-size: 14px;">${data[0]?.verifikator || "Operator Bappeda"}</p>
-                                </div>
-                            </div>
-
-                            <div class="print-footer">
-                                Dokumen ini dicetak oleh sistem pada tanggal: ${formattedPrintDate} pukul ${formattedPrintTime} WIB
-                            </div>
-
-                            ${mapImageSrc ? `
-                            <div style="page-break-before: always; text-align: center; padding-top: 10px;">
-                                <h3 class="font-bold uppercase" style="font-size: 14px; margin-bottom: 12px;">LAMPIRAN: PETA DIGITASI SEGMEN SPASIAL INFRASTRUKTUR DESA</h3>
-                                <div style="width: 100%; aspect-ratio: 16 / 9; overflow: hidden; background-color: #ffffff;">
-                                    <img src="${mapImageSrc}" style="width: 100%; height: 100%; object-fit: cover; display: block;" />
-                                </div>
-                                <p style="font-size: 10px; margin-top: 10px; color: #4b5563;">
-                                    Peta Realisasi Infrastruktur Desa - Desa ${targetDesaName}, Kecamatan ${targetKecName} - Tahun Anggaran ${tahun}
-                                </p>
-                                <div style="margin-top: 20px; border: 1px solid #cbd5e1; background-color: #f8fafc; border-radius: 6px; padding: 12px 16px; text-align: justify; font-size: 10px; line-height: 1.5; color: #1e293b;">
-                                    <div style="font-weight: bold; font-size: 11px; margin-bottom: 8px; color: #0f172a; text-align: left;">Catatan / Himbauan</div>
-                                    <p style="margin: 0 0 6px 0;">
-                                        Visualisasi segmen pada aplikasi ini disusun berdasarkan proses digitasi di atas peta (desktop digitizing) menggunakan informasi titik koordinat yang diinput secara manual oleh desa. Data tersebut <strong>bukan</strong> merupakan hasil pengukuran lapangan menggunakan perangkat survei berpresisi tinggi seperti <strong>RTK GNSS</strong> atau <strong>GPS Geodetik</strong>.
-                                    </p>
-                                    <p style="margin: 0 0 6px 0;">
-                                        Oleh karena itu, posisi, panjang, maupun bentuk segmen yang ditampilkan bersifat <strong>indikatif</strong> dan digunakan sebagai media dokumentasi, monitoring, serta pelaporan realisasi pembangunan. Perbedaan posisi atau bentuk segmen terhadap kondisi aktual di lapangan masih dapat terjadi dan bukan menjadi dasar penilaian teknis maupun pengukuran resmi.
-                                    </p>
-                                    <p style="margin: 0;">
-                                        Apabila diperlukan data dengan tingkat akurasi tinggi untuk keperluan teknis, pengukuran, atau penetapan batas, maka harus dilakukan survei lapangan menggunakan metode dan peralatan survei geospasial yang memenuhi standar.
-                                    </p>
-                                </div>
-                            </div>
-                            ` : ""}
-
-                            <script>
-                                window.onload = function() {
-                                    setTimeout(function() {
-                                        window.print();
-                                        window.close();
-                                    }, 500);
-                                };
-                            </script>
-                        </body>
-                    </html>
-                `);
-                printWindow.document.close();
-            }
-
-            toast.success("Berita Acara dikirim ke printer!", { id: toastId });
-        } catch (err) {
-            console.error("Print BA error:", err);
-            toast.error("Terjadi kesalahan saat memuat data berita acara", { id: toastId });
-        }
-    };
-
     // Digitizing Tool Menubar Component Instance
     const digitizingMenubarContent = (
         <DigitizingToolMenubar
@@ -6522,39 +6973,611 @@ export default function RoadRealizationInfrastrukturPage() {
         <>
             <div className="absolute inset-0 flex flex-col overflow-hidden bg-background text-foreground font-sans print:hidden">
                 {/* Header */}
-                <div className="h-14 border-b border-border bg-card px-4 flex items-center justify-between shrink-0 gap-3">
-                    <div className="flex items-center gap-4 min-w-0">
-                        <div className="flex items-center gap-4 shrink-0">
-                            <div className="p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-500/20">
-                                <MapIcon className="size-5" />
-                            </div>
-                            <div>
-                                <div className="flex items-center gap-1.5">
-                                    <h1 className="text-xs font-bold tracking-wider uppercase text-foreground/90">
-                                        {activeTipe ? `Workspace ${activeTipe.nama}` : "Workspace Infrastruktur"}
-                                    </h1>
-                                    <span className="hidden md:inline-flex items-center text-[8px] bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 rounded font-black uppercase tracking-wider leading-none">
-                                        Digitasi
-                                    </span>
-                                </div>
-                                {/* Breadcrumbs for region */}
-                                {activeKecName && activeDesaName ? (
-                                    <div className="hidden sm:flex items-center gap-1 text-[10px] text-muted-foreground font-semibold mt-0.5 leading-none">
-                                        <span>Kec. {activeKecName}</span>
-                                        <ChevronRight className="size-2.5 text-muted-foreground/60" />
-                                        <span className="text-blue-600 dark:text-blue-400 font-bold">Desa {activeDesaName}</span>
-                                    </div>
-                                ) : (
-                                    <p className="hidden sm:block text-[10px] text-muted-foreground font-medium mt-0.5 leading-none">Pilih wilayah di panel untuk memulai digitasi</p>
-                                )}
-                                {regionInfo && (
-                                    <p className="sm:hidden text-[9px] text-indigo-600 dark:text-indigo-400 font-bold uppercase tracking-wide truncate max-w-[150px] mt-0.5 leading-none">
-                                        {regionInfo}
-                                    </p>
-                                )}
+                <div className="h-14 border-b border-border bg-card px-2.5 sm:px-4 flex items-center justify-between shrink-0 gap-2 sm:gap-3">
+                    <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                        <div className="flex items-center shrink-0">
+                            <div className="p-1.5 sm:p-2 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-lg border border-blue-500/20">
+                                <MapIcon className="size-4 sm:size-5" />
                             </div>
                         </div>
 
+                        {/* Title & Region Breadcrumb Selector (Strictly 1 Row, No Wrap) */}
+                        <div className="flex items-center gap-1.5 sm:gap-3 min-w-0">
+                            {/* 2-Row Title with Interactive Tipe Switcher */}
+                            <div className="flex flex-col justify-center shrink-0 min-w-0">
+                                <div className="flex items-center gap-1 leading-none">
+                                    <span className="text-[8.5px] sm:text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                                        Workspace
+                                    </span>
+                                    <span className="inline-flex items-center text-[7px] sm:text-[8px] bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 px-1 py-0.2 rounded font-black uppercase tracking-wider leading-none">
+                                        Digitasi
+                                    </span>
+                                </div>
+
+                                {/* DESKTOP / TABLET TIPE SWITCHER POPOVER */}
+                                <div className="hidden sm:block mt-0.5">
+                                    <Popover open={headerTipeOpen} onOpenChange={setHeaderTipeOpen}>
+                                        <PopoverTrigger asChild>
+                                            <button
+                                                type="button"
+                                                disabled={isFormOpen}
+                                                className={cn(
+                                                    "group flex items-center gap-1 text-xs sm:text-sm font-bold text-foreground hover:text-blue-600 dark:hover:text-blue-400 transition-colors focus:outline-none text-left truncate max-w-[170px] cursor-pointer",
+                                                    isFormOpen && "opacity-60 cursor-not-allowed"
+                                                )}
+                                                title="Klik untuk ganti tipe infrastruktur"
+                                            >
+                                                <span className="truncate">{activeTipe ? activeTipe.nama : "Infrastruktur"}</span>
+                                                <ChevronsUpDown className="size-3 text-muted-foreground/60 group-hover:text-foreground shrink-0 transition-transform" />
+                                            </button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="p-1.5 w-[260px]" align="start">
+                                            <div className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50 mb-1">
+                                                Pilih Tipe Infrastruktur
+                                            </div>
+                                            <div className="space-y-0.5 max-h-[280px] overflow-y-auto custom-scrollbar">
+                                                {tipes.map((t) => {
+                                                    const isSelected = activeTipe?.kode === t.kode;
+                                                    return (
+                                                        <button
+                                                            key={t.kode}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActiveTipe(t);
+                                                                setSearchParams((prev) => {
+                                                                    const next = new URLSearchParams(prev);
+                                                                    next.set("tipe", t.kode);
+                                                                    return next;
+                                                                });
+                                                                setHeaderTipeOpen(false);
+                                                            }}
+                                                            className={cn(
+                                                                "w-full text-left px-2.5 py-2 rounded-lg flex items-center justify-between text-xs transition-colors hover:bg-muted/80 cursor-pointer",
+                                                                isSelected && "bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center gap-2 min-w-0">
+                                                                <span
+                                                                    className="size-2.5 rounded-full shrink-0 shadow-2xs"
+                                                                    style={{ backgroundColor: t.warna || "#3b82f6" }}
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <div className="truncate font-semibold">{t.nama}</div>
+                                                                    <div className="text-[9px] text-muted-foreground font-normal">
+                                                                        {t.geom_type?.toUpperCase() === "POINT" ? "Titik (Point)" : t.geom_type?.toUpperCase() === "POLYGON" ? "Poligon (Area)" : "Garis (Line)"}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            {isSelected && (
+                                                                <Check className="size-4 text-blue-600 dark:text-blue-400 shrink-0 ml-1" />
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="p-1 pt-1.5 border-t border-border/50 bg-muted/20">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setHeaderTipeOpen(false);
+                                                        setIsSelectTipeDialogOpen(true);
+                                                    }}
+                                                    className="w-full text-center py-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 rounded-md flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                                                >
+                                                    <Sparkles className="size-3" />
+                                                    <span>Buka Dialog Pilihan Tipe</span>
+                                                </button>
+                                            </div>
+                                        </PopoverContent>
+                                    </Popover>
+                                </div>
+
+                                {/* MOBILE TIPE SWITCHER DRAWER */}
+                                <div className="sm:hidden mt-0.5">
+                                    <Drawer open={headerMobileTipeOpen} onOpenChange={setHeaderMobileTipeOpen}>
+                                        <DrawerTrigger asChild>
+                                            <button
+                                                type="button"
+                                                disabled={isFormOpen}
+                                                className={cn(
+                                                    "flex items-center gap-0.5 text-xs font-bold text-foreground hover:text-blue-600 dark:hover:text-blue-400 transition-colors focus:outline-none text-left truncate max-w-[95px] xs:max-w-[125px] cursor-pointer",
+                                                    isFormOpen && "opacity-60 cursor-not-allowed"
+                                                )}
+                                            >
+                                                <span className="truncate">{activeTipe ? activeTipe.nama : "Infrastruktur"}</span>
+                                                <ChevronsUpDown className="size-2.5 text-muted-foreground/60 shrink-0" />
+                                            </button>
+                                        </DrawerTrigger>
+                                        <DrawerContent className="p-4 pt-2 pb-6 max-h-[70vh]">
+                                            <DrawerHeader className="px-0 pt-0 text-left">
+                                                <DrawerTitle className="text-sm font-bold">Pilih Tipe Infrastruktur</DrawerTitle>
+                                                <DrawerDescription className="text-xs text-muted-foreground">
+                                                    Ganti ruang kerja pemantauan dan digitasi spasial
+                                                </DrawerDescription>
+                                            </DrawerHeader>
+                                            <div className="space-y-1.5 mt-2 overflow-y-auto max-h-[50vh]">
+                                                {tipes.map((t) => {
+                                                    const isSelected = activeTipe?.kode === t.kode;
+                                                    return (
+                                                        <button
+                                                            key={t.kode}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setActiveTipe(t);
+                                                                setSearchParams((prev) => {
+                                                                    const next = new URLSearchParams(prev);
+                                                                    next.set("tipe", t.kode);
+                                                                    return next;
+                                                                });
+                                                                setHeaderMobileTipeOpen(false);
+                                                            }}
+                                                            className={cn(
+                                                                "w-full text-left p-3 rounded-xl flex items-center justify-between border transition-all cursor-pointer",
+                                                                isSelected
+                                                                    ? "border-blue-500/50 bg-blue-500/10 text-blue-700 dark:text-blue-300 font-bold shadow-xs"
+                                                                    : "border-border/60 bg-card hover:bg-muted/60 text-foreground"
+                                                            )}
+                                                        >
+                                                            <div className="flex items-center gap-3 min-w-0">
+                                                                <span
+                                                                    className="size-3.5 rounded-full shrink-0 shadow-sm"
+                                                                    style={{ backgroundColor: t.warna || "#3b82f6" }}
+                                                                />
+                                                                <div className="min-w-0">
+                                                                    <div className="text-xs font-bold truncate">{t.nama}</div>
+                                                                    <div className="text-[10px] text-muted-foreground font-medium mt-0.5">
+                                                                        Tipe {t.geom_type?.toUpperCase() === "POINT" ? "Titik (Point)" : t.geom_type?.toUpperCase() === "POLYGON" ? "Poligon / Area" : "Garis (LineString)"}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            {isSelected && (
+                                                                <Check className="size-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                            <div className="mt-3 pt-2 border-t border-border/50">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setHeaderMobileTipeOpen(false);
+                                                        setIsSelectTipeDialogOpen(true);
+                                                    }}
+                                                    className="w-full text-center py-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 rounded-xl flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                                                >
+                                                    <Sparkles className="size-3.5" />
+                                                    <span>Buka Dialog Pilihan Tipe</span>
+                                                </button>
+                                            </div>
+                                        </DrawerContent>
+                                    </Drawer>
+                                </div>
+                            </div>
+
+                            <ChevronRight className="size-3.5 text-muted-foreground/50 shrink-0 hidden sm:block" />
+
+                            {/* DESKTOP / TABLET REGION BREADCRUMB SELECTORS */}
+                            <div className="hidden sm:flex items-center gap-1.5 min-w-0">
+                                {/* Kecamatan Popover Selector */}
+                                <Popover open={headerKecOpen} onOpenChange={setHeaderKecOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            role="combobox"
+                                            aria-expanded={headerKecOpen}
+                                            disabled={isFormOpen || user?.role === 'operator_desa' || user?.role === 'operator_kecamatan'}
+                                            className={cn(
+                                                "h-7 text-xs font-semibold px-2.5 rounded-lg border-border/80 bg-background/80 hover:bg-muted transition-all max-w-[170px] justify-between gap-1",
+                                                selectedKec && "border-indigo-500/30 text-indigo-700 dark:text-indigo-300 font-bold bg-indigo-500/5"
+                                            )}
+                                        >
+                                            <span className="truncate">
+                                                {activeKecName ? `Kec. ${activeKecName}` : "Pilih Kecamatan..."}
+                                            </span>
+                                            {user?.role !== 'operator_desa' && user?.role !== 'operator_kecamatan' && (
+                                                <ChevronsUpDown className="size-3 shrink-0 opacity-50 ml-0.5" />
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-0 w-[220px]" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Cari kecamatan..." className="h-8 text-xs" />
+                                            <CommandList>
+                                                <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">Kecamatan tidak ditemukan</CommandEmpty>
+                                                <CommandGroup>
+                                                    {kecamatanList.map((kec) => (
+                                                        <CommandItem
+                                                            key={kec.id}
+                                                            value={kec.nama_kecamatan}
+                                                            onSelect={() => {
+                                                                setSelectedKec(kec.id.toString());
+                                                                setSelectedDesa("");
+                                                                setHeaderKecOpen(false);
+                                                                setHeaderDesaOpen(true);
+                                                            }}
+                                                            className="text-xs flex items-center justify-between"
+                                                        >
+                                                            <span>{kec.nama_kecamatan}</span>
+                                                            {selectedKec === kec.id.toString() && (
+                                                                <Check className="size-3.5 text-indigo-600 dark:text-indigo-400" />
+                                                            )}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+
+                                <ChevronRight className="size-3 text-muted-foreground/40 shrink-0" />
+
+                                {/* Desa Popover Selector */}
+                                <Popover open={headerDesaOpen} onOpenChange={setHeaderDesaOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            role="combobox"
+                                            aria-expanded={headerDesaOpen}
+                                            disabled={isFormOpen || !selectedKec || user?.role === 'operator_desa'}
+                                            className={cn(
+                                                "h-7 text-xs font-semibold px-2.5 rounded-lg border-border/80 bg-background/80 hover:bg-muted transition-all max-w-[170px] justify-between gap-1",
+                                                selectedDesa && "border-blue-500/40 text-blue-700 dark:text-blue-300 font-bold bg-blue-500/10 shadow-2xs",
+                                                !selectedKec && "opacity-50 cursor-not-allowed"
+                                            )}
+                                        >
+                                            <span className="truncate">
+                                                {activeDesaName ? `Desa ${activeDesaName}` : "Pilih Desa..."}
+                                            </span>
+                                            {user?.role !== 'operator_desa' && (
+                                                <ChevronsUpDown className="size-3 shrink-0 opacity-50 ml-0.5" />
+                                            )}
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-0 w-[220px]" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Cari desa..." className="h-8 text-xs" />
+                                            <CommandList>
+                                                <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">Desa tidak ditemukan</CommandEmpty>
+                                                <CommandGroup>
+                                                    {desaList.map((d) => (
+                                                        <CommandItem
+                                                            key={d.id}
+                                                            value={d.nama_desa}
+                                                            onSelect={() => {
+                                                                setSelectedDesa(d.id.toString());
+                                                                setHeaderDesaOpen(false);
+                                                            }}
+                                                            className="text-xs flex items-center justify-between"
+                                                        >
+                                                            <span>{d.nama_desa}</span>
+                                                            {selectedDesa === d.id.toString() && (
+                                                                <Check className="size-3.5 text-blue-600 dark:text-blue-400" />
+                                                            )}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+
+                                <ChevronRight className="size-3 text-muted-foreground/40 shrink-0" />
+
+                                {/* Tahun Anggaran Popover Selector */}
+                                <Popover open={headerTahunOpen} onOpenChange={setHeaderTahunOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            role="combobox"
+                                            aria-expanded={headerTahunOpen}
+                                            disabled={isFormOpen}
+                                            className={cn(
+                                                "h-7 text-xs font-semibold px-2.5 rounded-lg border-border/80 bg-background/80 hover:bg-muted transition-all max-w-[150px] justify-between gap-1",
+                                                selectedTahunFilter !== "Semua" && "border-amber-500/40 text-amber-700 dark:text-amber-300 font-bold bg-amber-500/10 shadow-2xs"
+                                            )}
+                                        >
+                                            <span className="truncate">
+                                                {selectedTahunFilter === "Semua" ? "Semua TA" : `TA ${selectedTahunFilter}`}
+                                            </span>
+                                            <ChevronsUpDown className="size-3 shrink-0 opacity-50 ml-0.5" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="p-0 w-[180px]" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Cari tahun anggaran..." className="h-8 text-xs" />
+                                            <CommandList>
+                                                <CommandEmpty className="py-2 text-center text-xs text-muted-foreground">Tahun tidak ditemukan</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="Semua Tahun Anggaran"
+                                                        onSelect={() => {
+                                                            setSelectedTahunFilter("Semua");
+                                                            setHeaderTahunOpen(false);
+                                                        }}
+                                                        className="text-xs flex items-center justify-between cursor-pointer"
+                                                    >
+                                                        <span>Semua Tahun</span>
+                                                        {selectedTahunFilter === "Semua" && (
+                                                            <Check className="size-3.5 text-amber-600 dark:text-amber-400" />
+                                                        )}
+                                                    </CommandItem>
+                                                    {uniqueYears.map((y) => (
+                                                        <CommandItem
+                                                            key={y}
+                                                            value={`TA ${y} ${y}`}
+                                                            onSelect={() => {
+                                                                setSelectedTahunFilter(y);
+                                                                setHeaderTahunOpen(false);
+                                                            }}
+                                                            className="text-xs flex items-center justify-between cursor-pointer font-medium"
+                                                        >
+                                                            <span>TA {y}</span>
+                                                            {selectedTahunFilter === y && (
+                                                                <Check className="size-3.5 text-amber-600 dark:text-amber-400" />
+                                                            )}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+
+                            {/* Mobile Chevron Divider */}
+                            <ChevronRight className="size-3 text-muted-foreground/40 shrink-0 sm:hidden" />
+
+                            {/* MOBILE COMPACT REGION DRAWER */}
+                            <div className="flex sm:hidden items-center shrink-0 min-w-0">
+                                <Drawer open={headerMobileRegionOpen} onOpenChange={setHeaderMobileRegionOpen}>
+                                    <DrawerTrigger asChild>
+                                        <button
+                                            type="button"
+                                            disabled={isFormOpen || user?.role === 'operator_desa'}
+                                            className={cn(
+                                                "h-7 text-[10px] sm:text-[10.5px] font-bold px-2 rounded-lg border flex items-center gap-1 max-w-[140px] xs:max-w-[170px] cursor-pointer transition-all shrink-0",
+                                                selectedDesa
+                                                    ? "border-indigo-500/40 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 shadow-2xs"
+                                                    : "border-border bg-muted/60 text-foreground hover:bg-muted"
+                                            )}
+                                        >
+                                            <MapPin className="size-2.5 text-indigo-500 shrink-0" />
+                                            <span className="truncate">
+                                                {activeDesaName
+                                                    ? `${activeKecName} › ${activeDesaName}${selectedTahunFilter !== "Semua" ? ` (${selectedTahunFilter})` : ""}`
+                                                    : activeKecName
+                                                    ? `Kec. ${activeKecName}`
+                                                    : "Pilih Wilayah"}
+                                            </span>
+                                            <ChevronsUpDown className="size-2 text-muted-foreground/60 shrink-0 opacity-60" />
+                                        </button>
+                                    </DrawerTrigger>
+                                    <DrawerContent className="p-4 pt-2 pb-5 max-h-[85vh] flex flex-col bg-background">
+                                        {/* Drawer Header & Summary */}
+                                        <div className="flex items-center justify-between pb-2.5 border-b border-border/60 shrink-0">
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                                                <MapPin className="size-3.5 text-indigo-500" />
+                                                <span>Pilih Wilayah &amp; Tahun Anggaran</span>
+                                            </div>
+                                            <div className="flex items-center gap-1 text-[10px] font-bold">
+                                                {activeKecName && (
+                                                    <span className="text-indigo-600 dark:text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded-md">
+                                                        {activeKecName}
+                                                    </span>
+                                                )}
+                                                {activeDesaName && (
+                                                    <span className="text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-md">
+                                                        › {activeDesaName}
+                                                    </span>
+                                                )}
+                                                {selectedTahunFilter !== "Semua" && (
+                                                    <span className="text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md">
+                                                        TA {selectedTahunFilter}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-4 pt-3 overflow-y-auto custom-scrollbar flex-1 min-h-0">
+                                            {/* 1. KECAMATAN SECTION */}
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="flex items-center justify-center size-4 rounded-full bg-indigo-500/20 text-indigo-700 dark:text-indigo-300 font-extrabold text-[9px]">1</span>
+                                                        <span>Kecamatan</span>
+                                                    </div>
+                                                    {activeKecName && (
+                                                        <span className="text-[10px] font-bold text-indigo-600 dark:text-indigo-400">Kec. {activeKecName}</span>
+                                                    )}
+                                                </div>
+
+                                                {user?.role === 'operator_desa' || user?.role === 'operator_kecamatan' ? (
+                                                    <div className="flex items-center justify-between p-2 rounded-lg bg-muted/50 border border-border/50 text-xs">
+                                                        <span className="text-muted-foreground font-medium">Kecamatan:</span>
+                                                        <span className="font-bold text-indigo-600 dark:text-indigo-400">{activeKecName}</span>
+                                                        <span className="text-[9px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded font-medium">Terkunci</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto custom-scrollbar p-1.5 bg-muted/20 rounded-lg border border-border/40">
+                                                        {kecamatanList.map((k) => {
+                                                            const isSelected = selectedKec === k.id.toString();
+                                                            return (
+                                                                <button
+                                                                    key={k.id}
+                                                                    type="button"
+                                                                    onClick={() => {
+                                                                        setSelectedKec(k.id.toString());
+                                                                        setSelectedDesa("");
+                                                                        setMobileDesaSearch("");
+                                                                    }}
+                                                                    className={cn(
+                                                                        "px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer",
+                                                                        isSelected
+                                                                            ? "border-indigo-500 bg-indigo-600 text-white shadow-2xs font-bold"
+                                                                            : "border-border/60 bg-card hover:bg-muted text-foreground"
+                                                                    )}
+                                                                >
+                                                                    {k.nama_kecamatan}
+                                                                </button>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* 2. DESA SECTION */}
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="flex items-center justify-center size-4 rounded-full bg-blue-500/20 text-blue-700 dark:text-blue-300 font-extrabold text-[9px]">2</span>
+                                                        <span>Desa</span>
+                                                    </div>
+                                                    {selectedKec && (
+                                                        <span className="text-[10px] font-normal text-muted-foreground lowercase">
+                                                            {desaList.length} desa tersedia
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {selectedKec ? (
+                                                    <div className="space-y-2">
+                                                        {/* Quick Search for Villages */}
+                                                        {desaList.length > 8 && (
+                                                            <Input
+                                                                type="text"
+                                                                placeholder="Cari nama desa..."
+                                                                value={mobileDesaSearch}
+                                                                onChange={(e) => setMobileDesaSearch(e.target.value)}
+                                                                className="h-7 text-xs bg-muted/30 border-border/60 rounded-md"
+                                                            />
+                                                        )}
+
+                                                        <div className="flex flex-wrap gap-1.5 max-h-[160px] overflow-y-auto custom-scrollbar p-1.5 bg-muted/20 rounded-lg border border-border/40">
+                                                            {desaList
+                                                                .filter((d) => !mobileDesaSearch || d.nama_desa.toLowerCase().includes(mobileDesaSearch.toLowerCase()))
+                                                                .map((d) => {
+                                                                    const isSelected = selectedDesa === d.id.toString();
+                                                                    return (
+                                                                        <button
+                                                                            key={d.id}
+                                                                            type="button"
+                                                                            disabled={user?.role === 'operator_desa'}
+                                                                            onClick={() => {
+                                                                                setSelectedDesa(d.id.toString());
+                                                                                setMobileDesaSearch("");
+                                                                            }}
+                                                                            className={cn(
+                                                                                "px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1",
+                                                                                isSelected
+                                                                                    ? "border-blue-500 bg-blue-600 text-white shadow-2xs font-bold"
+                                                                                    : "border-border/60 bg-card hover:bg-muted text-foreground"
+                                                                            )}
+                                                                        >
+                                                                            <span>{d.nama_desa}</span>
+                                                                            {isSelected && <Check className="size-3 text-white" />}
+                                                                        </button>
+                                                                    );
+                                                                })}
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="p-3 text-center text-xs text-muted-foreground bg-muted/20 rounded-lg border border-dashed border-border/60">
+                                                        Pilih kecamatan pada langkah 1 di atas terlebih dahulu
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* 3. TAHUN ANGGARAN SECTION */}
+                                            <div className="space-y-1.5">
+                                                <div className="flex items-center justify-between text-[10.5px] font-bold uppercase tracking-wider text-muted-foreground">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="flex items-center justify-center size-4 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-extrabold text-[9px]">3</span>
+                                                        <span>Tahun Anggaran (TA)</span>
+                                                    </div>
+                                                    <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">
+                                                        {selectedTahunFilter === "Semua" ? "Semua TA" : `TA ${selectedTahunFilter}`}
+                                                    </span>
+                                                </div>
+                                                <div className="flex flex-wrap gap-1.5 p-1.5 bg-muted/20 rounded-lg border border-border/40">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setSelectedTahunFilter("Semua");
+                                                            if (selectedDesa) {
+                                                                setHeaderMobileRegionOpen(false);
+                                                                setIsBottomSegmentPanelOpen(true);
+                                                            }
+                                                        }}
+                                                        className={cn(
+                                                            "px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer",
+                                                            selectedTahunFilter === "Semua"
+                                                                ? "border-amber-500 bg-amber-600 text-white shadow-2xs font-bold"
+                                                                : "border-border/60 bg-card hover:bg-muted text-foreground"
+                                                        )}
+                                                    >
+                                                        Semua TA
+                                                    </button>
+                                                    {uniqueYears.map((y) => {
+                                                        const isSelected = selectedTahunFilter === y;
+                                                        return (
+                                                            <button
+                                                                key={y}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setSelectedTahunFilter(y);
+                                                                    if (selectedDesa) {
+                                                                        setHeaderMobileRegionOpen(false);
+                                                                        setIsBottomSegmentPanelOpen(true);
+                                                                    }
+                                                                }}
+                                                                className={cn(
+                                                                    "px-2.5 py-1 rounded-md text-xs font-semibold border transition-all cursor-pointer flex items-center gap-1",
+                                                                    isSelected
+                                                                        ? "border-amber-500 bg-amber-600 text-white shadow-2xs font-bold"
+                                                                        : "border-border/60 bg-card hover:bg-muted text-foreground"
+                                                                )}
+                                                            >
+                                                                <span>TA {y}</span>
+                                                                {isSelected && <Check className="size-3 text-white" />}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Apply / Terapkan Button */}
+                                        <div className="pt-3 border-t border-border/60 shrink-0">
+                                            <Button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (!selectedDesa && user?.role !== 'super_admin' && user?.role !== 'admin') {
+                                                        toast.warning("Silakan pilih Desa terlebih dahulu.");
+                                                        return;
+                                                    }
+                                                    setHeaderMobileRegionOpen(false);
+                                                    if (selectedDesa) {
+                                                        setIsBottomSegmentPanelOpen(true);
+                                                    }
+                                                }}
+                                                className="w-full h-9 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-md shadow-indigo-500/20 cursor-pointer gap-1.5"
+                                            >
+                                                <Check className="size-4" />
+                                                <span>
+                                                    {selectedDesa
+                                                        ? `Terapkan Wilayah (${activeDesaName || "Desa"}) & Buka Segmen`
+                                                        : "Tampilkan Peta"}
+                                                </span>
+                                            </Button>
+                                        </div>
+                                    </DrawerContent>
+                                </Drawer>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
@@ -6564,9 +7587,35 @@ export default function RoadRealizationInfrastrukturPage() {
                                 <span className="hidden sm:inline">Sinkronisasi...</span>
                             </div>
                         )}
-                        <Button variant="outline" size="sm" onClick={() => setIsHelpOpen(true)} className="h-8 text-xs gap-1.5 rounded-lg border-border/80 hover:bg-muted/50">
-                            <HelpCircle className="size-3.5 text-muted-foreground" />
-                        </Button>
+                        <Tooltip>
+                            <TooltipTrigger asChild>
+                                <Button
+                                    variant={isBottomSegmentPanelOpen ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setIsBottomSegmentPanelOpen(prev => !prev)}
+                                    className={cn(
+                                        "h-8 text-xs gap-1.5 rounded-lg border-border/80 cursor-pointer transition-all",
+                                        isBottomSegmentPanelOpen
+                                            ? "bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-xs"
+                                            : "hover:bg-muted/50 text-foreground"
+                                    )}
+                                >
+                                    <Table2 className="size-3.5" />
+                                    <span className="hidden sm:inline">Tabel Segmen</span>
+                                    {realisasiList.length > 0 && (
+                                        <span className={cn(
+                                            "px-1.5 py-0.2 rounded-full text-[9px] font-black",
+                                            isBottomSegmentPanelOpen ? "bg-white/20 text-white" : "bg-indigo-500/15 text-indigo-700 dark:text-indigo-300"
+                                        )}>
+                                            {realisasiList.length}
+                                        </span>
+                                    )}
+                                </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">
+                                {isBottomSegmentPanelOpen ? "Sembunyikan Panel Bawah Segmen" : "Buka Panel Bawah Segmen (Tabel & Kartu Atribut)"}
+                            </TooltipContent>
+                        </Tooltip>
                     </div>
                 </div>
 
@@ -6581,110 +7630,280 @@ export default function RoadRealizationInfrastrukturPage() {
                         />
                     )}
 
-                    {/* Left Form Panel componentized */}
-                    <InfrastrukturPanel
-                        tipes={tipes}
-                        activeTipe={activeTipe}
-                        setActiveTipe={setActiveTipe}
+                    {/* Left Form Panel componentized with Responsive Drag-to-Resize */}
+                    {/* DESKTOP SIDEBAR (md ke atas) */}
+                    <div
+                        ref={sidebarContainerRef}
+                        style={{
+                            width: isSidebarOpen ? `${sidebarWidth}px` : "0px",
+                            minWidth: isSidebarOpen ? `${sidebarWidth}px` : "0px",
+                            maxWidth: isSidebarOpen ? `${sidebarWidth}px` : "0px",
+                        }}
                         className={cn(
-                            // === DESKTOP (md ke atas) — sidebar kiri ===
-                            "md:relative md:h-full md:transition-all md:duration-300 ease-in-out",
-                            // === MOBILE (di bawah md) — bottom sheet ===
-                            "fixed inset-x-0 bottom-0 z-40 transition-all duration-300 ease-in-out md:static",
-                            isSidebarOpen
-                                ? "w-full md:w-96 md:min-w-[384px] md:border-r md:border-border opacity-100 translate-y-0 md:translate-x-0 h-[70vh] md:h-full z-40"
-                                : "w-full md:w-0 md:min-w-0 md:border-r-0 opacity-0 translate-y-full md:-translate-x-full pointer-events-none h-[70vh] md:h-full z-40 overflow-hidden"
+                            "hidden md:flex md:relative md:h-full md:flex-col md:shrink-0",
+                            isSidebarDragging ? "transition-none select-none" : "transition-[width,min-width,max-width] duration-300 ease-in-out",
+                            isSidebarOpen ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-full pointer-events-none overflow-hidden"
                         )}
-                        drawnCoords={drawnCoords}
-                        selectedKec={selectedKec}
-                        setSelectedKec={setSelectedKec}
-                        selectedDesa={selectedDesa}
-                        setSelectedDesa={setSelectedDesa}
-                        kecamatanList={kecamatanList}
-                        desaList={desaList}
-                        onSearchCoordinates={handleSearchCoordinates}
-                        onSearchMultiCoordinates={handleSearchMultiCoordinates}
-                        onClearSearchPin={handleClearSearchPin}
-                        hasSearchPin={hasSearchPin}
-                        realisasiList={realisasiList}
-                        isFormOpen={isFormOpen}
-                        setIsFormOpen={setIsFormOpen}
-                        digitizeMode={digitizeMode}
-                        setDigitizeMode={setDigitizeMode}
-                        tipeJalanDigitasi={tipeJalanDigitasi}
-                        setTipeJalanDigitasi={setTipeJalanDigitasi}
-                        isDrawing={isDrawing}
-                        isReshaping={isReshaping}
-                        drawnLength={drawnLength}
-                        coordsCount={coordsCount}
-                        isSnappingEnabled={isSnappingEnabled}
-                        setIsSnappingEnabled={setIsSnappingEnabled}
-                        customRoadName={customRoadName}
-                        setCustomRoadName={setCustomRoadName}
-                        inputPanjang={inputPanjang}
-                        setInputPanjang={setInputPanjang}
-                        inputLebar={inputLebar}
-                        setInputLebar={setInputLebar}
-                        handleGenerateDimensionArea={handleGenerateDimensionArea}
-                        lebar={lebar}
-                        setLebar={setLebar}
-                        tahun={tahun}
-                        setTahun={setTahun}
-                        perkerasan={perkerasan}
-                        setPerkerasan={setPerkerasan}
-                        kondisi={kondisi}
-                        setKondisi={setKondisi}
-                        errorMsg={errorMsg}
-                        checkMelarosa={checkMelarosa}
-                        snappedRoad={snappedRoad}
-                        snappedCandidates={snappedCandidates}
-                        selectedSnappedRoadId={selectedSnappedRoadId}
-                        handleSave={handleSave}
-                        closeForm={closeForm}
-                        isAttributeDialogOpen={isAttributeDialogOpen}
-                        startDraw={startDraw}
-                        startAutoTraceMode={startAutoTraceMode}
-                        enterReshapeMode={enterReshapeMode}
-                        handleRedraw={handleRedraw}
-                        handleSelectAlternativeRoad={handleSelectAlternativeRoad}
-                        zoomToSegment={zoomToSegment}
-                        handleEditGeometryAndAttributes={handleEditGeometryAndAttributes}
-                        handleEditAttributesOnly={handleEditAttributesOnly}
-                        handleDelete={handleDelete}
-                        onHoverSegment={setHoveredSegmentId}
-                        isLoading={isLoading}
-                        editingSegmentId={editingSegmentId}
-                        onPrintBeritaAcara={triggerPrintBeritaAcaraDialog}
-                        onToggleSidebar={() => setIsSidebarOpen(v => !v)}
-                        selectedTahunFilter={selectedTahunFilter}
-                        setSelectedTahunFilter={setSelectedTahunFilter}
-                        onZoomToFiltered={zoomToFilteredSegments}
-                        onRefreshSegments={() => {
-                            if (!selectedDesa) {
-                                toast.warning("Silakan pilih wilayah desa terlebih dahulu.");
-                                return;
-                            }
-                            loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true });
-                            toast.success("Daftar segmen realisasi berhasil diperbarui.");
+                    >
+                        <InfrastrukturPanel
+                            tipes={tipes}
+                            activeTipe={activeTipe}
+                            setActiveTipe={setActiveTipe}
+                            className="w-full h-full flex-1 min-h-0 border-r border-border"
+                            drawnCoords={drawnCoords}
+                            selectedKec={selectedKec}
+                            setSelectedKec={setSelectedKec}
+                            selectedDesa={selectedDesa}
+                            setSelectedDesa={setSelectedDesa}
+                            kecamatanList={kecamatanList}
+                            desaList={desaList}
+                            onSearchCoordinates={handleSearchCoordinates}
+                            onSearchMultiCoordinates={handleSearchMultiCoordinates}
+                            onClearSearchPin={handleClearSearchPin}
+                            hasSearchPin={hasSearchPin}
+                            realisasiList={realisasiList}
+                            isFormOpen={isFormOpen}
+                            setIsFormOpen={setIsFormOpen}
+                            digitizeMode={digitizeMode}
+                            setDigitizeMode={setDigitizeMode}
+                            tipeJalanDigitasi={tipeJalanDigitasi}
+                            setTipeJalanDigitasi={setTipeJalanDigitasi}
+                            isDrawing={isDrawing}
+                            isReshaping={isReshaping}
+                            drawnLength={drawnLength}
+                            coordsCount={coordsCount}
+                            isSnappingEnabled={isSnappingEnabled}
+                            setIsSnappingEnabled={setIsSnappingEnabled}
+                            customRoadName={customRoadName}
+                            setCustomRoadName={setCustomRoadName}
+                            inputPanjang={inputPanjang}
+                            setInputPanjang={setInputPanjang}
+                            inputLebar={inputLebar}
+                            setInputLebar={setInputLebar}
+                            handleGenerateDimensionArea={handleGenerateDimensionArea}
+                            lebar={lebar}
+                            setLebar={setLebar}
+                            tahun={tahun}
+                            setTahun={setTahun}
+                            perkerasan={perkerasan}
+                            setPerkerasan={setPerkerasan}
+                            kondisi={kondisi}
+                            setKondisi={setKondisi}
+                            errorMsg={errorMsg}
+                            checkMelarosa={checkMelarosa}
+                            snappedRoad={snappedRoad}
+                            snappedCandidates={snappedCandidates}
+                            selectedSnappedRoadId={selectedSnappedRoadId}
+                            handleSave={handleSave}
+                            closeForm={closeForm}
+                            isAttributeDialogOpen={isAttributeDialogOpen}
+                            startDraw={startDraw}
+                            startAutoTraceMode={startAutoTraceMode}
+                            enterReshapeMode={enterReshapeMode}
+                            handleRedraw={handleRedraw}
+                            handleSelectAlternativeRoad={handleSelectAlternativeRoad}
+                            zoomToSegment={zoomToSegment}
+                            handleEditGeometryAndAttributes={handleEditGeometryAndAttributes}
+                            handleEditAttributesOnly={handleEditAttributesOnly}
+                            handleDelete={handleDelete}
+                            onHoverSegment={setHoveredSegmentId}
+                            isLoading={isLoading}
+                            editingSegmentId={editingSegmentId}
+                            onPrintBeritaAcara={triggerPrintBeritaAcaraDialog}
+                            onToggleSidebar={() => setIsSidebarOpen(v => !v)}
+                            selectedTahunFilter={selectedTahunFilter}
+                            setSelectedTahunFilter={setSelectedTahunFilter}
+                            onZoomToFiltered={zoomToFilteredSegments}
+                            onRefreshSegments={() => {
+                                if (!selectedDesa) {
+                                    toast.warning("Silakan pilih wilayah desa terlebih dahulu.");
+                                    return;
+                                }
+                                loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
+                                toast.success("Daftar segmen realisasi berhasil diperbarui.");
+                            }}
+                            realisasiEntries={realisasiEntries}
+                            selectedRealisasiEntryId={selectedRealisasiEntryIds[0] || ""}
+                            onSelectRealisasiEntry={handleToggleRealisasiEntry}
+                            onSaveClick={() => setIsAttributeDialogOpen(true)}
+                            isYearLocked={isYearLocked}
+                            activeSnapshotLaporan={activeSnapshotLaporan}
+                            lockedSegmenIds={lockedSegmenIds}
+                            handleSplitSegmen={handleStartSplitMode}
+                            onKirimDigitasi={(segment) => {
+                                setSegmentToKirim(segment);
+                                setIsKirimDialogOpen(true);
+                            }}
+                            onSubmitLaporanRevisi={handleSubmitLaporanRevisi}
+                            onOpenBottomPanel={() => setIsBottomSegmentPanelOpen(true)}
+                        />
+
+                        {/* Desktop Vertical Drag Resize Handle Divider */}
+                        {isSidebarOpen && (
+                            <div
+                                onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    setIsSidebarDragging(true);
+                                }}
+                                onDoubleClick={() => {
+                                    setSidebarWidth(384);
+                                    try {
+                                        localStorage.setItem("gigis_sidebar_width", "384");
+                                    } catch (e) { }
+                                }}
+                                className={cn(
+                                    "absolute top-0 bottom-0 -right-2 w-4 z-50 cursor-col-resize items-center justify-center group select-none touch-none hover:bg-indigo-500/10 flex transition-colors",
+                                    isSidebarDragging && "bg-indigo-500/20"
+                                )}
+                                title="Tarik ke kiri atau ke kanan untuk mengubah lebar panel infrastruktur (Klik ganda untuk reset lebar ke 384px)"
+                            >
+                                <div className={cn(
+                                    "w-1 h-10 rounded-full bg-border/80 group-hover:bg-indigo-500 group-hover:h-16 group-hover:w-1.5 transition-all duration-150 shadow-xs",
+                                    isSidebarDragging && "bg-indigo-600 dark:bg-indigo-400 h-20 w-1.5 shadow-md"
+                                )} />
+                            </div>
+                        )}
+                    </div>
+
+                    {/* MOBILE BOTTOM SHEET PANEL (di bawah md) with Vertical Drag */}
+                    <div
+                        style={{
+                            height: isSidebarOpen ? `${mobileSheetHeight}vh` : "0px",
+                            maxHeight: "92vh",
+                            minHeight: isSidebarOpen ? "180px" : "0px",
                         }}
-                        realisasiEntries={realisasiEntries}
-                        selectedRealisasiEntryId={selectedRealisasiEntryIds[0] || ""}
-                        onSelectRealisasiEntry={handleToggleRealisasiEntry}
-                        onSaveClick={() => setIsAttributeDialogOpen(true)}
-                        isYearLocked={isYearLocked}
-                        activeSnapshotLaporan={activeSnapshotLaporan}
-                        lockedSegmenIds={lockedSegmenIds}
-                        handleSplitSegmen={handleStartSplitMode}
-                        onKirimDigitasi={(segment) => {
-                            setSegmentToKirim(segment);
-                            setIsKirimDialogOpen(true);
-                        }}
-                        onSubmitLaporanRevisi={handleSubmitLaporanRevisi}
-                    />
+                        className={cn(
+                            "md:hidden fixed inset-x-0 bottom-0 z-40 flex flex-col bg-card rounded-t-2xl shadow-2xl border-t border-border overflow-hidden",
+                            isMobileSheetDragging ? "transition-none select-none" : "transition-[height,transform,opacity] duration-300 ease-in-out",
+                            isSidebarOpen
+                                ? "opacity-100 translate-y-0 pointer-events-auto"
+                                : "opacity-0 translate-y-full pointer-events-none"
+                        )}
+                    >
+                        {/* Mobile Top Drag Handle Bar */}
+                        <div
+                            onTouchStart={() => setIsMobileSheetDragging(true)}
+                            onDoubleClick={() => setMobileSheetHeight(prev => prev > 60 ? 40 : 75)}
+                            className="flex items-center justify-between px-3.5 py-2 shrink-0 bg-muted/60 hover:bg-muted active:bg-indigo-500/20 cursor-row-resize touch-none select-none border-b border-border/40"
+                            title="Tarik ke atas atau ke bawah untuk mengubah tinggi panel (Klik ganda untuk memperbesar/memperkecil)"
+                        >
+                            <div className="w-7" />
+                            <div className={cn(
+                                "w-12 h-1 rounded-full bg-muted-foreground/40 transition-all",
+                                isMobileSheetDragging && "w-20 bg-indigo-500 h-1.5"
+                            )} />
+                            <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => setIsSidebarOpen(false)}
+                                className="size-7 text-muted-foreground hover:text-foreground rounded-lg cursor-pointer"
+                                title="Tutup panel bawah infrastruktur"
+                            >
+                                <PanelBottomClose className="size-4" />
+                            </Button>
+                        </div>
+
+                        <InfrastrukturPanel
+                            tipes={tipes}
+                            activeTipe={activeTipe}
+                            setActiveTipe={setActiveTipe}
+                            className="w-full h-full flex-1 min-h-0"
+                            drawnCoords={drawnCoords}
+                            selectedKec={selectedKec}
+                            setSelectedKec={setSelectedKec}
+                            selectedDesa={selectedDesa}
+                            setSelectedDesa={setSelectedDesa}
+                            kecamatanList={kecamatanList}
+                            desaList={desaList}
+                            onSearchCoordinates={handleSearchCoordinates}
+                            onSearchMultiCoordinates={handleSearchMultiCoordinates}
+                            onClearSearchPin={handleClearSearchPin}
+                            hasSearchPin={hasSearchPin}
+                            realisasiList={realisasiList}
+                            isFormOpen={isFormOpen}
+                            setIsFormOpen={setIsFormOpen}
+                            digitizeMode={digitizeMode}
+                            setDigitizeMode={setDigitizeMode}
+                            tipeJalanDigitasi={tipeJalanDigitasi}
+                            setTipeJalanDigitasi={setTipeJalanDigitasi}
+                            isDrawing={isDrawing}
+                            isReshaping={isReshaping}
+                            drawnLength={drawnLength}
+                            coordsCount={coordsCount}
+                            isSnappingEnabled={isSnappingEnabled}
+                            setIsSnappingEnabled={setIsSnappingEnabled}
+                            customRoadName={customRoadName}
+                            setCustomRoadName={setCustomRoadName}
+                            inputPanjang={inputPanjang}
+                            setInputPanjang={setInputPanjang}
+                            inputLebar={inputLebar}
+                            setInputLebar={setInputLebar}
+                            handleGenerateDimensionArea={handleGenerateDimensionArea}
+                            lebar={lebar}
+                            setLebar={setLebar}
+                            tahun={tahun}
+                            setTahun={setTahun}
+                            perkerasan={perkerasan}
+                            setPerkerasan={setPerkerasan}
+                            kondisi={kondisi}
+                            setKondisi={setKondisi}
+                            errorMsg={errorMsg}
+                            checkMelarosa={checkMelarosa}
+                            snappedRoad={snappedRoad}
+                            snappedCandidates={snappedCandidates}
+                            selectedSnappedRoadId={selectedSnappedRoadId}
+                            handleSave={handleSave}
+                            closeForm={closeForm}
+                            isAttributeDialogOpen={isAttributeDialogOpen}
+                            startDraw={startDraw}
+                            startAutoTraceMode={startAutoTraceMode}
+                            enterReshapeMode={enterReshapeMode}
+                            handleRedraw={handleRedraw}
+                            handleSelectAlternativeRoad={handleSelectAlternativeRoad}
+                            zoomToSegment={zoomToSegment}
+                            handleEditGeometryAndAttributes={handleEditGeometryAndAttributes}
+                            handleEditAttributesOnly={handleEditAttributesOnly}
+                            handleDelete={handleDelete}
+                            onHoverSegment={setHoveredSegmentId}
+                            isLoading={isLoading}
+                            editingSegmentId={editingSegmentId}
+                            onPrintBeritaAcara={triggerPrintBeritaAcaraDialog}
+                            onToggleSidebar={() => setIsSidebarOpen(v => !v)}
+                            selectedTahunFilter={selectedTahunFilter}
+                            setSelectedTahunFilter={setSelectedTahunFilter}
+                            onZoomToFiltered={zoomToFilteredSegments}
+                            onRefreshSegments={() => {
+                                if (!selectedDesa) {
+                                    toast.warning("Silakan pilih wilayah desa terlebih dahulu.");
+                                    return;
+                                }
+                                loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
+                                toast.success("Daftar segmen realisasi berhasil diperbarui.");
+                            }}
+                            realisasiEntries={realisasiEntries}
+                            selectedRealisasiEntryId={selectedRealisasiEntryIds[0] || ""}
+                            onSelectRealisasiEntry={handleToggleRealisasiEntry}
+                            onSaveClick={() => setIsAttributeDialogOpen(true)}
+                            isYearLocked={isYearLocked}
+                            activeSnapshotLaporan={activeSnapshotLaporan}
+                            lockedSegmenIds={lockedSegmenIds}
+                            handleSplitSegmen={handleStartSplitMode}
+                            onKirimDigitasi={(segment) => {
+                                setSegmentToKirim(segment);
+                                setIsKirimDialogOpen(true);
+                            }}
+                            onSubmitLaporanRevisi={handleSubmitLaporanRevisi}
+                            onOpenBottomPanel={() => setIsBottomSegmentPanelOpen(true)}
+                        />
+                    </div>
 
                     {/* Right Panel: OpenLayers Map Component */}
-                    <div className="flex-1 h-full relative flex flex-col min-h-0 select-none">
-                        <div ref={mapElement} className="absolute inset-0 w-full h-full z-0 bg-slate-50 dark:bg-slate-950" />
+                    <div className="flex-1 h-full relative flex flex-col min-h-0 select-none overflow-hidden">
+                        <div
+                            ref={mapElement}
+                            className="absolute inset-0 w-full h-full z-0 bg-slate-50 dark:bg-slate-950 overflow-hidden [&_.ol-layer_canvas]:will-change-transform"
+                            style={{ transform: 'translateZ(0)', willChange: 'transform' }}
+                        />
 
                         <div className="pointer-events-none absolute inset-0 z-20">
                             {isSplitMode && splittingSegment && (
@@ -6713,10 +7932,10 @@ export default function RoadRealizationInfrastrukturPage() {
                                             {digitizeMode === "otomatis"
                                                 ? "Auto-Trace Jalan"
                                                 : digitizeMode === "dimensions"
-                                                ? "Area Dimensi"
-                                                : isReshaping
-                                                ? "Ubah Bentuk Geometri"
-                                                : `Digitasi ${activeTipe?.nama || "Segmen"}`}
+                                                    ? "Area Dimensi"
+                                                    : isReshaping
+                                                        ? "Ubah Bentuk Geometri"
+                                                        : `Digitasi ${activeTipe?.nama || "Segmen"}`}
                                         </span>
                                     </div>
 
@@ -6919,43 +8138,43 @@ export default function RoadRealizationInfrastrukturPage() {
                                                                 </Button>
                                                             )}
                                                             {selectedLayer.realisasiSegment && (() => {
-                                                                 const segId = selectedLayer.realisasiSegment!.id;
-                                                                 const segStatus = (selectedLayer.realisasiSegment as any).status_verifikasi;
-                                                                 const isBoundToBa = !!(lockedSegmenIds && lockedSegmenIds.has(segId.toString()));
-                                                                 const isBaFinal = segStatus === "terverifikasi" && isBoundToBa;
-                                                                 const isBappedaOrAdmin = user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin';
-                                                                 const isLocked = isBaFinal || (!isBappedaOrAdmin && (segStatus === 'verifikasi_bappeda' || segStatus === 'terverifikasi'));
+                                                                const segId = selectedLayer.realisasiSegment!.id;
+                                                                const segStatus = (selectedLayer.realisasiSegment as any).status_verifikasi;
+                                                                const isBoundToBa = !!(lockedSegmenIds && lockedSegmenIds.has(segId.toString()));
+                                                                const isBaFinal = segStatus === "terverifikasi" && isBoundToBa;
+                                                                const isBappedaOrAdmin = user?.role === 'operator_bappeda' || user?.role === 'super_admin' || user?.role === 'admin';
+                                                                const isLocked = isBaFinal || (!isBappedaOrAdmin && (segStatus === 'verifikasi_bappeda' || segStatus === 'terverifikasi'));
 
-                                                                 return (
-                                                                     <>
-                                                                         <Button
-                                                                             size="sm"
-                                                                             variant="secondary"
-                                                                             onClick={() => {
-                                                                                 handleShowSegmentDetail(selectedLayer.realisasiSegment!);
-                                                                                 setMapPopupInfo(null);
-                                                                             }}
-                                                                             className="h-6 text-[9.5px] font-semibold gap-1 rounded-md px-2"
-                                                                         >
-                                                                             <Info className="size-3 text-blue-500" />
-                                                                             Detail
-                                                                         </Button>
-                                                                         {!isLocked && (
-                                                                             <Button
-                                                                                 size="sm"
-                                                                                 onClick={() => {
-                                                                                     handleEditGeometryAndAttributes(selectedLayer.realisasiSegment!);
-                                                                                     setMapPopupInfo(null);
-                                                                                 }}
-                                                                                 className="h-6 text-[9.5px] font-semibold gap-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-xs px-2"
-                                                                             >
-                                                                                 <Edit3 className="size-3" />
-                                                                                 Edit
-                                                                             </Button>
-                                                                         )}
-                                                                     </>
-                                                                 );
-                                                             })()}
+                                                                return (
+                                                                    <>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="secondary"
+                                                                            onClick={() => {
+                                                                                handleShowSegmentDetail(selectedLayer.realisasiSegment!);
+                                                                                setMapPopupInfo(null);
+                                                                            }}
+                                                                            className="h-6 text-[9.5px] font-semibold gap-1 rounded-md px-2"
+                                                                        >
+                                                                            <Info className="size-3 text-blue-500" />
+                                                                            Detail
+                                                                        </Button>
+                                                                        {!isLocked && canDigitize(user) && (
+                                                                            <Button
+                                                                                size="sm"
+                                                                                onClick={() => {
+                                                                                    handleEditGeometryAndAttributes(selectedLayer.realisasiSegment!);
+                                                                                    setMapPopupInfo(null);
+                                                                                }}
+                                                                                className="h-6 text-[9.5px] font-semibold gap-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 shadow-xs px-2"
+                                                                            >
+                                                                                <Edit3 className="size-3" />
+                                                                                Edit
+                                                                            </Button>
+                                                                        )}
+                                                                    </>
+                                                                );
+                                                            })()}
                                                         </div>
                                                     </div>
                                                 );
@@ -6973,32 +8192,249 @@ export default function RoadRealizationInfrastrukturPage() {
                             )}
                         </div>
 
-                        {/* Floating Show/Hide Infrastruktur Panel Button on Map Canvas */}
-                        <Tooltip>
-                            <TooltipTrigger asChild>
-                                <Button
-                                    type="button"
-                                    size="icon"
-                                    variant="outline"
-                                    onClick={() => setIsSidebarOpen(prev => !prev)}
-                                    className="absolute top-4 left-4 z-30 h-10 w-10 rounded-xl border border-border bg-card dark:bg-slate-900 shadow-md hover:bg-muted dark:hover:bg-slate-800 text-foreground transition-all duration-200 cursor-pointer pointer-events-auto active:scale-95"
-                                >
-                                    {isSidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
-                                </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right" className="text-xs font-semibold">
-                                {isSidebarOpen ? "Sembunyikan Panel Infrastruktur" : "Tampilkan Panel Infrastruktur"}
-                            </TooltipContent>
-                        </Tooltip>
+                        {/* Top-Left Floating Controls: Show/Hide Infrastruktur Panel & Snapshot Status Capsule */}
+                        <div className="absolute top-4 left-4 z-30 flex items-center gap-2 pointer-events-auto select-none max-w-[calc(100vw-120px)] sm:max-w-none">
+                            {/* 1. Toggle Show/Hide Panel Button */}
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => setIsSidebarOpen(prev => !prev)}
+                                        className="h-10 w-10 shrink-0 rounded-xl border border-border bg-card dark:bg-slate-900 shadow-md hover:bg-muted dark:hover:bg-slate-800 text-foreground transition-all duration-200 cursor-pointer active:scale-95"
+                                    >
+                                        {/* Desktop: Panel Kiri (>= md) */}
+                                        <span className="hidden md:flex items-center justify-center">
+                                            {isSidebarOpen ? <PanelLeftClose className="size-4" /> : <PanelLeftOpen className="size-4" />}
+                                        </span>
+                                        {/* Mobile: Bottom Sheet (< md) */}
+                                        <span className="flex md:hidden items-center justify-center">
+                                            {isSidebarOpen ? <PanelBottomClose className="size-4" /> : <PanelBottomOpen className="size-4" />}
+                                        </span>
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="bottom" className="text-xs font-semibold">
+                                    {isSidebarOpen ? "Sembunyikan Panel Infrastruktur" : "Tampilkan Panel Infrastruktur"}
+                                </TooltipContent>
+                            </Tooltip>
+
+                            {/* 2. Smart Snapshot / Berita Acara Status Capsule */}
+                            {selectedDesa && (() => {
+                                const reportStatus = activeSnapshotLaporan?.status;
+                                const targetYear = selectedTahunFilter !== "Semua" ? selectedTahunFilter : (activeSnapshotLaporan?.tahun_anggaran || new Date().getFullYear().toString());
+                                const nomorBa = activeSnapshotLaporan?.nomor_ba;
+
+                                // Condition 1: FINAL (Sah & Terkunci)
+                                if (reportStatus === "Final" || isYearLocked) {
+                                    return (
+                                        <div className="flex items-center gap-1.5 p-1 pl-2.5 rounded-xl border bg-card/90 dark:bg-slate-900/90 backdrop-blur-md shadow-md border-emerald-500/30 animate-in fade-in zoom-in-95">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="flex items-center justify-center size-6 rounded-lg bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
+                                                    <Lock className="size-3.5" />
+                                                </span>
+                                                <div className="flex flex-col min-w-0 leading-tight">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 truncate">
+                                                            BA Final
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-muted-foreground hidden sm:inline">
+                                                            • TA {targetYear}
+                                                        </span>
+                                                    </div>
+                                                    {nomorBa && (
+                                                        <span className="text-[9.5px] font-mono text-muted-foreground truncate max-w-[130px] hidden md:inline">
+                                                            {nomorBa}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1 ml-1 shrink-0">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => navigate(`/admin/monitoring/dokumen-infrastruktur?tahun=${targetYear}&desa=${selectedDesa}&kec=${selectedKec}`)}
+                                                    className="h-7 px-2.5 text-xs font-bold gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs cursor-pointer"
+                                                    title="Buka dan cetak Berita Acara di menu Dokumen Infrastruktur"
+                                                >
+                                                    <FileText className="size-3.5" />
+                                                    <span className="hidden sm:inline">Buka Dokumen BA</span>
+                                                    <span className="sm:hidden">Dokumen</span>
+                                                </Button>
+
+                                                {isBappedaOrAdmin && (
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <Button
+                                                                size="icon"
+                                                                variant="ghost"
+                                                                className="size-7 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer"
+                                                                title="Opsi Berita Acara"
+                                                            >
+                                                                <MoreHorizontal className="size-3.5" />
+                                                            </Button>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent align="start" className="w-56 p-1.5 shadow-xl bg-card border-border">
+                                                            <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground border-b border-border/50">
+                                                                Opsi Berita Acara
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => triggerPrintBeritaAcaraDialog(selectedDesa, targetYear)}
+                                                                className="w-full text-left px-2 py-1.5 mt-1 rounded-md text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:bg-indigo-500/10 flex items-center gap-2 cursor-pointer transition-colors"
+                                                            >
+                                                                <Pencil className="size-3.5" />
+                                                                <span>Edit Metadata / Snapshot</span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => setRevertLaporanOpen(true)}
+                                                                className="w-full text-left px-2 py-1.5 mt-0.5 rounded-md text-xs font-medium text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 flex items-center gap-2 cursor-pointer transition-colors"
+                                                            >
+                                                                <RotateCcw className="size-3.5" />
+                                                                <span>Buka Kunci / Revisi BA</span>
+                                                            </button>
+                                                        </PopoverContent>
+                                                    </Popover>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                // Condition 2: SUBMITTED (Terkirim & Menunggu Verifikasi Bappeda)
+                                if (reportStatus === "Submitted") {
+                                    return (
+                                        <div className="flex items-center gap-1.5 p-1 pl-2.5 rounded-xl border bg-card/90 dark:bg-slate-900/90 backdrop-blur-md shadow-md border-blue-500/30 animate-in fade-in zoom-in-95">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="flex items-center justify-center size-6 rounded-lg bg-blue-500/20 text-blue-600 dark:text-blue-400 shrink-0">
+                                                    <Sparkles className="size-3.5" />
+                                                </span>
+                                                <div className="flex flex-col min-w-0 leading-tight">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[11px] font-bold text-blue-700 dark:text-blue-300 truncate">
+                                                            Diajukan ke Bappeda
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-muted-foreground hidden sm:inline">
+                                                            • TA {targetYear}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[9.5px] text-muted-foreground hidden md:inline">
+                                                        Siap diverifikasi &amp; disahkan
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1 ml-1 shrink-0">
+                                                {isBappedaOrAdmin ? (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => triggerPrintBeritaAcaraDialog(selectedDesa, targetYear)}
+                                                        className="h-7 px-2.5 text-xs font-bold gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs cursor-pointer"
+                                                        title="Buka form verifikasi snapshot dan pengesahan Berita Acara"
+                                                    >
+                                                        <Sparkles className="size-3.5" />
+                                                        <span className="hidden sm:inline">Finalisasi &amp; Sahkan BA</span>
+                                                    </Button>
+                                                ) : (
+                                                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400">
+                                                        Menunggu Verifikasi
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                }
+
+                                // Condition 3: DRAFT / REVISI
+                                if (reportStatus === "Draft" || reportStatus === "Revisi") {
+                                    const isRevisi = reportStatus === "Revisi";
+                                    return (
+                                        <div className="flex items-center gap-1.5 p-1 pl-2.5 rounded-xl border bg-card/90 dark:bg-slate-900/90 backdrop-blur-md shadow-md border-amber-500/30 animate-in fade-in zoom-in-95">
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                                <span className="flex items-center justify-center size-6 rounded-lg bg-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
+                                                    <Clock className="size-3.5" />
+                                                </span>
+                                                <div className="flex flex-col min-w-0 leading-tight">
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 truncate">
+                                                            {isRevisi ? "Perlu Revisi" : "Draft Penugasan"}
+                                                        </span>
+                                                        <span className="text-[10px] font-semibold text-muted-foreground hidden sm:inline">
+                                                            • TA {targetYear}
+                                                        </span>
+                                                    </div>
+                                                    <span className="text-[9.5px] text-muted-foreground hidden md:inline">
+                                                        {isRevisi ? "Menunggu perbaikan kecamatan" : "Sedang dikerjakan kecamatan"}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {isBappedaOrAdmin && (
+                                                <div className="flex items-center gap-1 ml-1 shrink-0">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => triggerPrintBeritaAcaraDialog(selectedDesa, targetYear)}
+                                                        className="h-7 px-2 text-xs font-bold gap-1 rounded-lg border-indigo-500/30 text-indigo-700 dark:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 cursor-pointer"
+                                                    >
+                                                        <Sparkles className="size-3.5" />
+                                                        <span className="hidden sm:inline">Sahkan BA</span>
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                }
+
+                                // Condition 4: BELUM ADA PENUGASAN
+                                return (
+                                    <div className="flex items-center gap-1.5 p-1 pl-2.5 rounded-xl border bg-card/90 dark:bg-slate-900/90 backdrop-blur-md shadow-md border-border/80 animate-in fade-in zoom-in-95">
+                                        <div className="flex items-center gap-1.5 min-w-0">
+                                            <span className="flex items-center justify-center size-6 rounded-lg bg-muted text-muted-foreground shrink-0">
+                                                <FileText className="size-3.5" />
+                                            </span>
+                                            <div className="flex flex-col min-w-0 leading-tight">
+                                                <span className="text-[11px] font-semibold text-foreground truncate">
+                                                    Belum Ada Penugasan
+                                                </span>
+                                                <span className="text-[9.5px] text-muted-foreground hidden md:inline">
+                                                    TA {targetYear}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {isBappedaOrAdmin ? (
+                                            <div className="flex items-center gap-1 ml-1 shrink-0">
+                                                <Button
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const url = `/admin/monitoring/dokumen-infrastruktur?tahun=${targetYear}&desa=${selectedDesa}&kec=${selectedKec}&action=create_draft`;
+                                                        navigate(url);
+                                                    }}
+                                                    className="h-7 px-2.5 text-xs font-bold gap-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-xs cursor-pointer"
+                                                    title="Buka modul Dokumen Infrastruktur untuk membuat draft penugasan & memilih plotting anggaran"
+                                                >
+                                                    <ExternalLink className="size-3.5" />
+                                                    <span>Buat Draft Penugasan</span>
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <span className="px-2 py-0.5 text-[10px] text-muted-foreground italic hidden sm:inline">
+                                                Menunggu Bappeda
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })()}
+                        </div>
 
                         {/* Floating Vertical QGIS-Style Digitizing Tool Menubar on Map (diletakkan di bawah tombol show hide panel) */}
-                        {((isFormOpen || isDrawing || isReshaping || digitizeMode === "dimensions" || drawnCoords.length > 0 || coordsCount > 0) && !isAttributeDialogOpen) && (
+                        {((isFormOpen || isDrawing || isReshaping || digitizeMode === "dimensions" || drawnCoords.length > 0 || coordsCount > 0) && !isAttributeDialogOpen && canDigitize(user)) && (
                             <div className="absolute top-16 left-4 z-30 transition-all duration-300 ease-in-out pointer-events-auto animate-in fade-in zoom-in-95 duration-200">
                                 {digitizingMenubarContent}
                             </div>
                         )}
-
-
 
 
 
@@ -7014,6 +8450,11 @@ export default function RoadRealizationInfrastrukturPage() {
                                         <>
                                             <Ruler className="h-4 w-4 text-blue-500" />
                                             Alat Pengukuran
+                                        </>
+                                    ) : activeRightTab === "simbologi" ? (
+                                        <>
+                                            <Palette className="h-4 w-4 text-indigo-600" />
+                                            Simbologi & Legenda
                                         </>
                                     ) : (
                                         <>
@@ -7034,9 +8475,9 @@ export default function RoadRealizationInfrastrukturPage() {
 
                             <Tabs value={activeRightTab} onValueChange={setActiveRightTab} className="flex-1 flex flex-col min-h-0 gap-0">
                                 <div className="bg-white dark:bg-slate-950 border-b dark:border-slate-800 px-2 py-2 shrink-0">
-                                    <TabsList className="w-full grid h-9 grid-cols-4">
-                                        <TabsTrigger value="katalog" className="text-[9px] uppercase font-bold tracking-tight">Katalog</TabsTrigger>
-                                        <TabsTrigger value="layers" className="text-[9px] uppercase font-bold tracking-tight">
+                                    <TabsList className="w-full grid h-9 grid-cols-5">
+                                        <TabsTrigger value="katalog" className="text-[8.5px] uppercase font-bold tracking-tight">Katalog</TabsTrigger>
+                                        <TabsTrigger value="layers" className="text-[8.5px] uppercase font-bold tracking-tight">
                                             Layer
                                             {activeOverlays.length > 0 && (
                                                 <span className="ml-1 px-1.5 py-0.2 text-[8px] bg-blue-100 text-blue-700 rounded-full font-black">
@@ -7044,10 +8485,18 @@ export default function RoadRealizationInfrastrukturPage() {
                                                 </span>
                                             )}
                                         </TabsTrigger>
-                                        <TabsTrigger value="acuan" className="text-[9px] uppercase font-bold tracking-tight">Acuan</TabsTrigger>
-                                        <TabsTrigger value="pengukuran" className="text-[9px] uppercase font-bold tracking-tight">Ukur</TabsTrigger>
+                                        <TabsTrigger value="simbologi" className="text-[8.5px] uppercase font-bold tracking-tight">Simbologi</TabsTrigger>
+                                        <TabsTrigger value="acuan" className="text-[8.5px] uppercase font-bold tracking-tight">Acuan</TabsTrigger>
+                                        <TabsTrigger value="pengukuran" className="text-[8.5px] uppercase font-bold tracking-tight">Ukur</TabsTrigger>
                                     </TabsList>
                                 </div>
+
+                                {/* Tab Content: Simbologi & Legenda */}
+                                {activeRightTab === "simbologi" && (
+                                    <TabsContent value="simbologi" className="flex-1 flex flex-col min-h-0 m-0 overflow-hidden bg-background">
+                                        <ThematicSymbologyPanel />
+                                    </TabsContent>
+                                )}
 
                                 {/* Tab Content: Katalog & Layer (Managed by LayerManagementPanel component) */}
                                 {(activeRightTab === "katalog" || activeRightTab === "layers") && (
@@ -7386,36 +8835,36 @@ export default function RoadRealizationInfrastrukturPage() {
                                                         </AccordionTrigger>
                                                         <AccordionContent className="pb-3 pt-1 space-y-2">
                                                             <div className="bg-slate-50/50 dark:bg-slate-900/30 p-2 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                    {(() => {
-                                                                        const style = customStyles['jalan_utama'] || { color: '#f97316', width: 2 };
-                                                                        return (
-                                                                            <div className="flex items-center justify-between gap-2 p-2 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl border border-slate-100 dark:border-slate-800/80">
-                                                                                <div className="flex-1 min-w-0">
-                                                                                    <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-350 block">Jalan Utama Kabupaten</span>
-                                                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                                                        <div className="w-8 h-1 rounded" style={{ backgroundColor: style.color }} />
-                                                                                        <span className="text-[8px] font-mono text-slate-400 font-bold">{style.color} ({style.width}px)</span>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <div className="flex items-center gap-1.5 shrink-0">
-                                                                                    <input
-                                                                                        type="color"
-                                                                                        value={style.color}
-                                                                                        onChange={(e) => updateStyle('jalan_utama', 'color', e.target.value)}
-                                                                                        className="w-4 h-4 rounded cursor-pointer border border-slate-200 dark:border-slate-800 bg-transparent p-0"
-                                                                                    />
-                                                                                    <input
-                                                                                        type="number"
-                                                                                        min="1"
-                                                                                        max="8"
-                                                                                        value={style.width}
-                                                                                        onChange={(e) => updateStyle('jalan_utama', 'width', parseInt(e.target.value, 10) || 1)}
-                                                                                        className="w-8 h-5 text-[9px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-center font-bold"
-                                                                                    />
+                                                                {(() => {
+                                                                    const style = customStyles['jalan_utama'] || { color: '#f97316', width: 2 };
+                                                                    return (
+                                                                        <div className="flex items-center justify-between gap-2 p-2 bg-slate-50/50 dark:bg-slate-900/30 rounded-xl border border-slate-100 dark:border-slate-800/80">
+                                                                            <div className="flex-1 min-w-0">
+                                                                                <span className="text-[10px] font-semibold text-slate-700 dark:text-slate-350 block">Jalan Utama Kabupaten</span>
+                                                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                                                    <div className="w-8 h-1 rounded" style={{ backgroundColor: style.color }} />
+                                                                                    <span className="text-[8px] font-mono text-slate-400 font-bold">{style.color} ({style.width}px)</span>
                                                                                 </div>
                                                                             </div>
-                                                                        );
-                                                                    })()}
+                                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                                <input
+                                                                                    type="color"
+                                                                                    value={style.color}
+                                                                                    onChange={(e) => updateStyle('jalan_utama', 'color', e.target.value)}
+                                                                                    className="w-4 h-4 rounded cursor-pointer border border-slate-200 dark:border-slate-800 bg-transparent p-0"
+                                                                                />
+                                                                                <input
+                                                                                    type="number"
+                                                                                    min="1"
+                                                                                    max="8"
+                                                                                    value={style.width}
+                                                                                    onChange={(e) => updateStyle('jalan_utama', 'width', parseInt(e.target.value, 10) || 1)}
+                                                                                    className="w-8 h-5 text-[9px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-center font-bold"
+                                                                                />
+                                                                            </div>
+                                                                        </div>
+                                                                    );
+                                                                })()}
                                                             </div>
                                                         </AccordionContent>
                                                     </AccordionItem>
@@ -7596,6 +9045,37 @@ export default function RoadRealizationInfrastrukturPage() {
                             masterRoad={detailMasterRoad}
                         />
 
+                        {/* Floating Quick Action: Mulai Digitasi Segmen Baru di Pojok Kiri Bawah (Responsif terhadap Panel Bawah) */}
+                        {selectedDesa && activeTipe && !isFormOpen && !isDrawing && !isReshaping && !isSplitMode && (
+                            isBappedaOrAdmin || (
+                                !isYearLocked &&
+                                activeSnapshotLaporan?.status !== 'Final' &&
+                                activeSnapshotLaporan?.status !== 'Submitted' &&
+                                (activeSnapshotLaporan && (activeSnapshotLaporan.status === 'Draft' || activeSnapshotLaporan.status === 'Revisi'))
+                            )
+                        ) && (
+                            <div
+                                style={{
+                                    bottom: isBottomSegmentPanelOpen ? `${bottomPanelHeight + 16}px` : "16px",
+                                }}
+                                className="absolute left-4 z-30 transition-[bottom,transform] duration-300 ease-out animate-in fade-in slide-in-from-bottom-2 select-none"
+                            >
+                                <Button
+                                    size="sm"
+                                    onClick={handleStartDigitasiNew}
+                                    className="h-9 px-2.5 sm:px-3.5 gap-1.5 sm:gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-500/25 backdrop-blur-md border border-emerald-400/30 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                                >
+                                    <Plus className="size-4" />
+                                    <span className="hidden sm:inline">Mulai Digitasi</span>
+                                    {selectedTahunFilter !== "Semua" && (
+                                        <span className="hidden sm:inline-block px-1.5 py-0.5 rounded-md bg-white/20 text-[10px] font-black uppercase">
+                                            TA {selectedTahunFilter}
+                                        </span>
+                                    )}
+                                </Button>
+                            </div>
+                        )}
+
                         {/* Map Layers Panel Button & Measurement Button */}
                         <div className={cn(
                             "absolute top-4 z-20 flex flex-col gap-2 transition-all duration-300",
@@ -7627,6 +9107,32 @@ export default function RoadRealizationInfrastrukturPage() {
                                 <TooltipContent side="left">Panel Layer</TooltipContent>
                             </Tooltip>
 
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        size="icon"
+                                        variant="outline"
+                                        onClick={() => {
+                                            if (isRightPanelOpen && activeRightTab === "simbologi") {
+                                                setIsRightPanelOpen(false);
+                                            } else {
+                                                setIsRightPanelOpen(true);
+                                                setActiveRightTab("simbologi");
+                                            }
+                                            setIsDetailPanelOpen(false);
+                                        }}
+                                        className={cn(
+                                            "h-10 w-10 md:h-9 md:w-9 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 transition-all duration-300",
+                                            isRightPanelOpen && activeRightTab === "simbologi" && "bg-indigo-600 dark:bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700 hover:text-white"
+                                        )}
+                                    >
+                                        <Palette className="size-4" />
+                                    </Button>
+                                </TooltipTrigger>
+                                <TooltipContent side="left">Simbologi & Legenda</TooltipContent>
+                            </Tooltip>
+
                             <MapStyleToggle
                                 showSta={showSta}
                                 setShowSta={setShowSta}
@@ -7639,14 +9145,65 @@ export default function RoadRealizationInfrastrukturPage() {
                             />
                         </div>
 
-                        {/* Floating Basemap Switcher */}
+                        {/* Floating Basemap Switcher (Responsively floats above BottomSegmentPanel) */}
                         <BasemapToggle
                             basemaps={basemapsList}
                             activeBasemap={activeBasemap}
                             onBasemapChange={setActiveBasemap}
+                            style={{
+                                bottom: isBottomSegmentPanelOpen ? `${bottomPanelHeight + 16}px` : "16px",
+                            }}
                             className={cn(
-                                "absolute transition-[right] duration-300 z-20",
-                                isRightPanelOpen ? "bottom-4 right-4 sm:right-[400px]" : "bottom-4 right-4"
+                                "absolute transition-[bottom,right,transform] duration-300 ease-out z-30",
+                                isRightPanelOpen ? "right-4 sm:right-[400px]" : "right-4"
+                            )}
+                        />
+
+                        {/* Bottom Segment Panel Component */}
+                        <BottomSegmentPanel
+                            isOpen={isBottomSegmentPanelOpen}
+                            onToggleOpen={() => setIsBottomSegmentPanelOpen(prev => !prev)}
+                            panelHeight={bottomPanelHeight}
+                            onPanelHeightChange={setBottomPanelHeight}
+                            realisasiList={realisasiList}
+                            activeTipe={activeTipe}
+                            selectedKec={selectedKec}
+                            selectedDesa={selectedDesa}
+                            desaName={activeDesaName}
+                            kecName={activeKecName}
+                            selectedTahunFilter={selectedTahunFilter}
+                            setSelectedTahunFilter={setSelectedTahunFilter}
+                            zoomToSegment={zoomToSegment}
+                            onHoverSegment={setHoveredSegmentId}
+                            handleEditAttributesOnly={handleEditAttributesOnly}
+                            handleEditGeometryAndAttributes={handleEditGeometryAndAttributes}
+                            handleSplitSegmen={handleStartSplitMode}
+                            handleDelete={handleDelete}
+                            onStartDigitasi={handleStartDigitasiNew}
+                            onKirimDigitasi={(segment) => {
+                                setSegmentToKirim(segment);
+                                setBatchSegmentsToKirim([]);
+                                setIsKirimDialogOpen(true);
+                            }}
+                            onBatchKirimDigitasi={(segments) => {
+                                setBatchSegmentsToKirim(segments);
+                                setSegmentToKirim(null);
+                                setIsKirimDialogOpen(true);
+                            }}
+                            onRefreshSegments={() => {
+                                if (!selectedDesa) {
+                                    toast.warning("Silakan pilih wilayah desa terlebih dahulu.");
+                                    return;
+                                }
+                                loadDesaData(selectedDesa, activeTipe?.kode, { skipFitBounds: true, silent: true });
+                                toast.success("Daftar segmen realisasi berhasil diperbarui.");
+                            }}
+                            lockedSegmenIds={lockedSegmenIds}
+                            isYearLocked={isYearLocked}
+                            activeSnapshotLaporan={activeSnapshotLaporan}
+                            isLoading={isLoading}
+                            className={cn(
+                                isRightPanelOpen && "sm:right-[380px]"
                             )}
                         />
                     </div>
@@ -7762,7 +9319,25 @@ export default function RoadRealizationInfrastrukturPage() {
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="text-muted-foreground font-semibold">Kode Ruas:</span>
                                                     <span className="font-mono font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                                                        {snappedRoad?.kode_ruas || editingSegmentData?.kode_ruas || "(Tanpa Kode)"}
+                                                        {(() => {
+                                                            const candidate = snappedRoad?.kode_ruas || editingSegmentData?.kode_ruas;
+                                                            if (candidate && !isUUID(candidate)) {
+                                                                return candidate;
+                                                            }
+                                                            const parentId = snappedRoad?.id || editingSegmentData?.parent_id;
+                                                            if (parentId && refSourceRef.current) {
+                                                                const feat = refSourceRef.current.getFeatures().find(f => {
+                                                                    const p = f.getProperties();
+                                                                    return String(p.id) === String(parentId) || String(f.getId()) === String(parentId);
+                                                                });
+                                                                if (feat) {
+                                                                    const p = feat.getProperties();
+                                                                    const k = p.kode_ruas || p.KODE_RUAS || p.no_ruas;
+                                                                    if (k && !isUUID(k)) return String(k);
+                                                                }
+                                                            }
+                                                            return "(Tanpa Kode)";
+                                                        })()}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5">
@@ -7790,7 +9365,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                             }
                                                         }}
                                                     >
-                                                        <SelectTrigger className="w-full h-9 text-xs bg-background border-emerald-500/40 rounded-xl font-medium shadow-xs">
+                                                        <SelectTrigger className="w-full border-emerald-500/40 shadow-xs">
                                                             <SelectValue placeholder="Pilih Ruas Master Rujukan" />
                                                         </SelectTrigger>
                                                         <SelectContent className="bg-popover border-border z-[100] max-h-[220px]">
@@ -7831,7 +9406,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                     ) : (
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between">
-                                                <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">
+                                                <Label className="text-sm font-medium">
                                                     {activeTipe ? `Nama ${activeTipe.nama} (namobj)` : "Nama Objek Infrastruktur (namobj)"}
                                                 </Label>
                                                 {isBappedaOrAdmin && (
@@ -7857,25 +9432,103 @@ export default function RoadRealizationInfrastrukturPage() {
                                                 }
                                                 value={customRoadName}
                                                 onChange={e => setCustomRoadName(e.target.value)}
-                                                className="h-9.5 bg-background border-input text-xs rounded-xl text-foreground focus:border-blue-500"
+                                                
                                                 required
                                             />
                                         </div>
                                     )}
 
+                                    {/* Wilayah Administrasi (Kecamatan & Desa) */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 p-3 rounded-xl bg-muted/30 border border-border/70">
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                                                    <MapPin className="size-3.5 text-blue-500" />
+                                                    <span>Kecamatan</span>
+                                                    <span className="text-rose-500">*</span>
+                                                </Label>
+                                                {!isBappedaOrAdmin && user?.role === 'operator_kecamatan' && (
+                                                    <span className="text-[10px] text-muted-foreground font-normal">(Terkunci Wilayah)</span>
+                                                )}
+                                            </div>
+                                            <Select
+                                                value={dialogKec || undefined}
+                                                onValueChange={handleDialogKecChange}
+                                                disabled={!isBappedaOrAdmin && (user?.role === 'operator_kecamatan' || user?.role === 'operator_desa')}
+                                            >
+                                                <SelectTrigger className="w-full h-9 text-xs bg-background">
+                                                    <SelectValue placeholder="Pilih Kecamatan" />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-popover border-border z-[100] max-h-[220px]">
+                                                    {kecamatanList.map(kec => (
+                                                        <SelectItem key={kec.id} value={kec.id.toString()} className="text-xs py-1.5 cursor-pointer">
+                                                            {kec.nama_kecamatan}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
+                                                    <Building2 className="size-3.5 text-emerald-500" />
+                                                    <span>Desa / Kelurahan</span>
+                                                    <span className="text-rose-500">*</span>
+                                                </Label>
+                                                {isLoadingDialogDesa && (
+                                                    <Loader2 className="size-3 animate-spin text-blue-500" />
+                                                )}
+                                            </div>
+                                            <Select
+                                                value={dialogDesa || undefined}
+                                                onValueChange={val => setDialogDesa(val)}
+                                                disabled={isLoadingDialogDesa || (!isBappedaOrAdmin && user?.role === 'operator_desa')}
+                                            >
+                                                <SelectTrigger className="w-full h-9 text-xs bg-background">
+                                                    <SelectValue placeholder={isLoadingDialogDesa ? "Memuat desa..." : "Pilih Desa"} />
+                                                </SelectTrigger>
+                                                <SelectContent className="bg-popover border-border z-[100] max-h-[220px]">
+                                                    {(dialogDesaList.length > 0 ? dialogDesaList : (dialogKec === selectedKec ? desaList : [])).map(desa => (
+                                                        <SelectItem key={desa.id} value={desa.id.toString()} className="text-xs py-1.5 cursor-pointer">
+                                                            {desa.nama_desa}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Kode Ruas</Label>
+                                            <Label className="text-sm font-medium">Kode Ruas</Label>
                                             <Input
                                                 value={
-                                                    snappedRoad?.kode_ruas || editingSegmentData?.kode_ruas || "0"
+                                                    (() => {
+                                                        const candidate = snappedRoad?.kode_ruas || editingSegmentData?.kode_ruas;
+                                                        if (candidate && !isUUID(candidate)) {
+                                                            return candidate;
+                                                        }
+                                                        const parentId = snappedRoad?.id || editingSegmentData?.parent_id;
+                                                        if (parentId && refSourceRef.current) {
+                                                            const feat = refSourceRef.current.getFeatures().find(f => {
+                                                                const p = f.getProperties();
+                                                                return String(p.id) === String(parentId) || String(f.getId()) === String(parentId);
+                                                            });
+                                                            if (feat) {
+                                                                const p = feat.getProperties();
+                                                                const k = p.kode_ruas || p.KODE_RUAS || p.no_ruas;
+                                                                if (k && !isUUID(k)) return String(k);
+                                                            }
+                                                        }
+                                                        return "0";
+                                                    })()
                                                 }
                                                 readOnly
-                                                className="h-9.5 bg-muted/50 font-mono font-bold text-xs rounded-xl border-input text-foreground cursor-not-allowed"
+                                                className="font-mono font-bold bg-muted"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">
+                                            <Label className="text-sm font-medium">
                                                 {activeTipe?.geom_type?.toUpperCase() === 'POLYGON' || activeTipe?.geom_type?.toUpperCase() === 'MULTIPOLYGON' ? "Dimensi / Panjang (Meter)" : "Panjang Segmen (Meter)"}
                                             </Label>
                                             <Input
@@ -7886,30 +9539,30 @@ export default function RoadRealizationInfrastrukturPage() {
                                                     const val = parseFloat(e.target.value);
                                                     setDrawnLength(isNaN(val) ? 0 : val);
                                                 }}
-                                                className="h-9.5 bg-background font-mono font-bold text-xs rounded-xl border-input text-foreground focus:border-blue-500"
+                                                className="font-mono font-bold"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Lebar (Meter)</Label>
+                                            <Label className="text-sm font-medium">Lebar (Meter)</Label>
                                             <Input
                                                 type="number"
                                                 step="0.1"
                                                 value={lebar}
                                                 onChange={e => setLebar(e.target.value)}
-                                                className="h-9.5 bg-background border-input text-xs rounded-xl"
+                                                
                                                 required
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Tahun Anggaran</Label>
+                                            <Label className="text-sm font-medium">Tahun Anggaran</Label>
                                             <Input
                                                 type="number"
                                                 value={tahun}
                                                 onChange={e => setTahun(e.target.value)}
-                                                className="h-9.5 bg-background border-input text-xs rounded-xl"
+                                                
                                                 required
                                             />
                                         </div>
@@ -7917,9 +9570,9 @@ export default function RoadRealizationInfrastrukturPage() {
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Kondisi Realisasi</Label>
+                                            <Label className="text-sm font-medium">Kondisi Realisasi</Label>
                                             <Select value={kondisi || undefined} onValueChange={setKondisi}>
-                                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl">
+                                                <SelectTrigger >
                                                     <SelectValue placeholder="Pilih Kondisi Realisasi" />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-popover border-border">
@@ -7930,9 +9583,9 @@ export default function RoadRealizationInfrastrukturPage() {
                                             </Select>
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Status Kondisi</Label>
+                                            <Label className="text-sm font-medium">Status Kondisi</Label>
                                             <Select value={statusKondisi || undefined} onValueChange={setStatusKondisi}>
-                                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl">
+                                                <SelectTrigger >
                                                     <SelectValue placeholder="Pilih Status Kondisi" />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-popover border-border">
@@ -7946,18 +9599,18 @@ export default function RoadRealizationInfrastrukturPage() {
 
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Sumber Data</Label>
+                                            <Label className="text-sm font-medium">Sumber Data</Label>
                                             <Input
                                                 value={sumberData}
                                                 onChange={e => setSumberData(e.target.value)}
-                                                className="h-9.5 bg-background border-input text-xs rounded-xl"
+                                                
                                                 required
                                             />
                                         </div>
                                         <div className="space-y-1.5">
-                                            <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Sumber Dana</Label>
+                                            <Label className="text-sm font-medium">Sumber Dana</Label>
                                             <Select value={sumberDana || undefined} onValueChange={setSumberDana}>
-                                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl">
+                                                <SelectTrigger >
                                                     <SelectValue placeholder="Pilih Sumber Dana" />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-popover border-border">
@@ -7972,7 +9625,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-start">
                                         <div className="space-y-1.5">
                                             <div className="flex items-center h-5">
-                                                <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 whitespace-nowrap">Status Aset</Label>
+                                                <Label className="text-sm font-medium whitespace-nowrap">Status Aset</Label>
                                             </div>
                                             <Select
                                                 value={
@@ -7988,7 +9641,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                     }
                                                 }}
                                             >
-                                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl focus:ring-1 focus:ring-blue-500">
+                                                <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input focus:ring-1 focus:ring-blue-500">
                                                     <SelectValue placeholder="Pilih Status Aset" />
                                                 </SelectTrigger>
                                                 <SelectContent className="bg-popover border-border">
@@ -8003,14 +9656,14 @@ export default function RoadRealizationInfrastrukturPage() {
                                                     placeholder="Ketik status aset manual..."
                                                     value={statusAset}
                                                     onChange={(e) => setStatusAset(e.target.value)}
-                                                    className="h-9.5 text-xs bg-background border-input rounded-xl mt-1.5 focus:border-blue-500 animate-in fade-in-50 duration-200"
+                                                    className="h-9.5 text-xs bg-background border-input mt-1.5 focus:border-blue-500 animate-in fade-in-50 duration-200"
                                                 />
                                             )}
                                         </div>
 
                                         <div className="space-y-1.5">
                                             <div className="flex items-center justify-between gap-1.5 h-5">
-                                                <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 whitespace-nowrap shrink-0">Plotting Anggaran</Label>
+                                                <Label className="text-sm font-medium whitespace-nowrap shrink-0">Plotting Anggaran</Label>
                                                 {plottingId ? (
                                                     <Button
                                                         type="button"
@@ -8035,27 +9688,27 @@ export default function RoadRealizationInfrastrukturPage() {
                                                 onSelect={(val) => setPlottingId(val)}
                                                 placeholder={isLoadingPlotting ? "Memuat..." : (plottingOptions.length > 0 ? "Pilih Plotting..." : "Tidak ada data")}
                                                 emptyText="Data plotting tidak ditemukan"
-                                                className="w-full"
+                                                className="w-full h-9.5 text-xs"
                                             />
                                         </div>
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Verifikator (User Login)</Label>
+                                        <Label className="text-sm font-medium">Verifikator (User Login)</Label>
                                         <Input
                                             value={currentUserName}
                                             readOnly
-                                            className="h-9.5 bg-muted text-muted-foreground font-semibold text-xs rounded-xl cursor-not-allowed"
+                                            className="h-9.5 bg-muted text-muted-foreground font-semibold text-xs cursor-not-allowed"
                                         />
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">Keterangan</Label>
+                                        <Label className="text-sm font-medium">Keterangan</Label>
                                         <textarea
                                             value={keterangan}
                                             onChange={e => setKeterangan(e.target.value)}
                                             placeholder="Tulis keterangan tambahan..."
-                                            className="w-full min-h-[70px] bg-background border border-input text-xs rounded-xl p-3 text-foreground focus:border-blue-500 focus:outline-none"
+                                            className="w-full min-h-[70px] bg-background border border-input text-xs rounded-md p-3 text-foreground focus:border-blue-500 focus:outline-none"
                                         />
                                     </div>
 
@@ -8093,7 +9746,7 @@ export default function RoadRealizationInfrastrukturPage() {
 
                                                             return (
                                                                 <div key={attr.key} className={cn("space-y-1.5", isFullWidth && "sm:col-span-2")}>
-                                                                    <Label className="text-xs font-semibold text-foreground/80 dark:text-slate-300 block">
+                                                                    <Label className="text-sm font-medium">
                                                                         {attr.label || attr.key}
                                                                         {attr.required && <span className="text-rose-500 ml-0.5">*</span>}
                                                                     </Label>
@@ -8102,7 +9755,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                                             value={val ? String(val) : undefined}
                                                                             onValueChange={handleAttrChange}
                                                                         >
-                                                                            <SelectTrigger className="w-full h-9.5 text-xs bg-background border-input rounded-xl">
+                                                                            <SelectTrigger >
                                                                                 <SelectValue placeholder={`Pilih ${attr.label || attr.key}`} />
                                                                             </SelectTrigger>
                                                                             <SelectContent className="bg-popover border-border">
@@ -8116,7 +9769,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                                             value={String(val)}
                                                                             onChange={e => handleAttrChange(e.target.value)}
                                                                             placeholder={`Masukkan ${attr.label}...`}
-                                                                            className="w-full min-h-[60px] bg-background border border-input text-xs rounded-xl p-3 text-foreground focus:border-blue-500 focus:outline-none"
+                                                                            className="w-full min-h-[60px] bg-background border border-input text-xs rounded-md p-3 text-foreground focus:border-blue-500 focus:outline-none"
                                                                             required={attr.required}
                                                                         />
                                                                     ) : attr.type === 'boolean' ? (
@@ -8133,7 +9786,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                                             step="any"
                                                                             value={val}
                                                                             onChange={e => handleAttrChange(e.target.value !== "" ? Number(e.target.value) : "")}
-                                                                            className="h-9.5 bg-background border-input text-xs rounded-xl"
+                                                                            
                                                                             required={attr.required}
                                                                         />
                                                                     ) : attr.type === 'date' ? (
@@ -8141,7 +9794,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                                             type="date"
                                                                             value={String(val)}
                                                                             onChange={e => handleAttrChange(e.target.value)}
-                                                                            className="h-9.5 bg-background border-input text-xs rounded-xl"
+                                                                            
                                                                             required={attr.required}
                                                                         />
                                                                     ) : (
@@ -8150,7 +9803,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                                                             value={String(val)}
                                                                             onChange={e => handleAttrChange(e.target.value)}
                                                                             placeholder={`Masukkan ${attr.label}...`}
-                                                                            className="h-9.5 bg-background border-input text-xs rounded-xl"
+                                                                            
                                                                             required={attr.required}
                                                                         />
                                                                     )}
@@ -8164,7 +9817,7 @@ export default function RoadRealizationInfrastrukturPage() {
                                     )}
 
                                     {errorMsg && (
-                                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-650 dark:text-red-400 rounded-xl flex items-start gap-2 text-[11px] leading-tight">
+                                        <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-650 dark:text-red-400 rounded-lg flex items-start gap-2 text-[11px] leading-tight">
                                             <AlertCircle className="size-4 shrink-0 text-red-500 mt-0.5" />
                                             <span>{errorMsg}</span>
                                         </div>
@@ -8178,13 +9831,13 @@ export default function RoadRealizationInfrastrukturPage() {
                                         onClick={() => {
                                             setIsAttributeDialogOpen(false);
                                         }}
-                                        className="h-9.5 px-4 text-xs font-semibold rounded-xl border-border hover:bg-muted"
+                                        className="h-9.5 px-4 text-xs font-semibold rounded-md border-border hover:bg-muted"
                                     >
                                         Batal
                                     </Button>
                                     <Button
                                         type="submit"
-                                        className="h-9.5 px-5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md"
+                                        className="h-9.5 px-5 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-md"
                                     >
                                         Simpan Segmen
                                     </Button>
@@ -8256,6 +9909,14 @@ export default function RoadRealizationInfrastrukturPage() {
                         onCancel={() => setIsPrintDialogOpen(false)}
                     />
 
+                    <TipeInfrastrukturDialog
+                        open={isSelectTipeDialogOpen}
+                        onOpenChange={setIsSelectTipeDialogOpen}
+                        tipes={tipes}
+                        activeTipe={activeTipe}
+                        onSelectTipe={handleSelectTipe}
+                    />
+
                     <DeleteConfirmDialog
                         open={!!deleteConfirmId}
                         activeTipe={activeTipe ?? null}
@@ -8266,6 +9927,7 @@ export default function RoadRealizationInfrastrukturPage() {
                     <KirimDigitasiDialog
                         open={isKirimDialogOpen}
                         segment={segmentToKirim}
+                        segments={batchSegmentsToKirim}
                         tipeNama={activeTipe?.nama || "Infrastruktur"}
                         namaKecamatan={activeKecName}
                         isSubmitting={isSubmittingKirim}
@@ -8274,6 +9936,7 @@ export default function RoadRealizationInfrastrukturPage() {
                             if (!isSubmittingKirim) {
                                 setIsKirimDialogOpen(false);
                                 setSegmentToKirim(null);
+                                setBatchSegmentsToKirim([]);
                             }
                         }}
                     />
@@ -8332,6 +9995,60 @@ export default function RoadRealizationInfrastrukturPage() {
                         onRefresh={handleRefreshGarisVisual}
                         onClose={() => setSegmenVisualPanel(null)}
                     />
+
+                    {/* Dialog: Buka Kunci / Kembalikan Berita Acara ke Status Draft (Bappeda) */}
+                    <Dialog open={revertLaporanOpen} onOpenChange={setRevertLaporanOpen}>
+                        <DialogContent className="sm:max-w-md">
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                    <RotateCcw className="size-5" />
+                                    <span>Buka Kunci &amp; Revisi Berita Acara</span>
+                                </DialogTitle>
+                                <DialogDescription className="text-xs">
+                                    Berita Acara TA {selectedTahunFilter} untuk Desa <strong>{activeDesaName}</strong> akan dikembalikan ke status <strong>Draft / Revisi</strong>.
+                                    Kunci tahun anggaran dan segmen akan dibuka sehingga operator dapat melakukan perbaikan data.
+                                </DialogDescription>
+                            </DialogHeader>
+
+                            <div className="space-y-3 py-2">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-semibold text-foreground">
+                                        Catatan / Alasan Pembukaan Kunci
+                                    </label>
+                                    <textarea
+                                        value={revertCatatanInput}
+                                        onChange={(e) => setRevertCatatanInput(e.target.value)}
+                                        placeholder="Contoh: Perbaikan geometri segmen jalan poros batas timur desa sesuai hasil survey lapangan ulang."
+                                        rows={3}
+                                        className="w-full text-xs p-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-amber-500/50 resize-none"
+                                    />
+                                </div>
+                            </div>
+
+                            <DialogFooter className="gap-2 sm:gap-0">
+                                <Button
+                                    variant="outline"
+                                    onClick={() => setRevertLaporanOpen(false)}
+                                    disabled={isRevertingLaporan}
+                                    className="h-8 text-xs cursor-pointer"
+                                >
+                                    Batal
+                                </Button>
+                                <Button
+                                    onClick={handleRevertToDraft}
+                                    disabled={isRevertingLaporan}
+                                    className="h-8 text-xs font-bold text-white bg-amber-600 hover:bg-amber-700 gap-1.5 cursor-pointer"
+                                >
+                                    {isRevertingLaporan ? (
+                                        <Loader2 className="size-3.5 animate-spin" />
+                                    ) : (
+                                        <RotateCcw className="size-3.5" />
+                                    )}
+                                    <span>Buka Kunci &amp; Kembalikan ke Draft</span>
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
 
                     <HelpDialog open={isHelpOpen} onClose={() => setIsHelpOpen(false)} />
                 </div>

@@ -1,0 +1,56 @@
+### REST Client Test - Module Manage Infrastruktur Tipe
+
+@baseUrl = http://localhost:5000
+@authToken = YOUR_JWT_TOKEN_HERE
+
+### 1. GET ALL Infrastruktur Tipe
+GET {{baseUrl}}/v1/manage/infrastruktur-tipe
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### 2. GET BY ID
+GET {{baseUrl}}/v1/manage/infrastruktur-tipe/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+###
+
+### 3. CREATE Tipe Infrastruktur
+POST {{baseUrl}}/v1/manage/infrastruktur-tipe
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "kode": "drainase",
+  "nama": "Drainase Perkotaan",
+  "deskripsi": "Saluran pembuangan air hujan dan limbah rumah tangga",
+  "ikon": "droplets",
+  "warna": "#06B6D4",
+  "geom_type": "LINESTRING",
+  "table_name": "drainase",
+  "has_segmen": true,
+  "is_active": true,
+  "sort_order": 3
+}
+
+###
+
+### 4. UPDATE Tipe Infrastruktur
+PUT {{baseUrl}}/v1/manage/infrastruktur-tipe/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{authToken}}
+Content-Type: application/json
+
+{
+  "nama": "Drainase & Saluran Air",
+  "warna": "#0891B2",
+  "sort_order": 3
+}
+
+###
+
+### 5. DELETE Tipe Infrastruktur
+DELETE {{baseUrl}}/v1/manage/infrastruktur-tipe/00000000-0000-0000-0000-000000000000
+Authorization: Bearer {{authToken}}
+Content-Type: application/json

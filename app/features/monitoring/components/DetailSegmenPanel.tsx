@@ -57,6 +57,16 @@ export const DetailSegmenPanel: React.FC<DetailSegmenPanelProps> = ({
                             <span className="text-slate-500 dark:text-slate-400 block font-normal text-[10px]">Nama Ruas</span>
                             <span className="font-semibold text-slate-900 dark:text-slate-100 break-words">{segment.nama_jalan}</span>
                         </div>
+                        <div className="grid grid-cols-2 gap-x-3 gap-y-3 pt-1 border-t border-slate-100 dark:border-slate-800">
+                            <div className="space-y-0.5">
+                                <span className="text-slate-500 dark:text-slate-400 block font-normal text-[10px]">Kecamatan</span>
+                                <span className="font-semibold text-slate-900 dark:text-slate-100">{segment.nama_kecamatan || "—"}</span>
+                            </div>
+                            <div className="space-y-0.5">
+                                <span className="text-slate-500 dark:text-slate-400 block font-normal text-[10px]">Desa / Kelurahan</span>
+                                <span className="font-semibold text-slate-900 dark:text-slate-100">{segment.nama_desa || "—"}</span>
+                            </div>
+                        </div>
                         <div className="grid grid-cols-2 gap-x-3 gap-y-3">
                             <div className="space-y-0.5">
                                 <span className="text-slate-500 dark:text-slate-400 block font-normal text-[10px]">Panjang Realisasi</span>

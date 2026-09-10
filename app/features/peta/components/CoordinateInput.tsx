@@ -1,5 +1,5 @@
-﻿import { useState } from 'react';
-import { Plus, Trash2, MapPin, Navigation, Pencil, Check, X, Loader2 } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, MapPin, Navigation, Pencil, Check, X, Loader2, Compass } from 'lucide-react';
 import { Input } from '~/components/ui/input';
 import { Textarea } from '~/components/ui/textarea';
 import { Button } from '~/components/ui/button';
@@ -42,8 +42,7 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
             };
         }
 
-        // Pattern 2: DMS (e.g., "7°9'0\"S, 111°52'48\"E" or "7 9 0 S, 111 52 48 E")
-        // Regex to match one DMS component
+        // Pattern 2: DMS (e.g., "7°9'0\"S, 111°52'48\"E")
         const dmsPattern = /(\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["]?[\s]*([NSEW])/gi;
         const matches = Array.from(cleanInput.matchAll(dmsPattern));
 
@@ -60,18 +59,14 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
 
             const val1 = convert(matches[0]);
             const val2 = convert(matches[1]);
-
-            // Determine which is lat and which is lon based on direction suffix
             const dir1 = matches[0][4].toUpperCase();
             const dir2 = matches[1][4].toUpperCase();
 
-            // Usually Lat is N/S, Lon is E/W
             if (['N', 'S'].includes(dir1) && ['E', 'W'].includes(dir2)) {
                 return { lat: val1, lon: val2 };
             } else if (['E', 'W'].includes(dir1) && ['N', 'S'].includes(dir2)) {
                 return { lat: val2, lon: val1 };
             }
-            // Fallback if directions are same type or missing logic
             return { lat: val1, lon: val2 };
         }
 
@@ -80,7 +75,6 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
 
     const handleAdd = () => {
         const lines = inputValue.split('\n').map(l => l.trim()).filter(l => l !== '');
-        
         if (lines.length === 0) return;
 
         let addedCount = 0;
@@ -102,7 +96,7 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
         });
 
         if (addedCount === 0) {
-            alert('Format koordinat tidak dikenali pada baris manapun. Gunakan format Desimal (-7.15, 111.88) atau DMS.');
+            alert('Format koordinat tidak dikenali. Gunakan format Desimal (-7.15, 111.88) atau DMS.');
         } else {
             setInputValue('');
             setTitle('');
@@ -154,130 +148,142 @@ export function CoordinateInput({ markers, onAdd, onRemove, onUpdate, onZoomTo, 
     };
 
     return (
-        <div className={cn("space-y-4", className)}>
-            {/* Input Form */}
-            <div className="bg-slate-50/50 dark:bg-slate-800/30 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 space-y-3">
-                <div className="flex items-center justify-between mb-1">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-blue-600 rounded-lg text-white">
-                            <Plus size={14} />
-                        </div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-800 dark:text-slate-100">Tambah Titik Koordinat</span>
-                    </div>
-                </div>
-
+        <div className={cn("space-y-3", className)}>
+            {/* Input Form Container */}
+            <div className="bg-[#0B101D] p-3.5 rounded-2xl border border-white/[0.08] space-y-3 shadow-sm">
+                
+                {/* GPS Location Button */}
                 <Button
                     type="button"
                     variant="outline"
                     onClick={handleUseMyLocation}
                     disabled={isLocating}
-                    className="w-full h-9 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 dark:text-blue-400 font-bold text-[9px] uppercase tracking-wider rounded-xl flex items-center justify-center gap-1.5 transition-all"
+                    className="w-full h-8 bg-emerald-950/30 hover:bg-emerald-900/40 text-emerald-300 border border-emerald-800/40 rounded-xl font-bold text-[10px] tracking-wide flex items-center justify-center gap-1.5 transition-all cursor-pointer shadow-sm"
                 >
                     {isLocating ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-400" />
                     ) : (
-                        <Navigation className="w-3.5 h-3.5" />
+                        <Navigation className="w-3.5 h-3.5 text-emerald-400" />
                     )}
                     {isLocating ? "Mencari Sinyal GPS..." : "Gunakan Lokasi Saya Saat Ini"}
                 </Button>
 
-                <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Koordinat Manual (Pemisah Enter)</label>
+                {/* Manual Coordinate Textarea */}
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Koordinat Manual (Pemisah Enter)
+                    </label>
                     <Textarea
                         placeholder="Contoh:&#10;-7.15, 111.88&#10;-7.20, 111.90"
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
-                        className="min-h-[90px] rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 font-medium text-xs resize-none"
+                        className="min-h-[75px] rounded-xl border border-white/[0.08] bg-[#0E131F] text-slate-100 placeholder:text-slate-500 font-mono text-xs resize-none focus-visible:ring-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
                     />
-                    <p className="text-[8px] text-slate-400 font-medium italic ml-1">Ketik banyak koordinat dipisahkan dengan tombol Enter.</p>
+                    <span className="text-[9px] text-slate-500 italic block">
+                        Ketik koordinat dipisahkan dengan Enter.
+                    </span>
                 </div>
 
-                <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Label (Opsional)</label>
+                {/* Optional Title Input */}
+                <div className="space-y-1">
+                    <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Label / Nama Titik (Opsional)
+                    </label>
                     <Input
                         type="text"
-                        placeholder="Nama lokasi..."
+                        placeholder="Contoh: Jembatan Bubulan..."
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
-                        className="h-9 rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs"
+                        className="h-8 rounded-xl border border-white/[0.08] bg-[#0E131F] text-slate-100 placeholder:text-slate-500 text-xs focus-visible:ring-1 focus-visible:ring-emerald-500 focus-visible:border-emerald-500"
                     />
                 </div>
 
+                {/* Add to Map Submit Button */}
                 <Button
                     onClick={handleAdd}
-                    className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-200 dark:shadow-none font-black text-[10px] uppercase tracking-widest mt-1"
+                    disabled={!inputValue.trim()}
+                    className="w-full h-9 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 rounded-xl font-bold text-xs tracking-wide cursor-pointer transition-all shadow-lg shadow-emerald-500/20"
                 >
+                    <Plus size={14} className="mr-1" />
                     Tambah ke Peta
                 </Button>
             </div>
 
-            {/* List of Markers */}
+            {/* List of Plotted Markers */}
             {markers.length > 0 && (
-                <div className="space-y-2">
+                <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between px-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Daftar Titik ({markers.length})</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                          Titik Tersimpan ({markers.length})
+                        </span>
                     </div>
-                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+
+                    <div className="space-y-1.5 max-h-[220px] overflow-y-auto pr-1 custom-scrollbar">
                         {markers.map((marker) => (
                             <div
                                 key={marker.id}
-                                className="group flex items-center gap-3 p-3 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-blue-200 dark:hover:border-blue-800 transition-all shadow-sm"
+                                className="flex items-center gap-2.5 p-2 bg-[#0B101D] border border-white/[0.06] rounded-xl hover:border-white/[0.12] transition-all text-xs"
                             >
-                                <div className="p-2 bg-slate-50 dark:bg-slate-800 rounded-lg text-blue-600 group-hover:bg-blue-50 dark:group-hover:bg-blue-900/20 transition-colors">
-                                    <MapPin size={14} />
+                                <div className="p-1.5 bg-emerald-950/60 border border-emerald-800/40 rounded-lg text-emerald-400 shrink-0">
+                                    <MapPin size={12} />
                                 </div>
+
                                 <div className="flex-1 min-w-0">
                                     {editingId === marker.id ? (
-                                        <div className="flex items-center gap-1 mb-1">
+                                        <div className="flex items-center gap-1">
                                             <Input
                                                 value={editValue}
                                                 onChange={(e) => setEditValue(e.target.value)}
-                                                className="h-7 text-[11px] py-0 px-2 font-bold"
+                                                className="h-6 text-[11px] px-1.5 bg-[#0E131F] border-white/[0.1] text-white"
                                                 autoFocus
                                                 onKeyDown={(e) => {
                                                     if (e.key === 'Enter') saveEdit(marker);
                                                     if (e.key === 'Escape') cancelEditing();
                                                 }}
                                             />
-                                            <button onClick={() => saveEdit(marker)} className="p-1 text-emerald-600 hover:bg-emerald-50 rounded">
+                                            <button onClick={() => saveEdit(marker)} className="p-1 text-emerald-400 hover:bg-emerald-950 rounded cursor-pointer">
                                                 <Check size={12} />
                                             </button>
-                                            <button onClick={cancelEditing} className="p-1 text-red-500 hover:bg-red-50 rounded">
+                                            <button onClick={cancelEditing} className="p-1 text-slate-400 hover:bg-slate-800 rounded cursor-pointer">
                                                 <X size={12} />
                                             </button>
                                         </div>
                                     ) : (
-                                        <p className="text-[11px] font-extrabold text-slate-900 dark:text-slate-200 truncate leading-none mb-1 uppercase tracking-tight">
+                                        <p className="font-bold text-slate-200 truncate leading-tight">
                                             {marker.title}
                                         </p>
                                     )}
-                                    <p className="text-[9px] font-bold text-slate-400 tabular-nums">
-                                        {marker.lat.toFixed(6)}, {marker.lon.toFixed(6)}
-                                    </p>
+                                    <span className="text-[9px] text-slate-500 font-mono block">
+                                        {marker.lat.toFixed(5)}, {marker.lon.toFixed(5)}
+                                    </span>
                                 </div>
-                                <div className="flex gap-1">
+
+                                <div className="flex items-center gap-0.5 shrink-0">
                                     {editingId !== marker.id && (
                                         <button
+                                            type="button"
                                             onClick={() => startEditing(marker)}
-                                            className="p-2 hover:bg-blue-50 dark:hover:bg-blue-900/30 text-blue-600 rounded-lg transition-colors"
+                                            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/[0.08] rounded-lg transition-colors cursor-pointer"
                                             title="Ubah Nama"
                                         >
-                                            <Pencil size={14} />
+                                            <Pencil size={12} />
                                         </button>
                                     )}
                                     <button
+                                        type="button"
                                         onClick={() => onZoomTo(marker)}
-                                        className="p-2 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 text-emerald-600 rounded-lg transition-colors"
-                                        title="Ke Lokasi"
+                                        className="p-1.5 text-emerald-400 hover:bg-emerald-950/60 rounded-lg transition-colors cursor-pointer"
+                                        title="Fokus ke Titik"
                                     >
-                                        <Navigation size={14} />
+                                        <Navigation size={12} />
                                     </button>
                                     <button
+                                        type="button"
                                         onClick={() => onRemove(marker.id)}
-                                        className="p-2 hover:bg-red-50 dark:hover:bg-red-900/30 text-red-500 rounded-lg transition-colors"
-                                        title="Hapus"
+                                        className="p-1.5 text-rose-400 hover:bg-rose-950/60 rounded-lg transition-colors cursor-pointer"
+                                        title="Hapus Titik"
                                     >
-                                        <Trash2 size={14} />
+                                        <Trash2 size={12} />
                                     </button>
                                 </div>
                             </div>

@@ -1,4 +1,4 @@
-﻿import * as React from "react"
+import * as React from "react"
 
 import { cn } from "~/lib/utils"
 
@@ -21,7 +21,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("[&_tr]:border-b", className)}
+      className={cn("[&_tr]:border-b bg-slate-50 dark:bg-slate-900/90 text-foreground", className)}
       {...props}
     />
   )

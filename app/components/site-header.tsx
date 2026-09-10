@@ -126,9 +126,8 @@ export function SiteHeader({ menus, className }: SiteHeaderProps) {
                 <DropdownMenuSeparator className="my-1.5" />
                 <DropdownMenuItem 
                   className="text-xs rounded-lg py-1.5 text-rose-600 dark:text-rose-450 cursor-pointer focus:bg-rose-50 dark:focus:bg-rose-950/20 font-medium"
-                  onClick={() => {
-                    signout()
-                    navigate("/")
+                  onClick={async () => {
+                    await signout()
                   }}
                 >
                   <LogOut className="size-4 mr-2" />

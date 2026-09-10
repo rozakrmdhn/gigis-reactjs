@@ -34,10 +34,27 @@ export function useSnapshotLock(
             });
             const reports = Array.isArray(res?.result) ? res.result : (Array.isArray(res?.data) ? res.data : []);
             if (reports.length > 0) {
+                // If "Semua" is selected (no specific year filter), do NOT lock the entire screen
+                if (!queryTahun) {
+                    setIsYearLocked(false);
+                    setActiveSnapshotLaporan(null);
+
+                    // Collect locked segment IDs from any Final reports across years for badge display
+                    const finalReports = reports.filter((lap: any) => lap.status === "Final");
+                    const newLockedIds = new Set<string>();
+                    for (const lap of finalReports) {
+                        const segmens = lap.SegmensFormatted || lap.LaporanSegmens || lap.segmens || [];
+                        segmens.forEach((s: any) => {
+                            const sid = s.id?.toString() || s.id_segmen?.toString();
+                            if (sid) newLockedIds.add(sid);
+                        });
+                    }
+                    setLockedSegmenIds(newLockedIds);
+                    return;
+                }
+
                 // Filter reports matching the queried year if specific year is selected
-                const matchingReports = queryTahun
-                    ? reports.filter((lap: any) => String(lap.tahun_anggaran) === String(queryTahun))
-                    : reports;
+                const matchingReports = reports.filter((lap: any) => String(lap.tahun_anggaran) === String(queryTahun));
 
                 // Only reports with status "Final" lock segments and year
                 const finalReports = matchingReports.filter((lap: any) => lap.status === "Final");

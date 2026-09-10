@@ -1,5 +1,5 @@
-import { Layers, X, GripVertical, Trash2, Eye, EyeOff, RotateCcw, Filter, Search, Info, Loader2, RefreshCw, Play } from "lucide-react";
-import { useState, useEffect, useMemo } from "react";
+import { Layers, X, GripVertical, Trash2, Eye, EyeOff, RotateCcw, Filter, RefreshCw, Play, SunMedium } from "lucide-react";
+import { useState, useEffect } from "react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Slider } from "~/components/ui/slider";
@@ -85,7 +85,6 @@ function SortableLayerItem({
         if (!isWms || !layer.url) return;
         setLoadingAttributes(true);
         try {
-            // Construct WFS URL from WMS URL
             const url = new URL(layer.url, window.location.origin);
             url.searchParams.set('service', 'WFS');
             url.searchParams.set('version', '1.0.0');
@@ -101,7 +100,6 @@ function SortableLayerItem({
                     name: p.name,
                     type: p.type.split(':').pop() || p.type
                 }));
-                // Filter out common geom fields
                 setAttributes(fields.filter((f: any) => !f.type.toLowerCase().includes('geometry')));
             }
         } catch (error) {
@@ -117,21 +115,14 @@ function SortableLayerItem({
         }
     }, [isFilterOpen]);
 
-    const handleAttributeClick = (attrName: string) => {
-        setBuilderField(attrName);
-    };
-
     const applyBuilderFilter = () => {
         if (!builderField) return;
         
-        // Smart quote handling for strings
         const attr = attributes?.find(a => a.name === builderField);
         const isString = attr?.type.toLowerCase().includes('string') || attr?.type.toLowerCase().includes('text');
         
         let formattedVal = builderVal;
         if (isString) {
-            // Ensure single quotes for CQL strings
-            // Handle LIKE/ILIKE wildcards if not already present
             if ((builderOp === 'LIKE' || builderOp === 'ILIKE') && !builderVal.includes('%')) {
                 formattedVal = `'%${builderVal}%'`;
             } else {
@@ -140,7 +131,6 @@ function SortableLayerItem({
         }
 
         const newCql = `${builderField} ${builderOp} ${formattedVal}`;
-        // Update both local state and parent state
         onUpdateParams(layer.id, { CQL_FILTER: newCql });
     };
 
@@ -163,48 +153,46 @@ function SortableLayerItem({
             ref={setNodeRef}
             style={sortableStyle}
             className={cn(
-                "group flex flex-col p-2.5 rounded-xl border transition-all",
+                "group flex flex-col p-3 rounded-xl border transition-all select-none",
                 isDragging
-                    ? "bg-blue-50/90 dark:bg-blue-900/40 border-blue-200 dark:border-blue-900 shadow-xl opacity-90 scale-[1.02]"
-                    : "bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700",
-                hasActiveFilter && !isDragging && "border-blue-200 dark:border-blue-800 ring-1 ring-blue-500/10"
+                    ? "bg-slate-800 border-white/20 shadow-2xl opacity-90 scale-[1.02]"
+                    : "bg-[#0C101A] border-white/[0.08] hover:border-white/[0.16]",
+                hasActiveFilter && !isDragging && "border-amber-500/40 ring-1 ring-amber-500/20"
             )}
         >
             <div className="flex items-center gap-3">
                 <div
                     {...dndAttributes}
                     {...listeners}
-                    className="cursor-grab active:cursor-grabbing p-1 text-slate-300 dark:text-slate-600 hover:text-blue-600 transition-colors"
+                    className="cursor-grab active:cursor-grabbing p-1 text-slate-500 hover:text-white transition-colors"
                 >
                     <GripVertical size={16} />
                 </div>
 
                 <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-0.5">
+                    <div className="flex items-center gap-1.5 mb-0.5">
                         <span className={cn(
-                            "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest",
-                            layer.type === 'wms' ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                            "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest border border-white/[0.08]",
+                            layer.type === 'wms' ? "bg-slate-800 text-slate-300" : "bg-emerald-950/50 text-emerald-400 border-emerald-800/40"
                         )}>
                             {layer.type}
                         </span>
                         {isLegacy && (
                             <span className={cn(
-                                "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest shadow-sm border",
-                                layerStyle.bg,
-                                layerStyle.bgDark,
-                                layerStyle.text,
-                                layerStyle.border
+                                "text-[8px] font-black px-1.5 py-0.5 rounded uppercase tracking-widest shadow-sm border border-white/[0.08]",
+                                layerStyle.bgDark || "bg-slate-800",
+                                layerStyle.text || "text-slate-300"
                             )}>
                                 Core
                             </span>
                         )}
                         {hasActiveFilter && (
-                            <span className="text-[7px] font-black px-1 py-0.5 rounded bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400 uppercase tracking-widest animate-pulse">
+                            <span className="text-[7px] font-black px-1 py-0.5 rounded bg-amber-950/50 text-amber-400 border border-amber-800/40 uppercase tracking-widest animate-pulse">
                                 Filtered
                             </span>
                         )}
                     </div>
-                    <h4 className="text-[11px] font-semibold text-slate-900 dark:text-slate-100 truncate">
+                    <h4 className="text-xs font-bold text-white truncate">
                         {layer.title}
                     </h4>
                 </div>
@@ -215,22 +203,26 @@ function SortableLayerItem({
                             variant="ghost"
                             size="icon"
                             className={cn(
-                                "h-7 w-7 rounded-lg transition-all",
-                                isFilterOpen ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : (hasActiveFilter ? "text-blue-600 bg-blue-50" : "text-slate-400 hover:text-blue-600 hover:bg-slate-50")
+                                "h-7 w-7 rounded-lg transition-all cursor-pointer",
+                                isFilterOpen
+                                    ? "bg-white text-slate-950 hover:bg-slate-200"
+                                    : (hasActiveFilter ? "text-amber-400 bg-amber-950/40 border border-amber-800/40" : "text-slate-400 hover:text-white hover:bg-white/[0.08]")
                             )}
                             onClick={() => setIsFilterOpen(!isFilterOpen)}
+                            title="Filter Layer"
                         >
-                            <Filter size={14} className={isFilterOpen ? "fill-white/20" : ""} />
+                            <Filter size={14} />
                         </Button>
                     )}
                     <Button
                         variant="ghost"
                         size="icon"
                         className={cn(
-                            "h-7 w-7 rounded-lg transition-colors",
-                            layer.visible !== false ? "text-blue-600 bg-blue-50 dark:bg-blue-900/20" : "text-slate-400"
+                            "h-7 w-7 rounded-lg transition-colors cursor-pointer",
+                            layer.visible !== false ? "text-emerald-400 bg-emerald-950/40 border border-emerald-800/40" : "text-slate-500 hover:text-slate-300"
                         )}
                         onClick={() => onToggleVisibility(layer.id)}
+                        title={layer.visible !== false ? "Sembunyikan layer" : "Tampilkan layer"}
                     >
                         {layer.visible !== false ? <Eye size={14} /> : <EyeOff size={14} />}
                     </Button>
@@ -238,8 +230,9 @@ function SortableLayerItem({
                         <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="h-7 w-7 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/30 cursor-pointer"
                             onClick={() => onRemoveLayer(layer.id)}
+                            title="Hapus layer dari peta"
                         >
                             <Trash2 size={14} />
                         </Button>
@@ -248,34 +241,51 @@ function SortableLayerItem({
             </div>
 
             {/* Expansions */}
-            <div className="pl-8 space-y-3 overflow-hidden transition-all">
+            <div className="pl-7 space-y-3 overflow-hidden transition-all">
                 {/* Opacity Slider */}
-                <div className="mt-2 text-slate-400 flex items-center gap-3">
-                    <span className="text-[9px] font-bold uppercase tracking-tighter w-12 truncate shrink-0">
-                        Alpha {Math.round((layer.opacity ?? 1) * 100)} %
-                    </span>
-                    <Slider
-                        value={[(layer.opacity ?? 1) * 100]}
-                        max={100}
-                        step={1}
-                        className="flex-1"
-                        onValueChange={(val) => onOpacityChange(layer.id, val[0] / 100)}
-                    />
+                <div className="mt-2.5 p-2.5 bg-[#090D16] rounded-xl border border-white/[0.06] space-y-2">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 text-slate-300 font-bold text-[10px]">
+                            <SunMedium size={12} className="text-emerald-400" />
+                            <span>Opasitas Layer</span>
+                        </div>
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-950/60 border border-emerald-800/40 font-mono font-bold text-[10px] text-emerald-300">
+                            {Math.round((layer.opacity ?? 1) * 100)}%
+                        </span>
+                    </div>
+
+                    <div className="space-y-1">
+                        <Slider
+                            value={[(layer.opacity ?? 1) * 100]}
+                            max={100}
+                            min={0}
+                            step={5}
+                            className="cursor-pointer"
+                            trackClassName="bg-slate-900 border border-white/[0.08] h-2"
+                            rangeClassName="bg-gradient-to-r from-emerald-600 to-emerald-400"
+                            thumbClassName="border-2 border-emerald-400 bg-[#0B101D] size-4 hover:scale-110 focus-visible:ring-emerald-500/40"
+                            onValueChange={(val) => onOpacityChange(layer.id, val[0] / 100)}
+                        />
+                        <div className="flex justify-between items-center text-[8px] text-slate-500 font-semibold px-0.5 uppercase tracking-wider">
+                            <span>0% Transparan</span>
+                            <span>100% Pekat</span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Filter Builder Section */}
                 <Collapsible open={isFilterOpen && isWms}>
                     <CollapsibleContent className="overflow-hidden data-[state=open]:animate-collapsible-down data-[state=closed]:animate-collapsible-up">
-                        <div className="mt-2 p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-100 dark:border-slate-800/50 space-y-3">
+                        <div className="mt-2 p-3 bg-[#080B11] rounded-xl border border-white/[0.08] space-y-3">
                             {/* Header Discovery */}
                             <div className="flex items-center justify-between">
-                                <span className="text-[8px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1">
                                     <Filter size={10} /> Filter Builder
                                 </span>
                                 <button 
                                     onClick={fetchLayerSchema}
                                     disabled={loadingAttributes}
-                                    className="text-[8px] font-bold text-slate-400 hover:text-blue-600 transition-colors p-1"
+                                    className="text-[8px] font-bold text-slate-400 hover:text-white transition-colors p-1 cursor-pointer"
                                 >
                                     <RefreshCw size={10} className={cn(loadingAttributes && "animate-spin")} />
                                 </button>
@@ -286,13 +296,13 @@ function SortableLayerItem({
                                 <div className="space-y-1">
                                     <label className="text-[7px] font-black text-slate-400 uppercase ml-0.5">Atribut</label>
                                     <Select value={builderField} onValueChange={setBuilderField}>
-                                        <SelectTrigger size="sm" className="h-8 text-[9px] font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg w-full">
+                                        <SelectTrigger size="sm" className="h-8 text-[9px] font-bold bg-slate-900 border-white/[0.08] text-white rounded-lg w-full">
                                             <SelectValue placeholder="Pilih field..." />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className="bg-[#0C101A] border-white/[0.08] text-slate-200">
                                             {attributes?.map(attr => (
-                                                <SelectItem key={attr.name} value={attr.name} className="text-[10px] font-medium">
-                                                    {attr.name} <span className="text-[8px] text-slate-400 italic">({attr.type})</span>
+                                                <SelectItem key={attr.name} value={attr.name} className="text-[10px] font-medium text-slate-200 focus:bg-slate-800 focus:text-white">
+                                                    {attr.name} <span className="text-[8px] text-slate-500 italic">({attr.type})</span>
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -302,12 +312,12 @@ function SortableLayerItem({
                                 <div className="space-y-1">
                                     <label className="text-[7px] font-black text-slate-400 uppercase ml-0.5">Simbol</label>
                                     <Select value={builderOp} onValueChange={setBuilderOp}>
-                                        <SelectTrigger size="sm" className="h-8 text-[9px] font-black bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg w-full">
+                                        <SelectTrigger size="sm" className="h-8 text-[9px] font-black bg-slate-900 border-white/[0.08] text-white rounded-lg w-full">
                                             <SelectValue />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className="bg-[#0C101A] border-white/[0.08] text-slate-200">
                                             {CQL_OPERATORS.map(op => (
-                                                <SelectItem key={op.value} value={op.value} className="text-[10px] font-bold">
+                                                <SelectItem key={op.value} value={op.value} className="text-[10px] font-bold text-slate-200 focus:bg-slate-800 focus:text-white">
                                                     {op.label}
                                                 </SelectItem>
                                             ))}
@@ -322,8 +332,8 @@ function SortableLayerItem({
                                 <Input
                                     value={builderVal}
                                     onChange={(e) => setBuilderVal(e.target.value)}
-                                    placeholder="Ketik nilai..."
-                                    className="h-8 text-[10px] font-bold bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 rounded-lg focus-visible:ring-blue-500/30 w-full placeholder:font-normal"
+                                    placeholder="Ketik nilai filter..."
+                                    className="h-8 text-[10px] font-medium bg-slate-900 border-white/[0.08] text-white rounded-lg focus-visible:ring-white/20 w-full placeholder:text-slate-500"
                                 />
                             </div>
 
@@ -332,7 +342,7 @@ function SortableLayerItem({
                                 <Button 
                                     onClick={applyBuilderFilter}
                                     disabled={!builderField || !builderVal}
-                                    className="flex-1 h-8 bg-blue-600 hover:bg-blue-700 text-white text-[9px] font-black rounded-lg shadow-lg shadow-blue-200 dark:shadow-none transition-all uppercase tracking-widest gap-2"
+                                    className="flex-1 h-8 bg-white text-slate-950 hover:bg-slate-200 text-[9px] font-black rounded-lg transition-all uppercase tracking-widest gap-2 cursor-pointer shadow-sm"
                                 >
                                     <Play size={10} fill="currentColor" /> Terapkan Filter
                                 </Button>
@@ -340,7 +350,7 @@ function SortableLayerItem({
                                     <Button 
                                         onClick={resetFilter}
                                         variant="outline"
-                                        className="px-4 h-8 text-[9px] font-black text-rose-500 border-rose-100 hover:bg-rose-50 rounded-lg uppercase tracking-widest"
+                                        className="px-3 h-8 text-[9px] font-black text-rose-400 border-rose-900/40 hover:bg-rose-950/40 rounded-lg uppercase tracking-widest cursor-pointer"
                                     >
                                         Reset
                                     </Button>
@@ -350,16 +360,16 @@ function SortableLayerItem({
                             {!attributes && !loadingAttributes && (
                                 <button 
                                     onClick={fetchLayerSchema}
-                                    className="w-full py-2 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg text-[9px] font-black text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-all uppercase tracking-widest"
+                                    className="w-full py-2 border border-dashed border-white/[0.1] rounded-lg text-[9px] font-bold text-slate-400 hover:text-white hover:border-white/30 transition-all uppercase tracking-widest cursor-pointer"
                                 >
                                     Muat Daftar Atribut
                                 </button>
                             )}
                             
                             {hasActiveFilter && (
-                                <div className="p-2 bg-blue-50/50 dark:bg-blue-900/10 rounded-lg border border-blue-100/50 dark:border-blue-900/20">
-                                    <p className="text-[8px] font-bold text-blue-600 dark:text-blue-400 uppercase tracking-widest opacity-70 mb-1">Filter Aktif:</p>
-                                    <p className="text-[9px] font-mono text-slate-600 dark:text-slate-300 break-all bg-white dark:bg-slate-900 p-1 rounded border border-blue-100 dark:border-blue-900/30">
+                                <div className="p-2 bg-slate-900 rounded-lg border border-amber-500/30">
+                                    <p className="text-[8px] font-bold text-amber-400 uppercase tracking-widest opacity-80 mb-1">Filter Aktif:</p>
+                                    <p className="text-[9px] font-mono text-slate-200 break-all bg-black/40 p-1.5 rounded border border-white/[0.06]">
                                         {layer.params.CQL_FILTER}
                                     </p>
                                 </div>
@@ -413,14 +423,14 @@ export function MapLayerControlPanel({
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-slate-950/50 overflow-hidden">
+        <div className="flex flex-col h-full bg-[#080B11] text-slate-200 overflow-hidden">
             {/* Header / Info bar */}
-            <div className="px-4 py-2.5 border-b border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50 flex items-center justify-between">
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+            <div className="px-4 py-2.5 border-b border-white/[0.08] bg-[#0E131F]/90 flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-300">
                     {layers.length} Layer Terpasang di Peta
                 </span>
                 {onReset && (
-                    <Button variant="ghost" size="sm" onClick={onReset} className="h-7 px-2 text-xs font-semibold text-slate-500 hover:text-blue-600 rounded-lg gap-1.5 transition-all">
+                    <Button variant="ghost" size="sm" onClick={onReset} className="h-7 px-2 text-xs font-semibold text-slate-400 hover:text-white rounded-lg gap-1.5 transition-all cursor-pointer">
                         <RotateCcw size={12} /> Reset
                     </Button>
                 )}
@@ -439,7 +449,7 @@ export function MapLayerControlPanel({
                             items={layers.map((l) => l.id)}
                             strategy={verticalListSortingStrategy}
                         >
-                            <div className="space-y-3 pb-8">
+                            <div className="space-y-2.5 pb-8">
                                 {layers.map((layer) => (
                                 <SortableLayerItem
                                     key={layer.id}
@@ -456,20 +466,20 @@ export function MapLayerControlPanel({
                 ) : (
                     <div className="flex flex-col items-center justify-center py-20 px-8 text-center gap-3">
                         <div className="relative">
-                            <Layers className="text-slate-100 dark:text-slate-800" size={48} />
+                            <Layers className="text-slate-800" size={48} />
                             <div className="absolute inset-0 flex items-center justify-center">
-                                <X className="text-slate-200 dark:text-slate-700" size={24} />
+                                <X className="text-slate-700" size={24} />
                             </div>
                         </div>
                         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Belum ada layer aktif</p>
-                        <p className="text-[10px] text-slate-400 italic">Pilih dataset dari katalog untuk menampilkan data di peta.</p>
+                        <p className="text-[10px] text-slate-500 italic">Pilih dataset dari katalog untuk menampilkan data di peta.</p>
                     </div>
                 )}
             </div>
 
             {/* Footer Tips */}
-            <div className="p-3 bg-slate-50 dark:bg-slate-900/50 border-t border-slate-100 dark:border-slate-800">
-                <p className="text-[9px] text-center text-slate-400 font-medium italic">
+            <div className="p-3 bg-[#0E131F]/90 border-t border-white/[0.08]">
+                <p className="text-[9px] text-center text-slate-500 font-medium italic">
                     Tarik <GripVertical className="inline w-2 h-2 mb-0.5" /> untuk mengatur urutan tumpukan layer
                 </p>
             </div>

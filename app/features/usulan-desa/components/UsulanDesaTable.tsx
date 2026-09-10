@@ -1,4 +1,4 @@
-﻿import { type UsulanDesa, type UsulanStatus, type UsulanDesaFilters as IFilters, type VerifikasiAssignment, type VerifikasiStatus } from "../types/usulan-desa.types";
+import { type UsulanDesa, type UsulanStatus, type UsulanDesaFilters as IFilters, type VerifikasiAssignment, type VerifikasiStatus } from "../types/usulan-desa.types";
 import { UsulanDesaFilters } from "./UsulanDesaFilters";
 import { Card, CardContent } from "~/components/ui/card";
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "~/components/ui/table";
@@ -7,18 +7,20 @@ import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { IconEdit, IconTrash, IconMapPin, IconSearch } from "@tabler/icons-react";
 import { Skeleton } from "~/components/ui/skeleton";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { cn } from "~/lib/utils";
 import { kecamatanService, type Kecamatan } from "~/services/kecamatan";
 import { desaService, type Desa } from "~/services/desa";
-import { MoreHorizontal, ChevronRight, ChevronLeft, Check, X, Pencil, CalendarIcon, Mail, Send, ClipboardCheck, CheckCircle2, FileText } from "lucide-react";
+import { MoreHorizontal, ChevronRight, ChevronLeft, Check, X, Pencil, CalendarIcon, Mail, Send, ClipboardCheck, CheckCircle2, FileText, Building2, Search, SlidersHorizontal, RotateCw, Filter, Sparkles } from "lucide-react";
+import { Badge } from "~/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "~/components/ui/popover";
-import { Calendar } from "~/components/ui/calendar";
+import { Calendar as CalendarPicker } from "~/components/ui/calendar";
 import { toast } from "sonner";
 import { usulanDesaService } from "../services/usulan-desa.service";
 import { masterOpdService } from "../services/master-opd.service";
 import { verifikasiService } from "../services/verifikasi.service";
 import { authService } from "~/services/auth.service";
+import { canCreateUsulanDesa, canVerifyUsulanDesa, isReadOnlyRole } from "~/utils/permissions";
 import {
     Dialog,
     DialogContent,
@@ -48,6 +50,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "~
 import { Textarea } from "~/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "~/components/ui/sheet";
+
+import { UsulanDesaPagination } from "./UsulanDesaPagination";
+
 interface UsulanDesaTableProps {
     data: UsulanDesa[];
     isLoading: boolean;
@@ -56,6 +61,10 @@ interface UsulanDesaTableProps {
     onDetail: (item: UsulanDesa) => void;
     pageIndex: number;
     pageSize: number;
+    pageCount?: number;
+    totalItems?: number;
+    onPageChange?: (page: number) => void;
+    onPageSizeChange?: (size: number) => void;
     filters: IFilters;
     onFilterChange: (key: string, value: string) => void;
     onRefresh: () => void;
@@ -96,12 +105,21 @@ export function UsulanDesaTable({
     onDetail,
     pageIndex,
     pageSize,
+    pageCount = 0,
+    totalItems = 0,
+    onPageChange,
+    onPageSizeChange,
     filters,
     onFilterChange,
     onRefresh,
     onReset,
     onUpdateItem
 }: UsulanDesaTableProps) {
+    const currentUser = authService.getUser();
+    const isOpd = isReadOnlyRole(currentUser);
+    const canEditOrDelete = !isOpd && canCreateUsulanDesa(currentUser);
+    const canVerify = !isOpd && canVerifyUsulanDesa(currentUser);
+
     const [deleteItem, setDeleteItem] = useState<UsulanDesa | null>(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [selectedAssignmentUsulan, setSelectedAssignmentUsulan] = useState<UsulanDesa | null>(null);
@@ -168,8 +186,8 @@ export function UsulanDesaTable({
 
             // 2. Determine new status: if no OPD is selected, revert back to 'verifikasi_bappeda'.
             // If the status was pending and OPDs are selected, it changes to verifikasi_bappeda.
-            const newStatus = selectedOpdIds.length === 0 
-                ? 'verifikasi_bappeda' 
+            const newStatus = selectedOpdIds.length === 0
+                ? 'verifikasi_bappeda'
                 : (assigningItem.status === 'pending' ? 'verifikasi_bappeda' : assigningItem.status);
 
             // 3. Update local state optimistically
@@ -225,8 +243,8 @@ export function UsulanDesaTable({
 
             // 2. Determine new status: if no OPD is selected, revert back to 'verifikasi_bappeda'.
             // If the status was pending and OPDs are selected, it changes to verifikasi_bappeda.
-            const newStatus = remainingOpdIds.length === 0 
-                ? 'verifikasi_bappeda' 
+            const newStatus = remainingOpdIds.length === 0
+                ? 'verifikasi_bappeda'
                 : (usulan.status === 'pending' ? 'verifikasi_bappeda' : usulan.status);
 
             // 3. Update local state optimistically
@@ -300,7 +318,7 @@ export function UsulanDesaTable({
         setSelectedAssignmentUsulan(null);
         setAssigningItem(usulan);
         let existingIds = (usulan.assignments || []).map(a => a.opd_id);
-        
+
         // If there are no assignments yet, pre-select the initial OPD from the category
         if (existingIds.length === 0 && usulan.kategori?.opd_id) {
             existingIds = [usulan.kategori.opd_id];
@@ -485,7 +503,7 @@ export function UsulanDesaTable({
         try {
             await usulanDesaService.update(selectedAssignmentUsulan.id, { status: 'selesai' });
             toast.success("Berhasil menandai usulan desa sebagai selesai.");
-            
+
             // Update local state
             onUpdateItem(selectedAssignmentUsulan.id, { status: 'selesai' });
             setSelectedAssignmentUsulan({
@@ -506,7 +524,7 @@ export function UsulanDesaTable({
         try {
             await usulanDesaService.update(selectedAssignmentUsulan.id, { status: 'verifikasi_opd' });
             toast.success("Berhasil membatalkan status selesai. Status kembali ke Verifikasi OPD.");
-            
+
             // Update local state
             onUpdateItem(selectedAssignmentUsulan.id, { status: 'verifikasi_opd' });
             setSelectedAssignmentUsulan({
@@ -559,368 +577,530 @@ export function UsulanDesaTable({
         }
     };
 
+    const activeFilterCount = useMemo(() => {
+        let n = 0;
+        if (filters.status && filters.status !== "all") n++;
+        if (filters.tahun_anggaran && filters.tahun_anggaran !== "all") n++;
+        if (filters.jenis_usulan && filters.jenis_usulan !== "all") n++;
+        if (filters.nama_desa) n++;
+        if (filters.nama_kecamatan) n++;
+        if (filters.nomor_surat) n++;
+        if (filters.tanggal_surat_from) n++;
+        if (filters.tanggal_surat_to) n++;
+        return n;
+    }, [filters]);
+
+    const statusTabs = useMemo(() => [
+        { value: "all", label: "Semua Usulan", color: "slate" },
+        { value: "pending", label: "Pending", color: "amber" },
+        { value: "verifikasi_bappeda", label: "Verifikasi Bappeda", color: "sky" },
+        { value: "verifikasi_opd", label: "Verifikasi OPD", color: "indigo" },
+        { value: "disetujui", label: "Disetujui", color: "emerald" },
+        { value: "selesai", label: "Selesai", color: "emerald" },
+        { value: "ditolak", label: "Ditolak", color: "rose" },
+    ], []);
+
     return (
-        <div className="flex-1 min-h-0 flex flex-col">
-            <Card className="gap-0 py-0 overflow-hidden border dark:border-slate-800 bg-white dark:bg-slate-950 relative flex flex-col flex-1 min-h-0">
-                {/* Custom Search & Filters Toolbar */}
-                <div className="p-4 border-b border-border flex items-center justify-between gap-4 shrink-0 bg-slate-50/30 dark:bg-slate-900/10">
-                    <div className="relative w-full max-w-xs sm:max-w-sm">
-                        <IconSearch className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <div className="flex-1 flex flex-col">
+            {/* 1. STICKY TOP MENUBAR: Search, Filters, Reset, Refresh, Status Pill Tabs */}
+            <div className="sticky top-0 z-40 bg-background dark:bg-slate-950 border-b border-border shadow-xs">
+                {/* Search & Actions Toolbar */}
+                <div className="px-4 sm:px-6 py-2.5 sm:py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 bg-muted/20">
+                    {/* Search Input on Left */}
+                    <div className="relative w-full max-w-sm">
+                        <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                         <Input
-                            type="text"
-                            placeholder="Cari nama desa..."
+                            placeholder="Cari nama desa / kecamatan / nomor..."
                             value={localSearch}
                             onChange={(e) => setLocalSearch(e.target.value)}
-                            className="pl-9 h-9 w-full"
+                            className="pl-9 h-9 w-full text-xs rounded-xl bg-background border-border"
+                            autoComplete="off"
                         />
+                        {localSearch && (
+                            <button
+                                onClick={() => {
+                                    setLocalSearch("");
+                                    onFilterChange("nama_desa", "");
+                                }}
+                                className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </div>
 
-                    <UsulanDesaFilters
-                        filters={filters}
-                        onFilterChange={onFilterChange}
-                        onRefresh={onRefresh}
-                        onReset={onReset}
-                        isLoading={isLoading}
-                        isOpen={isFilterOpen}
-                        setIsOpen={setIsFilterOpen}
-                    />
+                    {/* Filter Trigger & Action Controls on Right */}
+                    <div className="flex items-center gap-2 shrink-0">
+                        <UsulanDesaFilters
+                            filters={filters}
+                            onFilterChange={onFilterChange}
+                            onRefresh={onRefresh}
+                            onReset={onReset}
+                            isLoading={isLoading}
+                            isOpen={isFilterOpen}
+                            setIsOpen={setIsFilterOpen}
+                        />
+                    </div>
                 </div>
 
-                <CardContent className="p-0 overflow-hidden flex-1 min-h-0 flex flex-row relative">
-                    <div className="flex-1 overflow-auto custom-scrollbar [&_[data-slot=table-container]]:overflow-visible">
-                        <Table>
-                            <TableHeader className="bg-slate-50 dark:bg-slate-900 sticky top-0 z-20 border-b border-border shadow-[0_1px_1px_rgba(0,0,0,0.1)]">
+                {/* Quick Status Filter Tabs with Counts (Horizontally scrollable on mobile) */}
+                <div className="relative border-t border-border/60 bg-muted/10 shrink-0">
+                    <div className="flex items-center gap-1.5 px-4 sm:px-6 py-2 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:overflow-x-visible sm:flex-wrap scroll-smooth touch-pan-x overscroll-x-contain">
+                        {statusTabs.map((tab) => (
+                            <button
+                                key={tab.value}
+                                onClick={() => onFilterChange("status", tab.value)}
+                                className={cn(
+                                    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer border shrink-0 whitespace-nowrap select-none active:scale-95",
+                                    (filters.status || "all") === tab.value
+                                        ? tab.color === 'amber'
+                                            ? "bg-amber-600 text-white border-amber-600 shadow-xs"
+                                            : tab.color === 'sky'
+                                                ? "bg-sky-600 text-white border-sky-600 shadow-xs"
+                                                : tab.color === 'indigo'
+                                                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                                                    : tab.color === 'rose'
+                                                        ? "bg-rose-600 text-white border-rose-600 shadow-xs"
+                                                        : tab.color === 'emerald'
+                                                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                                                            : "bg-foreground text-background border-foreground shadow-xs"
+                                        : "bg-background text-muted-foreground border-border hover:bg-muted"
+                                )}
+                            >
+                                <span>{tab.label}</span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+
+                {/* Active Filter Chips */}
+                {activeFilterCount > 0 && (
+                    <div className="flex items-center gap-1.5 px-4 sm:px-6 py-1.5 border-t border-border/60 bg-muted/5 text-[11px] overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] sm:flex-wrap shrink-0">
+                        <span className="text-muted-foreground font-semibold shrink-0">Filter aktif:</span>
+                        {filters.status && filters.status !== "all" && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                Status: {filters.status}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => onFilterChange("status", "all")} />
+                            </Badge>
+                        )}
+                        {filters.tahun_anggaran && filters.tahun_anggaran !== "all" && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                TA {filters.tahun_anggaran}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => onFilterChange("tahun_anggaran", "all")} />
+                            </Badge>
+                        )}
+                        {filters.jenis_usulan && filters.jenis_usulan !== "all" && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                Jenis: {filters.jenis_usulan}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => onFilterChange("jenis_usulan", "all")} />
+                            </Badge>
+                        )}
+                        {filters.nama_kecamatan && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                Kec: {filters.nama_kecamatan}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => onFilterChange("nama_kecamatan", "")} />
+                            </Badge>
+                        )}
+                        {filters.nama_desa && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                Desa: {filters.nama_desa}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => { setLocalSearch(""); onFilterChange("nama_desa", ""); }} />
+                            </Badge>
+                        )}
+                        {filters.nomor_surat && (
+                            <Badge variant="secondary" className="gap-1 px-2 py-0.5 rounded-lg text-[10px] shrink-0 whitespace-nowrap">
+                                No. Surat: {filters.nomor_surat}
+                                <X className="w-3 h-3 cursor-pointer" onClick={() => onFilterChange("nomor_surat", "")} />
+                            </Badge>
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {/* 2. Main Data Content Area: Desktop Table & Mobile Card Feed */}
+            <div className="px-4 sm:px-6 py-4 space-y-4 max-w-full overflow-x-hidden">
+                {/* A. Desktop High-Density Table View */}
+                <div className="hidden md:block rounded-md border border-border bg-card shadow-xs overflow-x-auto custom-scrollbar">
+                    <Table className="min-w-[1100px]">
+                        <TableHeader className="bg-muted/60 dark:bg-slate-900 border-b border-border">
+                            <TableRow className="hover:bg-transparent">
+                                <TableHead className="text-center font-bold sticky left-0 z-20 bg-muted/90 dark:bg-slate-900 border-r border-border w-[120px] min-w-[120px] shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)]">
+                                    Aksi
+                                </TableHead>
+                                <TableHead className="w-16 font-bold text-xs text-foreground">Agenda</TableHead>
+                                <TableHead className="font-bold min-w-[140px] text-xs text-foreground">Nomor Surat</TableHead>
+                                <TableHead className="font-bold min-w-[110px] text-xs text-foreground">Tanggal</TableHead>
+                                <TableHead className="font-bold min-w-[160px] text-xs text-foreground">Desa & Kecamatan</TableHead>
+                                <TableHead className="font-bold min-w-[240px] max-w-[380px] text-xs text-foreground">Uraian Usulan</TableHead>
+                                <TableHead className="font-bold min-w-[130px] text-xs text-foreground">Jenis / Kategori</TableHead>
+                                <TableHead className="font-bold min-w-[120px] text-xs text-foreground">Lokasi Spasial</TableHead>
+                                <TableHead className="font-bold min-w-[160px] text-xs text-foreground">Verifikasi OPD</TableHead>
+                                <TableHead className="font-bold min-w-[110px] text-xs text-foreground text-center">Status</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
                                 <TableRow>
-                                    <TableHead className="text-center font-semibold sticky top-0 left-0 z-30 bg-slate-50 dark:bg-slate-900 border-r shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] w-[110px] min-w-[110px] md:w-[110px] md:min-w-[110px]">Aksi</TableHead>
-                                    <TableHead className="font-semibold">Agenda</TableHead>
-                                    <TableHead className="font-semibold">Nomor Surat</TableHead>
-                                    <TableHead className="font-semibold">Tanggal Surat</TableHead>
-                                    <TableHead className="font-semibold">Desa</TableHead>
-                                    <TableHead className="font-semibold">Kecamatan</TableHead>
-                                    <TableHead className="font-semibold min-w-[200px] max-w-[400px]">Uraian Usulan</TableHead>
-                                    <TableHead className="font-semibold">Jenis</TableHead>
-                                    <TableHead className="font-semibold">Lokasi Spasial</TableHead>
-                                    <TableHead className="font-semibold min-w-[150px]">Verifikasi OPD</TableHead>
-                                    <TableHead className="font-semibold">Status</TableHead>
+                                    <TableCell colSpan={10} className="h-24">
+                                        <div className="p-4 space-y-3">
+                                            <Skeleton className="h-8 w-full rounded-lg" />
+                                            <Skeleton className="h-8 w-full rounded-lg" />
+                                            <Skeleton className="h-8 w-full rounded-lg" />
+                                        </div>
+                                    </TableCell>
                                 </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {isLoading ? (
-                                    <TableRow>
-                                        <TableCell colSpan={11} className="h-24">
-                                            <div className="p-4 space-y-4">
-                                                <Skeleton className="h-10 w-full" />
-                                                {Array.from({ length: 5 }).map((_, i) => (
-                                                    <Skeleton key={i} className="h-12 w-full" />
-                                                ))}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : data.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
-                                            Tidak ada data usulan desa.
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    data.map((item, index) => {
-                                        const name = item.nama_desa;
-                                        const desaName = name || desaList.find((d) => Number(d.id) === Number(item.id_desa))?.nama_desa || "-";
+                            ) : data.length === 0 ? (
+                                <TableRow>
+                                    <TableCell colSpan={10} className="h-32 text-center text-muted-foreground">
+                                        <div className="flex flex-col items-center justify-center gap-1.5">
+                                            <FileText className="w-8 h-8 opacity-30" />
+                                            <span className="font-semibold text-sm">Tidak ada data usulan desa.</span>
+                                            <span className="text-xs text-muted-foreground">Coba sesuaikan filter pencarian Anda.</span>
+                                        </div>
+                                    </TableCell>
+                                </TableRow>
+                            ) : (
+                                data.map((item) => {
+                                    const desaName = item.nama_desa || desaList.find((d) => Number(d.id) === Number(item.id_desa))?.nama_desa || "-";
+                                    const kecamatanName = item.nama_kecamatan || kecamatanList.find((k) => Number(k.id) === Number(item.id_kecamatan))?.nama_kecamatan || "-";
+                                    const isSelesaiOrApproved = item.status === 'selesai' || (item.assignments && item.assignments.some(a => a.status_terakhir === 'disetujui'));
 
-                                        const nameKec = item.nama_kecamatan;
-                                        const kecamatanName = nameKec || kecamatanList.find((k) => Number(k.id) === Number(item.id_kecamatan))?.nama_kecamatan || "-";
-                                        const isSelesaiOrApproved = item.status === 'selesai' || (item.assignments && item.assignments.some(a => a.status_terakhir === 'disetujui'));
-
-                                        return (
-                                            <TableRow
-                                                key={item.id}
+                                    return (
+                                        <TableRow
+                                            key={item.id}
+                                            className={cn(
+                                                "group transition-colors",
+                                                isSelesaiOrApproved && "bg-emerald-500/5 hover:bg-emerald-500/10"
+                                            )}
+                                        >
+                                            <TableCell
                                                 className={cn(
-                                                    "group transition-colors",
+                                                    "w-[120px] min-w-[120px] p-2 sticky left-0 border-r border-border shadow-[2px_0_5px_-2px_rgba(0,0,0,0.08)] z-10 transition-colors",
                                                     isSelesaiOrApproved
-                                                        ? "bg-emerald-50 dark:bg-[#0b271f] hover:bg-emerald-100 dark:hover:bg-[#113a2e]"
-                                                        : ""
+                                                        ? "bg-card group-hover:bg-muted/80"
+                                                        : "bg-card group-hover:bg-muted/80"
                                                 )}
                                             >
-                                                <TableCell
-                                                    className={cn(
-                                                        "w-[110px] min-w-[110px] md:w-[110px] md:min-w-[110px] p-0 relative sticky left-0 border-r border-slate-200 dark:border-slate-800 shadow-[4px_0_8px_-4px_rgba(0,0,0,0.1)] z-10 transition-colors",
-                                                        isSelesaiOrApproved
-                                                            ? "bg-emerald-50 dark:bg-[#0b271f] group-hover:bg-emerald-100 dark:group-hover:bg-[#113a2e]"
-                                                            : "bg-white dark:bg-slate-950 group-hover:bg-slate-50 dark:group-hover:bg-slate-900"
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-7 w-7 p-0 border-emerald-200 dark:border-emerald-800 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-lg shrink-0 cursor-pointer"
+                                                        onClick={() => onDetail(item)}
+                                                        title="Lihat Detail"
+                                                    >
+                                                        <IconMapPin className="h-3.5 w-3.5" />
+                                                    </Button>
+                                                    {canEditOrDelete && (
+                                                        <>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-7 w-7 p-0 border-blue-200 dark:border-blue-800 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-lg shrink-0 cursor-pointer"
+                                                                onClick={() => onEdit(item)}
+                                                                title="Edit Usulan"
+                                                            >
+                                                                <IconEdit className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-7 w-7 p-0 border-rose-200 dark:border-rose-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 rounded-lg shrink-0 cursor-pointer"
+                                                                onClick={() => setDeleteItem(item)}
+                                                                title="Hapus Usulan"
+                                                            >
+                                                                <IconTrash className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </>
                                                     )}
-                                                >
-                                                    {/* Desktop Actions Layout */}
-                                                    <div className="hidden md:flex flex-row items-center justify-center gap-1.5 h-12 w-full px-2">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onDetail(item);
-                                                            }}
-                                                            title="Lihat Detail"
-                                                        >
-                                                            <IconMapPin className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onEdit(item);
-                                                            }}
-                                                            title="Edit Usulan"
-                                                        >
-                                                            <IconEdit className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setDeleteItem(item);
-                                                            }}
-                                                            title="Hapus Usulan"
-                                                        >
-                                                            <IconTrash className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-
-                                                    {/* Mobile Trigger Menu */}
-                                                    <div className="flex md:hidden items-center justify-center h-12 w-full">
-                                                        <Button
-                                                            variant="ghost"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setActiveRowId(item.id);
-                                                            }}
-                                                            className="h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md"
-                                                            title="Menu Aksi"
-                                                        >
-                                                            <MoreHorizontal className="h-4 w-4 text-slate-500" />
-                                                        </Button>
-                                                    </div>
-
-                                                    {/* Mobile Sliding Actions Capsule */}
-                                                    <div className={cn(
-                                                        "absolute top-0 bottom-0 left-0 z-20 flex md:hidden items-center justify-center gap-1.5 bg-blue-50/95 dark:bg-blue-950/95 backdrop-blur-xs transition-all duration-300 ease-in-out px-2 border-r border-slate-200 dark:border-slate-800 rounded-r-xl w-[160px]",
-                                                        activeRowId === item.id ? "translate-x-0 opacity-100" : "-translate-x-4 opacity-0 pointer-events-none"
-                                                    )}>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 rounded-md shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setActiveRowId(null);
-                                                            }}
-                                                            title="Tutup"
-                                                        >
-                                                            <ChevronLeft className="h-4 w-4" />
-                                                        </Button>
-                                                        <div className="h-5 w-[1px] bg-slate-200 dark:bg-slate-800 mx-0.5 shrink-0" />
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onDetail(item);
-                                                                setActiveRowId(null);
-                                                            }}
-                                                            title="Lihat Detail"
-                                                        >
-                                                            <IconMapPin className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                onEdit(item);
-                                                                setActiveRowId(null);
-                                                            }}
-                                                            title="Edit Usulan"
-                                                        >
-                                                            <IconEdit className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 w-7 p-0 border-slate-200 dark:border-slate-800 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setDeleteItem(item);
-                                                                setActiveRowId(null);
-                                                            }}
-                                                            title="Hapus Usulan"
-                                                        >
-                                                            <IconTrash className="h-3.5 w-3.5" />
-                                                        </Button>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="font-semibold text-slate-900 dark:text-slate-100">
-                                                    {item.nomor_agenda}
-                                                </TableCell>
-                                                <TableCell className="text-slate-700 dark:text-slate-300 text-xs">
-                                                    {(() => {
-                                                        const list = parseNomorSurat(item.nomor_surat);
-                                                        if (list.length === 0) return "-";
-                                                        return (
-                                                            <div className="flex flex-col gap-1 min-w-[120px]">
-                                                                {list.map((num, idx) => (
-                                                                    <div key={idx} className="bg-slate-100/80 dark:bg-slate-800/80 px-2 py-0.5 rounded text-[11px] font-medium break-all border border-slate-200/50 dark:border-slate-700/50 w-fit">
-                                                                        {num}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </TableCell>
-                                                <TableCell className="text-slate-600 dark:text-slate-400 font-mono text-sm">
-                                                    {formatDate(item.tanggal_surat)}
-                                                </TableCell>
-                                                <TableCell className="text-slate-700 dark:text-slate-355 font-medium">
-                                                    {desaName}
-                                                </TableCell>
-                                                <TableCell className="text-slate-600 dark:text-slate-400 text-sm">
-                                                    {kecamatanName}
-                                                </TableCell>
-                                                <TableCell className="whitespace-normal break-words text-slate-700 dark:text-slate-300">
-                                                    {item.uraian_usulan}
-                                                </TableCell>
-                                                <TableCell className="text-slate-600 dark:text-slate-400">
-                                                    {item.kategori ? (
-                                                        <span
-                                                            className="inline-flex items-center bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-medium"
-                                                            title={`${item.kategori.nama}${item.volume ? ` (${item.volume})` : ''}`}
-                                                        >
-                                                            {item.kategori.nama}
-                                                        </span>
-                                                    ) : (
-                                                        item.jenis_usulan || "-"
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-xs">
-                                                    {item.geometries && item.geometries.length > 0 ? (() => {
-                                                        const counts = item.geometries.reduce((acc, geom) => {
-                                                            const t = geom.geom?.type;
-                                                            if (t === 'Point') acc.point = (acc.point || 0) + 1;
-                                                            else if (t === 'LineString') acc.line = (acc.line || 0) + 1;
-                                                            else if (t === 'Polygon') acc.area = (acc.area || 0) + 1;
-                                                            else acc.other = (acc.other || 0) + 1;
-                                                            return acc;
-                                                        }, {} as Record<string, number>);
-                                                        return (
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {counts.point && (
-                                                                    <span className="inline-flex items-center gap-0.5 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-400 border border-blue-200 dark:border-blue-900/50 font-semibold px-1.5 py-0.5 rounded-full text-[10px]">
-                                                                        <svg className="h-2 w-2 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" /></svg>
-                                                                        {counts.point} Titik
-                                                                    </span>
-                                                                )}
-                                                                {counts.line && (
-                                                                    <span className="inline-flex items-center gap-0.5 bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-400 border border-violet-200 dark:border-violet-900/50 font-semibold px-1.5 py-0.5 rounded-full text-[10px]">
-                                                                        <svg className="h-2 w-2 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 19L19 5" /></svg>
-                                                                        {counts.line} Garis
-                                                                    </span>
-                                                                )}
-                                                                {counts.area && (
-                                                                    <span className="inline-flex items-center gap-0.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:emerald-400 border border-emerald-200 dark:border-emerald-900/50 font-semibold px-1.5 py-0.5 rounded-full text-[10px]">
-                                                                        <svg className="h-2 w-2 shrink-0" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h18v18H3z" /></svg>
-                                                                        {counts.area} Area
-                                                                    </span>
-                                                                )}
-                                                                {counts.other && (
-                                                                    <span className="inline-flex items-center gap-0.5 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 font-semibold px-1.5 py-0.5 rounded-full text-[10px]">
-                                                                        {counts.other} Lainnya
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })() : (
-                                                        <span className="text-slate-400 dark:text-slate-500 italic text-[11px]">—</span>
-                                                    )}
-                                                </TableCell>
-                                                 <TableCell
-                                                    className={cn("text-xs", item.assignments && item.assignments.length > 0 && "cursor-pointer hover:bg-slate-50/80 dark:hover:bg-slate-900/80 transition-colors")}
-                                                    onClick={(e) => {
-                                                        if (item.assignments && item.assignments.length > 0) {
-                                                            e.stopPropagation();
-                                                            setSelectedAssignmentUsulan(item);
-                                                        }
-                                                    }}
-                                                    title={item.assignments && item.assignments.length > 0 ? "Klik untuk melihat detail verifikasi" : undefined}
-                                                >
-                                                    {item.assignments && item.assignments.length > 0 ? (
-                                                        <div className="flex flex-col gap-1">
-                                                            {item.assignments.map((assign) => (
-                                                                <div key={assign.id} className="flex items-center justify-between gap-2 bg-slate-50 dark:bg-slate-900/60 px-2 py-1 rounded border dark:border-slate-800/80">
-                                                                    <span className="font-bold text-[10px] text-slate-800 dark:text-slate-200 truncate max-w-[80px]" title={assign.opd?.nama || assign.opd_id}>
-                                                                        {assign.opd?.kode || assign.opd_id}
-                                                                    </span>
-                                                                    <span className={cn(
-                                                                        "px-1.5 py-0.5 rounded text-[9px] font-black uppercase shrink-0 border",
-                                                                        assign.status_terakhir === 'disetujui' && "bg-emerald-50 text-emerald-700 border-emerald-250 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50",
-                                                                        assign.status_terakhir === 'ditolak' && "bg-rose-50 text-rose-700 border-rose-250 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-900/50",
-                                                                        assign.status_terakhir === 'revisi' && "bg-amber-50 text-amber-700 border-amber-250 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50",
-                                                                        assign.status_terakhir === 'pending' && "bg-amber-50 text-amber-700 border-amber-250 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50",
-                                                                        assign.status_terakhir === 'terkirim' && "bg-blue-50 text-blue-700 border-blue-250 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-900/50"
-                                                                    )}>
-                                                                        {assign.status_terakhir}
-                                                                    </span>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="font-mono font-bold text-xs text-foreground">
+                                                #{item.nomor_agenda}
+                                            </TableCell>
+                                            <TableCell className="text-xs">
+                                                {(() => {
+                                                    const list = parseNomorSurat(item.nomor_surat);
+                                                    if (list.length === 0) return <span className="text-muted-foreground">-</span>;
+                                                    return (
+                                                        <div className="flex flex-col gap-1 min-w-[120px]">
+                                                            {list.map((num, idx) => (
+                                                                <div key={idx} className="bg-muted px-2 py-0.5 rounded-md text-[10.5px] font-mono font-medium truncate max-w-[180px]" title={num}>
+                                                                    {num}
                                                                 </div>
                                                             ))}
                                                         </div>
-                                                    ) : item.status === 'pending' ? (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleTriggerCekBappeda(item);
-                                                            }}
-                                                            className="h-7 text-[10px] font-bold text-amber-700 bg-amber-50/80 hover:bg-amber-100 dark:bg-amber-950/40 dark:text-amber-400 px-2.5 rounded-lg border border-amber-300 dark:border-amber-900/60 flex items-center gap-1 w-fit shadow-xs"
-                                                        >
-                                                            <ClipboardCheck className="h-3 w-3 text-amber-600" />
-                                                            Cek Usulan Bappeda
-                                                        </Button>
-                                                    ) : (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                handleTriggerEditAssignments(item);
-                                                            }}
-                                                            className="h-7 text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 px-2.5 rounded-lg border border-dashed border-blue-200 dark:border-blue-900/50 flex items-center gap-1 w-fit"
-                                                        >
-                                                            + Tambah Verifikasi
-                                                        </Button>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <StatusBadge status={item.status} />
-                                                </TableCell>
-                                            </TableRow>
-                                        );
-                                    })
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                                    );
+                                                })()}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground font-mono whitespace-nowrap">
+                                                {formatDate(item.tanggal_surat)}
+                                            </TableCell>
+                                            <TableCell className="text-xs">
+                                                <div className="font-bold text-foreground truncate max-w-[180px]">Desa {desaName}</div>
+                                                <div className="text-[11px] text-muted-foreground truncate max-w-[180px]">Kec. {kecamatanName}</div>
+                                            </TableCell>
+                                            <TableCell className="text-xs text-foreground font-medium max-w-[350px]">
+                                                <p className="line-clamp-2 leading-relaxed" title={item.uraian_usulan}>
+                                                    {item.uraian_usulan}
+                                                </p>
+                                            </TableCell>
+                                            <TableCell className="text-xs">
+                                                {item.kategori ? (
+                                                    <Badge variant="outline" className="text-[10px] bg-muted/40 font-medium truncate max-w-[150px]" title={`${item.kategori.nama}${item.volume ? ` (${item.volume})` : ''}`}>
+                                                        {item.kategori.nama}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">{item.jenis_usulan || "-"}</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-xs">
+                                                {item.geometries && item.geometries.length > 0 ? (
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-bold text-[10px] border border-indigo-500/20">
+                                                            <IconMapPin className="w-3 h-3" />
+                                                            {item.geometries.length} Spasial
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-muted-foreground/50 text-[11px]">—</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell
+                                                className={cn("text-xs", item.assignments && item.assignments.length > 0 && "cursor-pointer hover:bg-muted/30 transition-colors")}
+                                                onClick={() => {
+                                                    if (item.assignments && item.assignments.length > 0) {
+                                                        setSelectedAssignmentUsulan(item);
+                                                    }
+                                                }}
+                                                title={item.assignments && item.assignments.length > 0 ? "Klik untuk melihat detail verifikasi" : undefined}
+                                            >
+                                                {item.assignments && item.assignments.length > 0 ? (
+                                                    <div className="flex flex-col gap-1">
+                                                        {item.assignments.map((assign) => (
+                                                            <div key={assign.id} className="flex items-center justify-between gap-2 bg-muted/50 px-2 py-0.5 rounded-md border border-border">
+                                                                <span className="font-bold text-[10px] text-foreground truncate max-w-[80px]" title={assign.opd?.nama || assign.opd_id}>
+                                                                    {assign.opd?.kode || assign.opd_id}
+                                                                </span>
+                                                                <span className={cn(
+                                                                    "px-1.5 py-0.2 rounded text-[9px] font-black uppercase shrink-0 border",
+                                                                    assign.status_terakhir === 'disetujui' && "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-400",
+                                                                    assign.status_terakhir === 'ditolak' && "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/30 dark:text-rose-400",
+                                                                    assign.status_terakhir === 'revisi' && "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400",
+                                                                    assign.status_terakhir === 'pending' && "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400",
+                                                                    assign.status_terakhir === 'terkirim' && "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/30 dark:text-blue-400"
+                                                                )}>
+                                                                    {assign.status_terakhir}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : item.status === 'pending' ? (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleTriggerCekBappeda(item)}
+                                                        className="h-7 text-[10px] font-bold text-amber-700 bg-amber-500/10 hover:bg-amber-500/20 dark:text-amber-300 px-2.5 rounded-lg border border-amber-500/30 flex items-center gap-1 w-fit cursor-pointer"
+                                                    >
+                                                        <ClipboardCheck className="h-3 w-3 text-amber-600" />
+                                                        Cek Bappeda
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleTriggerEditAssignments(item)}
+                                                        className="h-7 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/30 px-2.5 rounded-lg border border-dashed border-indigo-300 dark:border-indigo-800 flex items-center gap-1 w-fit cursor-pointer"
+                                                    >
+                                                        + Verifikasi OPD
+                                                    </Button>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <StatusBadge status={item.status} />
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
 
-                    {/* Spacer to push table content left when filter panel is open */}
-                    <div className={cn(
-                        "hidden md:block transition-all duration-300 ease-in-out shrink-0",
-                        isFilterOpen ? "w-[300px]" : "w-0"
-                    )} />
-                </CardContent>
-            </Card>
+                {/* B. Mobile High-Contrast Card Feed (hidden on desktop) */}
+                <div className="block md:hidden space-y-3">
+                    {isLoading ? (
+                        Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="p-4 rounded-2xl border border-border bg-card space-y-2.5 shadow-xs">
+                                <Skeleton className="h-4 w-3/4 rounded-md" />
+                                <Skeleton className="h-3 w-1/2 rounded-md" />
+                                <Skeleton className="h-10 w-full rounded-xl" />
+                                <div className="flex gap-2 pt-2">
+                                    <Skeleton className="h-8 w-20 rounded-xl" />
+                                    <Skeleton className="h-8 w-20 rounded-xl" />
+                                </div>
+                            </div>
+                        ))
+                    ) : data.length === 0 ? (
+                        <div className="p-8 text-center border border-dashed border-border rounded-2xl bg-muted/10 text-muted-foreground">
+                            <FileText className="w-8 h-8 mx-auto mb-2 opacity-40 text-muted-foreground" />
+                            <p className="text-xs font-semibold">Tidak ada data usulan desa.</p>
+                        </div>
+                    ) : (
+                        data.map((item) => {
+                            const desaName = item.nama_desa || desaList.find((d) => Number(d.id) === Number(item.id_desa))?.nama_desa || "-";
+                            const kecamatanName = item.nama_kecamatan || kecamatanList.find((k) => Number(k.id) === Number(item.id_kecamatan))?.nama_kecamatan || "-";
+                            const nomorSuratList = parseNomorSurat(item.nomor_surat);
+
+                            return (
+                                <div
+                                    key={item.id}
+                                    className="p-3.5 rounded-2xl border border-border bg-card shadow-xs hover:shadow-md transition-all space-y-3"
+                                >
+                                    {/* Header: Desa & Kecamatan + Status Badge */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="space-y-0.5 min-w-0">
+                                            <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                                                <Building2 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                                                <span className="truncate">Desa {desaName}</span>
+                                            </div>
+                                            <p className="text-[11px] text-muted-foreground truncate">
+                                                Kec. {kecamatanName} {item.tahun_anggaran ? `• TA ${item.tahun_anggaran}` : ''}
+                                            </p>
+                                        </div>
+                                        <StatusBadge status={item.status} />
+                                    </div>
+
+                                    {/* Agenda & Nomor Surat */}
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="px-2 py-0.5 rounded-md bg-muted text-[10.5px] font-mono font-bold text-foreground">
+                                            Agenda #{item.nomor_agenda}
+                                        </span>
+                                        {nomorSuratList.length > 0 && (
+                                            <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-[10px] font-mono text-muted-foreground truncate max-w-[200px]" title={nomorSuratList.join(', ')}>
+                                                {nomorSuratList[0]} {nomorSuratList.length > 1 ? `(+${nomorSuratList.length - 1})` : ''}
+                                            </span>
+                                        )}
+                                        {item.tanggal_surat && (
+                                            <span className="text-[10.5px] text-muted-foreground flex items-center gap-1 font-mono">
+                                                <CalendarIcon className="w-3 h-3 text-muted-foreground shrink-0" />
+                                                {formatDate(item.tanggal_surat)}
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Uraian Usulan */}
+                                    <div className="bg-muted/30 p-2.5 rounded-xl border border-border/60">
+                                        <p className="text-xs text-foreground font-medium line-clamp-3 leading-relaxed">
+                                            {item.uraian_usulan}
+                                        </p>
+                                    </div>
+
+                                    {/* Metadata Badges: Jenis, Volume, Geometri */}
+                                    <div className="flex items-center gap-1.5 flex-wrap text-[10px]">
+                                        {item.kategori ? (
+                                            <Badge variant="outline" className="text-[10px] bg-background">
+                                                {item.kategori.nama} {item.volume ? `(${item.volume})` : ''}
+                                            </Badge>
+                                        ) : item.jenis_usulan ? (
+                                            <Badge variant="outline" className="text-[10px] bg-background">
+                                                {item.jenis_usulan}
+                                            </Badge>
+                                        ) : null}
+
+                                        {item.geometries && item.geometries.length > 0 && (
+                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 font-semibold">
+                                                <IconMapPin className="w-2.5 h-2.5" />
+                                                {item.geometries.length} Spasial
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Verifikasi OPD Section (if any) */}
+                                    {item.assignments && item.assignments.length > 0 && (
+                                        <div
+                                            className="pt-2 border-t border-border/80 flex items-center justify-between gap-2 cursor-pointer"
+                                            onClick={() => setSelectedAssignmentUsulan(item)}
+                                        >
+                                            <span className="text-[10.5px] font-semibold text-muted-foreground">Verifikasi OPD:</span>
+                                            <div className="flex items-center gap-1 flex-wrap justify-end">
+                                                {item.assignments.map((assign) => (
+                                                    <span
+                                                        key={assign.id}
+                                                        className={cn(
+                                                            "px-1.5 py-0.5 rounded text-[9px] font-black uppercase border",
+                                                            assign.status_terakhir === 'disetujui' && "bg-emerald-50 text-emerald-700 border-emerald-300 dark:bg-emerald-950/30 dark:text-emerald-400",
+                                                            assign.status_terakhir === 'ditolak' && "bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/30 dark:text-rose-400",
+                                                            assign.status_terakhir === 'revisi' && "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400",
+                                                            assign.status_terakhir === 'pending' && "bg-amber-50 text-amber-700 border-amber-300 dark:bg-amber-950/30 dark:text-amber-400",
+                                                            assign.status_terakhir === 'terkirim' && "bg-blue-50 text-blue-700 border-blue-300 dark:bg-blue-950/30 dark:text-blue-400"
+                                                        )}
+                                                    >
+                                                        {assign.opd?.kode || assign.opd_id}: {assign.status_terakhir}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Footer Actions */}
+                                    <div className="pt-2 border-t border-border/80 flex items-center justify-end gap-1.5">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => onDetail(item)}
+                                            className="h-8 px-2.5 text-xs font-semibold rounded-xl text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 gap-1 cursor-pointer"
+                                        >
+                                            <IconMapPin className="w-3.5 h-3.5" />
+                                            <span>Detail</span>
+                                        </Button>
+                                        {canEditOrDelete && (
+                                            <>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => onEdit(item)}
+                                                    className="h-8 px-2.5 text-xs font-semibold rounded-xl text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800 hover:bg-blue-50 dark:hover:bg-blue-950/30 gap-1 cursor-pointer"
+                                                >
+                                                    <IconEdit className="w-3.5 h-3.5" />
+                                                    <span>Edit</span>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => setDeleteItem(item)}
+                                                    className="h-8 px-2.5 text-xs font-semibold rounded-xl text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800 hover:bg-rose-50 dark:hover:bg-rose-950/30 gap-1 cursor-pointer"
+                                                >
+                                                    <IconTrash className="w-3.5 h-3.5" />
+                                                    <span>Hapus</span>
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })
+                    )}
+                </div>
+
+                {/* 3. Non-Sticky Bottom Pagination (Minimalist flush layout) */}
+                {onPageChange && onPageSizeChange && (
+                    <div className="pt-1 pb-0">
+                        <UsulanDesaPagination
+                            className="p-0 py-0 sm:py-0 px-0 sm:px-0 gap-2"
+                            pageIndex={pageIndex}
+                            pageCount={pageCount}
+                            totalItems={totalItems}
+                            pageSize={pageSize}
+                            onPageChange={onPageChange}
+                            onPageSizeChange={onPageSizeChange}
+                        />
+                    </div>
+                )}
+            </div>
 
             <AlertDialog open={!!deleteItem} onOpenChange={(open) => !open && setDeleteItem(null)}>
                 <AlertDialogContent>
@@ -1102,40 +1282,44 @@ export function UsulanDesaTable({
                                     <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
                                         Diteruskan & Status Verifikasi
                                     </h4>
-                                    <div className="flex items-center gap-1.5">
-                                        {selectedAssignmentUsulan?.status === 'verifikasi_opd' && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleMarkAsSelesai}
-                                                disabled={isSavingSelesai}
-                                                className="h-7 text-[10px] font-semibold gap-1 px-2.5 border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
-                                            >
-                                                <Check className="h-3 w-3" />
-                                                Tandai Selesai
-                                            </Button>
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        {canVerify && (
+                                            <>
+                                                {selectedAssignmentUsulan?.status !== 'selesai' && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={handleMarkAsSelesai}
+                                                        disabled={isSavingSelesai}
+                                                        className="h-7 text-[10px] font-semibold gap-1 px-2.5 border-emerald-200 dark:border-emerald-900/50 bg-emerald-50/50 hover:bg-emerald-50 dark:bg-emerald-950/20 dark:hover:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400"
+                                                    >
+                                                        <Check className="h-3 w-3" />
+                                                        Tandai Selesai
+                                                    </Button>
+                                                )}
+                                                {selectedAssignmentUsulan?.status === 'selesai' && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={handleUndoSelesai}
+                                                        disabled={isSavingSelesai}
+                                                        className="h-7 text-[10px] font-semibold gap-1 px-2.5 border-rose-200 dark:border-rose-900/50 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-400"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                        Batal Selesai
+                                                    </Button>
+                                                )}
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleTriggerEditAssignments(selectedAssignmentUsulan!)}
+                                                    className="h-7 text-[10px] font-semibold gap-1 px-2 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900"
+                                                >
+                                                    <IconEdit className="h-3 w-3" />
+                                                    Ubah Penerusan
+                                                </Button>
+                                            </>
                                         )}
-                                        {selectedAssignmentUsulan?.status === 'selesai' && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleUndoSelesai}
-                                                disabled={isSavingSelesai}
-                                                className="h-7 text-[10px] font-semibold gap-1 px-2.5 border-rose-200 dark:border-rose-900/50 bg-rose-50/50 hover:bg-rose-50 dark:bg-rose-950/20 dark:hover:bg-rose-950/40 text-rose-700 dark:text-rose-400"
-                                            >
-                                                <X className="h-3 w-3" />
-                                                Batal Selesai
-                                            </Button>
-                                        )}
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => handleTriggerEditAssignments(selectedAssignmentUsulan!)}
-                                            className="h-7 text-[10px] font-semibold gap-1 px-2 border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900"
-                                        >
-                                            <IconEdit className="h-3 w-3" />
-                                            Ubah Penerusan
-                                        </Button>
                                     </div>
                                 </div>
 
@@ -1171,42 +1355,46 @@ export function UsulanDesaTable({
                                                             )}>
                                                                 {assign.status_terakhir.replace(/_/g, ' ')}
                                                             </span>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleTriggerEditPengantar(assign);
-                                                                }}
-                                                                className="h-7 w-7 rounded text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/30 shrink-0"
-                                                                title="Edit Surat Pengantar Bappeda"
-                                                            >
-                                                                <Mail className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleTriggerVerify(assign);
-                                                                }}
-                                                                className="h-7 w-7 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 shrink-0"
-                                                                title="Input Hasil Verifikasi"
-                                                            >
-                                                                <Pencil className="h-3.5 w-3.5" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    handleDeleteSingleOpd(selectedAssignmentUsulan, assign.opd_id, assign.opd?.nama || assign.opd_id);
-                                                                }}
-                                                                className="h-7 w-7 rounded text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
-                                                                title="Hapus Penerusan OPD"
-                                                            >
-                                                                <IconTrash className="h-3.5 w-3.5" />
-                                                            </Button>
+                                                            {canVerify && (
+                                                                <>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleTriggerEditPengantar(assign);
+                                                                        }}
+                                                                        className="h-7 w-7 rounded text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:hover:bg-violet-950/30 shrink-0"
+                                                                        title="Edit Surat Pengantar Bappeda"
+                                                                    >
+                                                                        <Mail className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleTriggerVerify(assign);
+                                                                        }}
+                                                                        className="h-7 w-7 rounded text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-950/30 shrink-0"
+                                                                        title="Input Hasil Verifikasi"
+                                                                    >
+                                                                        <Pencil className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        onClick={(e) => {
+                                                                            e.stopPropagation();
+                                                                            handleDeleteSingleOpd(selectedAssignmentUsulan, assign.opd_id, assign.opd?.nama || assign.opd_id);
+                                                                        }}
+                                                                        className="h-7 w-7 rounded text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/30 shrink-0"
+                                                                        title="Hapus Penerusan OPD"
+                                                                    >
+                                                                        <IconTrash className="h-3.5 w-3.5" />
+                                                                    </Button>
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -1495,10 +1683,10 @@ export function UsulanDesaTable({
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0" align="end">
-                                        <Calendar
+                                        <CalendarPicker
                                             mode="single"
                                             selected={verifyTanggalDokumen ? new Date(verifyTanggalDokumen + "T00:00:00") : undefined}
-                                            onSelect={(date) => {
+                                            onSelect={(date: Date | undefined) => {
                                                 if (date) {
                                                     const yyyy = date.getFullYear();
                                                     const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -1594,10 +1782,10 @@ export function UsulanDesaTable({
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0" align="end">
-                                        <Calendar
+                                        <CalendarPicker
                                             mode="single"
                                             selected={pengantarTanggal ? new Date(pengantarTanggal + "T00:00:00") : undefined}
-                                            onSelect={(date) => {
+                                            onSelect={(date: Date | undefined) => {
                                                 if (date) {
                                                     const yyyy = date.getFullYear();
                                                     const mm = String(date.getMonth() + 1).padStart(2, "0");

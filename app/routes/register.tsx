@@ -38,8 +38,9 @@ import {
   Activity,
   ArrowRight,
   Clock,
+  Shield,
 } from 'lucide-react';
-import { IconTopologyComplex, IconMap2, IconUserPlus } from '@tabler/icons-react';
+import { IconTopologyComplex, IconMap2, IconUserPlus, IconShieldCheck } from '@tabler/icons-react';
 import { authService } from '../services/auth.service';
 import { kecamatanService, type Kecamatan } from '../services/kecamatan';
 import { Combobox } from '../components/ui/combobox';
@@ -97,11 +98,43 @@ const features = [
   },
 ];
 
+const successFeatures = [
+  {
+    icon: IconShieldCheck,
+    label: 'Verifikasi Penugasan Wilayah',
+    desc: 'Bappeda Bojonegoro akan meninjau dan mengesahkan wilayah tugas Anda',
+    color: 'text-emerald-400',
+    bg: 'bg-emerald-500/10 border-emerald-500/20',
+  },
+  {
+    icon: Activity,
+    label: 'Aktivasi Hak Akses',
+    desc: 'Setelah disetujui, akun langsung dapat digunakan untuk masuk ke portal',
+    color: 'text-blue-400',
+    bg: 'bg-blue-500/10 border-blue-500/20',
+  },
+  {
+    icon: Layers,
+    label: 'Modul Pelaporan Spasial',
+    desc: 'Akses penuh ke editor WebGIS, plotting anggaran, & realisasi fisik',
+    color: 'text-amber-400',
+    bg: 'bg-amber-500/10 border-amber-500/20',
+  },
+];
+
 export default function Register() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isRegistered, setIsRegistered] = useState(false);
+  const [submittedSummary, setSubmittedSummary] = useState<{
+    nama: string;
+    email: string;
+    role: string;
+    nama_kecamatan: string;
+    nama_desa?: string;
+    timestamp: string;
+  } | null>(null);
 
   // Dropdown lists
   const [kecamatanList, setKecamatanList] = useState<Kecamatan[]>([]);
@@ -184,6 +217,25 @@ export default function Register() {
       }
 
       await authService.register(payload);
+
+      const kecObj = kecamatanList.find(k => k.id.toString() === data.id_kecamatan);
+      const desaObj = desaList.find(d => d.id.toString() === data.id_desa);
+
+      setSubmittedSummary({
+        nama: data.nama,
+        email: data.email,
+        role: data.role === 'operator_desa' ? 'Operator Desa' : 'Operator Kecamatan',
+        nama_kecamatan: kecObj?.nama_kecamatan || '',
+        nama_desa: desaObj?.nama_desa || '',
+        timestamp: new Date().toLocaleString('id-ID', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+        }) + ' WIB',
+      });
+
       toast.success('Registrasi berhasil! Menunggu persetujuan admin.');
       setIsRegistered(true);
     } catch (err) {
@@ -193,41 +245,6 @@ export default function Register() {
       setIsLoading(false);
     }
   };
-
-  // State Registrasi Berhasil (Pending Approval)
-  if (isRegistered) {
-    return (
-      <div className="min-h-screen w-full flex font-sans items-center justify-center bg-slate-950 px-4 py-12">
-        <Card className="w-full max-w-md bg-slate-900 border-slate-800 text-slate-100 shadow-2xl p-6 md:p-8 rounded-2xl flex flex-col items-center text-center space-y-6">
-          <div className="h-16 w-16 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center">
-            <CheckCircle2 className="h-9 w-9" />
-          </div>
-          <div className="space-y-2">
-            <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-400 text-xs font-semibold gap-1.5 px-3 py-1">
-              <Clock className="w-3.5 h-3.5" />
-              Menunggu Persetujuan Admin
-            </Badge>
-            <CardTitle className="text-2xl font-black text-white tracking-tight pt-2">
-              Pengajuan Registrasi Berhasil!
-            </CardTitle>
-            <CardDescription className="text-slate-400 text-sm leading-relaxed">
-              Data pendaftaran Anda telah berhasil direkam dalam sistem MELAROSA.
-            </CardDescription>
-          </div>
-          <div className="bg-slate-950/70 border border-slate-800 p-4 rounded-xl text-left text-xs text-slate-300 leading-relaxed w-full">
-            <strong className="text-amber-400 block mb-1">📌 Catatan Aktivasi:</strong>
-            Akun Anda memerlukan verifikasi dan verifikasi oleh Administrator Bappeda Kabupaten Bojonegoro sebelum dapat digunakan untuk masuk ke portal admin.
-          </div>
-          <Button asChild className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md">
-            <Link to="/login" className="flex items-center justify-center gap-2">
-              <ArrowLeft className="h-4 w-4" />
-              <span>Kembali ke Halaman Login</span>
-            </Link>
-          </Button>
-        </Card>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen w-full flex font-sans bg-white dark:bg-slate-950">
@@ -275,35 +292,58 @@ export default function Register() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <Badge
-                  variant="outline"
-                  className="border-blue-500/30 bg-blue-500/10 text-blue-300 text-[10px] font-bold tracking-[0.15em] uppercase px-3 py-1"
-                >
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-2" />
-                  Registrasi Portal Operator
-                </Badge>
+              {isRegistered ? (
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  <Badge
+                    variant="outline"
+                    className="border-emerald-500/30 bg-emerald-500/10 text-emerald-300 text-[10px] font-bold tracking-[0.15em] uppercase px-3 py-1"
+                  >
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-2" />
+                    Registrasi Berhasil Terkirim
+                  </Badge>
 
-                <h1 className="text-4xl xl:text-5xl font-black text-white leading-[1.1] tracking-tight">
-                  Pendaftaran Akun{" "}
-                  <span className="text-blue-400">
-                    Operator Wilayah
-                  </span>
-                </h1>
+                  <h1 className="text-4xl xl:text-5xl font-black text-white leading-[1.1] tracking-tight">
+                    Selamat Datang di Ekosistem{" "}
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-emerald-400">
+                      MELAROSA
+                    </span>
+                  </h1>
 
-                <p className="text-slate-400 text-base font-normal leading-relaxed max-w-md">
-                  Daftarkan akun Operator Desa atau Operator Kecamatan Anda untuk pengelolaan data spasial dan pelaporan realisasi fisik pembangunan infrastruktur secara presisi.
-                </p>
-              </div>
+                  <p className="text-slate-400 text-base font-normal leading-relaxed max-w-md">
+                    Pengajuan akun Anda telah tercatat. Tim administrator Bappeda Bojonegoro akan meninjau permohonan untuk menjamin validitas dan keamanan data infrastruktur spasial.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3 animate-in fade-in duration-300">
+                  <Badge
+                    variant="outline"
+                    className="border-blue-500/30 bg-blue-500/10 text-blue-300 text-[10px] font-bold tracking-[0.15em] uppercase px-3 py-1"
+                  >
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse mr-2" />
+                    Registrasi Portal Operator
+                  </Badge>
+
+                  <h1 className="text-4xl xl:text-5xl font-black text-white leading-[1.1] tracking-tight">
+                    Pendaftaran Akun{" "}
+                    <span className="text-blue-400">
+                      Operator Wilayah
+                    </span>
+                  </h1>
+
+                  <p className="text-slate-400 text-base font-normal leading-relaxed max-w-md">
+                    Daftarkan akun Operator Desa atau Operator Kecamatan Anda untuk pengelolaan data spasial dan pelaporan realisasi fisik pembangunan infrastruktur secara presisi.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Feature Grid */}
             <div className="grid gap-3">
-              {features.map((f, i) => (
+              {(isRegistered ? successFeatures : features).map((f, i) => (
                 <div
                   key={i}
                   className={cn(
-                    'flex items-start gap-3.5 p-4 rounded-xl border backdrop-blur-xs',
+                    'flex items-start gap-3.5 p-4 rounded-xl border backdrop-blur-xs transition-all',
                     f.bg
                   )}
                 >
@@ -352,186 +392,265 @@ export default function Register() {
             </div>
           </div>
 
-          {/* Registration Card */}
-          <Card className="border-slate-200/80 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
-            <CardHeader className="pb-2 space-y-3 text-center">
-              <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 mx-auto">
-                <IconUserPlus className="w-6 h-6" />
-              </div>
-              <div className="space-y-1">
-                <CardTitle className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-                  Buat Akun Operator
-                </CardTitle>
-                <CardDescription className="text-slate-500 dark:text-slate-400 text-xs">
-                  Isi formulir di bawah ini untuk pengajuan akun resmi
-                </CardDescription>
-              </div>
-            </CardHeader>
+          {isRegistered ? (
+            /* ── Registration Success Card ─────────────────────────────── */
+            <Card className="border-slate-200/80 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900 rounded-2xl overflow-hidden animate-in fade-in-50 zoom-in-95 duration-300">
+              <CardHeader className="pb-3 space-y-3 text-center">
+                {/* Success Icon */}
+                <div className="relative mx-auto">
+                  <div className="flex items-center justify-center w-14 h-14 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/80 dark:border-emerald-800/80 shadow-md shadow-emerald-500/10 ring-8 ring-emerald-500/5">
+                    <CheckCircle2 className="w-7 h-7" />
+                  </div>
+                </div>
 
-            <CardContent className="pt-4">
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  {/* Nama Lengkap */}
-                  <FormField
-                    control={form.control}
-                    name="nama"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Nama Lengkap
-                        </FormLabel>
-                        <FormControl>
-                          <div className="relative group">
-                            <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none" />
-                            <Input
-                              placeholder="Nama lengkap Anda"
-                              autoComplete="off"
-                              className="h-11 pl-10 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium transition-all"
-                              disabled={isLoading}
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage className="text-xs font-medium text-rose-500" />
-                      </FormItem>
-                    )}
-                  />
+                <div className="space-y-1.5">
+                  <Badge variant="outline" className="border-amber-500/30 bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold gap-1.5 px-3 py-1 rounded-full mx-auto">
+                    <Clock className="w-3.5 h-3.5" />
+                    Menunggu Persetujuan Admin
+                  </Badge>
 
-                  {/* Email */}
-                  <FormField
-                    control={form.control}
-                    name="email"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Alamat Email
-                        </FormLabel>
-                        <FormControl>
-                          <div className="relative group">
-                            <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none" />
-                            <Input
-                              type="email"
-                              placeholder="operator@bojonegoro.go.id"
-                              autoComplete="off"
-                              className="h-11 pl-10 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium transition-all"
-                              disabled={isLoading}
-                              {...field}
-                            />
-                          </div>
-                        </FormControl>
-                        <FormMessage className="text-xs font-medium text-rose-500" />
-                      </FormItem>
-                    )}
-                  />
+                  <CardTitle className="text-xl font-bold text-slate-900 dark:text-white tracking-tight pt-1">
+                    Pengajuan Akun Berhasil!
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400 text-xs leading-relaxed max-w-sm mx-auto">
+                    Data pendaftaran Anda telah berhasil direkam dalam sistem MELAROSA.
+                  </CardDescription>
+                </div>
+              </CardHeader>
 
-                  {/* Password */}
-                  <FormField
-                    control={form.control}
-                    name="password"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Password
-                        </FormLabel>
-                        <FormControl>
-                          <div className="relative group">
-                            <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none" />
-                            <Input
-                              type={showPassword ? 'text' : 'password'}
-                              placeholder="Minimal 6 karakter"
-                              autoComplete="new-password"
-                              className="h-11 pl-10 pr-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium transition-all"
-                              disabled={isLoading}
-                              {...field}
-                            />
-                            <button
-                              type="button"
-                              tabIndex={-1}
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-                            >
-                              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                            </button>
-                          </div>
-                        </FormControl>
-                        <FormMessage className="text-xs font-medium text-rose-500" />
-                      </FormItem>
-                    )}
-                  />
+              <CardContent className="space-y-4 pt-1">
+                {/* Account Details Summary Box */}
+                {submittedSummary && (
+                  <div className="rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/40 p-3.5 space-y-2 text-xs">
+                    <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-1.5">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Nama</span>
+                      <span className="font-bold text-slate-900 dark:text-white">{submittedSummary.nama}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-1.5">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Email</span>
+                      <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">{submittedSummary.email}</span>
+                    </div>
+                    <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-700/60 pb-1.5">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Wilayah Tugas</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400 text-right max-w-[200px] truncate">
+                        {submittedSummary.role}
+                        {submittedSummary.nama_desa ? ` (Ds. ${submittedSummary.nama_desa})` : ''}
+                        {submittedSummary.nama_kecamatan ? `, Kec. ${submittedSummary.nama_kecamatan}` : ''}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">Waktu Pengajuan</span>
+                      <span className="font-mono text-[11px] text-slate-600 dark:text-slate-300">{submittedSummary.timestamp}</span>
+                    </div>
+                  </div>
+                )}
 
-                  {/* Role Selector */}
-                  <FormField
-                    control={form.control}
-                    name="role"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Peran (Role) Operator
-                        </FormLabel>
-                        <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
-                          <FormControl>
-                            <SelectTrigger className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium">
-                              <SelectValue placeholder="Pilih Role Operator..." />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl border">
-                            <SelectItem value="operator_desa">Operator Desa</SelectItem>
-                            <SelectItem value="operator_kecamatan">Operator Kecamatan</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage className="text-xs font-medium text-rose-500" />
-                      </FormItem>
-                    )}
-                  />
+                {/* 3-Step Verification Timeline */}
+                <div className="space-y-1.5">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 block">
+                    Alur Aktivasi Akun
+                  </span>
+                  <div className="grid grid-cols-3 gap-2 text-center text-[10.5px]">
+                    <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 dark:text-emerald-300 space-y-1">
+                      <div className="w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center mx-auto text-[10px] font-bold">
+                        ✓
+                      </div>
+                      <span className="font-bold block leading-tight">Pengajuan Terkirim</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 space-y-1">
+                      <div className="w-5 h-5 rounded-full bg-amber-500 text-white flex items-center justify-center mx-auto text-[10px] font-bold animate-pulse">
+                        2
+                      </div>
+                      <span className="font-bold block leading-tight">Review Bappeda</span>
+                    </div>
+                    <div className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 space-y-1">
+                      <div className="w-5 h-5 rounded-full bg-slate-300 dark:bg-slate-700 text-slate-600 dark:text-slate-400 flex items-center justify-center mx-auto text-[10px] font-bold">
+                        3
+                      </div>
+                      <span className="font-semibold block leading-tight">Akun Aktif</span>
+                    </div>
+                  </div>
+                </div>
 
-                  {/* Kecamatan Combobox */}
-                  <FormField
-                    control={form.control}
-                    name="id_kecamatan"
-                    render={({ field }) => (
-                      <FormItem className="flex flex-col">
-                        <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                          Kecamatan Wilayah Kerja
-                        </FormLabel>
-                        <FormControl>
-                          <Combobox
-                            options={kecamatanOptions}
-                            value={field.value}
-                            onChange={field.onChange}
-                            placeholder="Pilih Kecamatan..."
-                            searchPlaceholder="Cari Kecamatan..."
-                            emptyText="Kecamatan tidak ditemukan."
-                            disabled={isLoading}
-                            className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
-                            popoverClassName="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl border"
-                            contentClassName="bg-white dark:bg-slate-900"
-                          />
-                        </FormControl>
-                        <FormMessage className="text-xs font-medium text-rose-500" />
-                      </FormItem>
-                    )}
-                  />
+                {/* Info Note */}
+                <div className="p-3 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/70 dark:border-blue-900/40 text-[11.5px] text-slate-600 dark:text-slate-300 leading-relaxed space-y-1">
+                  <div className="flex items-center gap-1.5 font-bold text-blue-700 dark:text-blue-300 text-xs">
+                    <Shield className="w-3.5 h-3.5" />
+                    <span>Catatan Aktivasi:</span>
+                  </div>
+                  <p>
+                    Admin Bappeda akan memverifikasi penugasan wilayah Anda. Begitu akun disetujui, Anda dapat langsung masuk dengan email & password yang telah didaftarkan.
+                  </p>
+                </div>
 
-                  {/* Desa Combobox (Operator Desa) */}
-                  {selectedRole === 'operator_desa' && (
+                {/* Action Buttons */}
+                <div className="space-y-2 pt-2">
+                  <Button asChild className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 cursor-pointer transition-colors">
+                    <Link to="/login" className="flex items-center justify-center gap-2">
+                      <span>Masuk ke Halaman Login</span>
+                      <ArrowRight className="w-4 h-4" />
+                    </Link>
+                  </Button>
+                  <Button asChild variant="outline" className="w-full h-10 rounded-xl border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold cursor-pointer">
+                    <Link to="/" className="flex items-center justify-center gap-2">
+                      <ArrowLeft className="w-3.5 h-3.5" />
+                      <span>Kembali ke Beranda Utama</span>
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : (
+            /* ── Registration Form Card ────────────────────────────────── */
+            <Card className="border-slate-200/80 dark:border-slate-800 shadow-xl bg-white dark:bg-slate-900 rounded-2xl overflow-hidden">
+              <CardHeader className="pb-2 space-y-3 text-center">
+                <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/50 mx-auto">
+                  <IconUserPlus className="w-6 h-6" />
+                </div>
+                <div className="space-y-1">
+                  <CardTitle className="text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+                    Buat Akun Operator
+                  </CardTitle>
+                  <CardDescription className="text-slate-500 dark:text-slate-400 text-xs">
+                    Isi formulir di bawah ini untuk pengajuan akun resmi
+                  </CardDescription>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-4">
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+                    {/* Nama Lengkap */}
                     <FormField
                       control={form.control}
-                      name="id_desa"
+                      name="nama"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Nama Lengkap
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative group">
+                              <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none" />
+                              <Input
+                                placeholder="Nama lengkap Anda"
+                                autoComplete="off"
+                                className="h-11 pl-10 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium transition-all"
+                                disabled={isLoading}
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage className="text-xs font-medium text-rose-500" />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Email */}
+                    <FormField
+                      control={form.control}
+                      name="email"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Alamat Email
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative group">
+                              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none" />
+                              <Input
+                                type="email"
+                                placeholder="operator@bojonegoro.go.id"
+                                autoComplete="off"
+                                className="h-11 pl-10 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium transition-all"
+                                disabled={isLoading}
+                                {...field}
+                              />
+                            </div>
+                          </FormControl>
+                          <FormMessage className="text-xs font-medium text-rose-500" />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Password */}
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Password
+                          </FormLabel>
+                          <FormControl>
+                            <div className="relative group">
+                              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-blue-600 transition-colors pointer-events-none" />
+                              <Input
+                                type={showPassword ? 'text' : 'password'}
+                                placeholder="Minimal 6 karakter"
+                                autoComplete="new-password"
+                                className="h-11 pl-10 pr-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium transition-all"
+                                disabled={isLoading}
+                                {...field}
+                              />
+                              <button
+                                type="button"
+                                tabIndex={-1}
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
+                              >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </FormControl>
+                          <FormMessage className="text-xs font-medium text-rose-500" />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Role Selector */}
+                    <FormField
+                      control={form.control}
+                      name="role"
                       render={({ field }) => (
                         <FormItem className="flex flex-col">
-                          <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                            <span>Desa Wilayah Kerja</span>
-                            {desaLoading && <span className="text-[11px] text-blue-500 animate-pulse">Memuat desa...</span>}
+                          <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Peran (Role) Operator
+                          </FormLabel>
+                          <Select onValueChange={field.onChange} defaultValue={field.value} disabled={isLoading}>
+                            <FormControl>
+                              <SelectTrigger className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium">
+                                <SelectValue placeholder="Pilih Role Operator..." />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl border">
+                              <SelectItem value="operator_desa">Operator Desa</SelectItem>
+                              <SelectItem value="operator_kecamatan">Operator Kecamatan</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage className="text-xs font-medium text-rose-500" />
+                        </FormItem>
+                      )}
+                    />
+
+                    {/* Kecamatan Combobox */}
+                    <FormField
+                      control={form.control}
+                      name="id_kecamatan"
+                      render={({ field }) => (
+                        <FormItem className="flex flex-col">
+                          <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                            Kecamatan Wilayah Kerja
                           </FormLabel>
                           <FormControl>
                             <Combobox
-                              options={desaOptions}
-                              value={field.value || ''}
+                              options={kecamatanOptions}
+                              value={field.value}
                               onChange={field.onChange}
-                              placeholder={!selectedKecamatan ? "Pilih kecamatan terlebih dahulu" : "Pilih Desa..."}
-                              searchPlaceholder="Cari Desa..."
-                              emptyText="Desa tidak ditemukan."
-                              disabled={!selectedKecamatan || desaLoading || isLoading}
+                              placeholder="Pilih Kecamatan..."
+                              searchPlaceholder="Cari Kecamatan..."
+                              emptyText="Kecamatan tidak ditemukan."
+                              disabled={isLoading}
                               className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
                               popoverClassName="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl border"
                               contentClassName="bg-white dark:bg-slate-900"
@@ -541,42 +660,73 @@ export default function Register() {
                         </FormItem>
                       )}
                     />
-                  )}
 
-                  {/* Submit Button */}
-                  <div className="pt-2">
-                    <Button
-                      type="submit"
-                      disabled={isLoading}
-                      className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 cursor-pointer transition-colors"
-                    >
-                      {isLoading ? (
-                        <span className="flex items-center gap-2">
-                          <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                          Mengirim Pengajuan...
-                        </span>
-                      ) : (
-                        <span className="flex items-center justify-center gap-2">
-                          Kirim Pengajuan Registrasi
-                          <ArrowRight className="w-4 h-4" />
-                        </span>
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
+                    {/* Desa Combobox (Operator Desa) */}
+                    {selectedRole === 'operator_desa' && (
+                      <FormField
+                        control={form.control}
+                        name="id_desa"
+                        render={({ field }) => (
+                          <FormItem className="flex flex-col">
+                            <FormLabel className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+                              <span>Desa Wilayah Kerja</span>
+                              {desaLoading && <span className="text-[11px] text-blue-500 animate-pulse">Memuat desa...</span>}
+                            </FormLabel>
+                            <FormControl>
+                              <Combobox
+                                options={desaOptions}
+                                value={field.value || ''}
+                                onChange={field.onChange}
+                                placeholder={!selectedKecamatan ? "Pilih kecamatan terlebih dahulu" : "Pilih Desa..."}
+                                searchPlaceholder="Cari Desa..."
+                                emptyText="Desa tidak ditemukan."
+                                disabled={!selectedKecamatan || desaLoading || isLoading}
+                                className="h-11 rounded-xl bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 transition-all"
+                                popoverClassName="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl border"
+                                contentClassName="bg-white dark:bg-slate-900"
+                              />
+                            </FormControl>
+                            <FormMessage className="text-xs font-medium text-rose-500" />
+                          </FormItem>
+                        )}
+                      />
+                    )}
 
-              {/* Login Link */}
-              <div className="mt-4 text-center">
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Sudah memiliki akun?{' '}
-                  <Link to="/login" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold transition-colors">
-                    Masuk di sini
-                  </Link>
-                </p>
-              </div>
-            </CardContent>
-          </Card>
+                    {/* Submit Button */}
+                    <div className="pt-2">
+                      <Button
+                        type="submit"
+                        disabled={isLoading}
+                        className="w-full h-11 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md shadow-blue-500/20 cursor-pointer transition-colors"
+                      >
+                        {isLoading ? (
+                          <span className="flex items-center gap-2">
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                            Mengirim Pengajuan...
+                          </span>
+                        ) : (
+                          <span className="flex items-center justify-center gap-2">
+                            Kirim Pengajuan Registrasi
+                            <ArrowRight className="w-4 h-4" />
+                          </span>
+                        )}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+
+                {/* Login Link */}
+                <div className="mt-4 text-center">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Sudah memiliki akun?{' '}
+                    <Link to="/login" className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-semibold transition-colors">
+                      Masuk di sini
+                    </Link>
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Mobile copyright */}
           <p className="lg:hidden text-center text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-6">
